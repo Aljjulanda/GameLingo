@@ -1,0 +1,7 @@
+
+LocalAddress LocalPort RemoteAddress       State
+------------ --------- -------------       -----
+192.168.3.70     38443 0.0.0.0            Listen
+192.168.3.70     38443 192.168.3.138 Established
+
+

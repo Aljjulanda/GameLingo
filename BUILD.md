@@ -16,6 +16,8 @@ python scripts/build-msi.py dist/GameLingo C:/tools/wix314 build/GameLingo-Setup
 
 Install the EN–AR model via the GUI before running the OCR + translation test. Set PYTHONPATH to the absolute desktop directory for pytest. Use WiX 3.14.1 binaries from the official wix3 release. The executable supports `--self-test absolute-report-path.json` for the synthetic end-to-end smoke test; run the GUI normally without arguments. Avoid adding unrelated toolchain DLL directories to the packaging environment. Windows supplies the ICU interface for Qt. PyWinRT requires its native .pywinrt tables beside the projection packages.
 
+Starting with the 0.2.1 Windows package, the frozen self-test also starts a TLS listener on a random loopback port. The spec bundles the current Python distribution's matching OpenSSL libraries and, if present, its public SSL trust-policy asset. This preserves the runtime trust configuration.
+
 ## Android TV
 
 Set JAVA_HOME, ANDROID_HOME and GRADLE_BIN for JDK 17/21, Android SDK 34 with build-tools 34.0.0 and Gradle 8.9. With Git Bash run `bash scripts/android-build.sh`. The connected debug APK is android-tv/app/build/outputs/apk/debug/app-debug.apk. Use a persistent **project-specific** Android user home to retain the debug signing identity for local updates. Secrets and signing keys are excluded from source archives.

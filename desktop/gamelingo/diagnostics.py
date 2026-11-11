@@ -35,6 +35,21 @@ def self_test(path, window):
     ok=bool(results and "الباب" in results[0]["translated"] and not errors and not pipeline.thread.is_alive())
     report={"pass":ok,"tabs":window.tabs.count(),"fixture":"original synthetic EN image",
             "measured":results[:1],"messages":[x["type"] for x in messages],"errors":errors}
+    import traceback
+    from .network import Hub
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            test_hub=Hub(Path(tmp),"127.0.0.1",lambda *_:None,port=0)
+            test_hub.thread.start()
+            try:
+                if not test_hub.ready.wait(6) or test_hub.error:
+                    raise RuntimeError(test_hub.error or "Listener startup timed out")
+                report["local_tls_listener"]=True
+            finally:
+                test_hub.stop()
+    except Exception:
+        report["pass"]=False
+        report["network_error"]=traceback.format_exc()
     Path(path).write_text(json.dumps(report,ensure_ascii=False,indent=2),encoding="utf-8")
-    return 0 if ok else 1
+    return 0 if report["pass"] else 1
 
