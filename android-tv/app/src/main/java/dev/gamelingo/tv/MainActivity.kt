@@ -16,6 +16,9 @@ class MainActivity : Activity() {
     private lateinit var position: Button
     private lateinit var start: Button
     private lateinit var panel: LinearLayout
+    private val liveStatus = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+        if (key == "status") refresh()
+    }
     private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
     private fun button(title: String, action: () -> Unit) = Button(this).apply {
         text = title
@@ -54,12 +57,35 @@ class MainActivity : Activity() {
             }
         }
         button("إخفاء النص وإيقاف الخدمة") { stopService(Intent(this, OverlayService::class.java)); refresh() }
+        button("الاتصال بتطبيق Windows") { connectionDialog() }
+        val link = intent.data
+        if (intent.action == Intent.ACTION_VIEW && link?.scheme == "gamelingo" && link.host == "pair") {
+            connectionDialog(link.getQueryParameter("host"), link.getQueryParameter("code"))
+        }
     }
-    override fun onResume() { super.onResume(); refresh() }
+    private fun connectionDialog(suggestedHost: String? = null, suggestedCode: String? = null) {
+        val form = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(22),dp(8),dp(22),0) }
+        fun field(hintText: String) = EditText(this).apply {
+            hint = hintText; isSingleLine = true
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD or android.text.InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+            textDirection = View.TEXT_DIRECTION_LTR; form.addView(this)
+        }
+        val ip = field("عنوان الكمبيوتر 192.168.x.x").apply { setText(suggestedHost ?: prefs.getString("host","")) }
+        val code = field("رمز الاقتران · اتركه فارغًا بعد الاقتران").apply { setText(suggestedCode ?: "") }
+        android.app.AlertDialog.Builder(this).setTitle("GameLingo · Windows").setView(form)
+            .setNegativeButton("إلغاء",null).setPositiveButton("اتصال") { _,_ ->
+                if (Settings.canDrawOverlays(this)) {
+                    startForegroundService(Intent(this,OverlayService::class.java).setAction("connect")
+                        .putExtra("host",ip.text.toString().trim()).putExtra("code",code.text.toString().trim()))
+                } else status.text = "يلزم إذن الظهور فوق التطبيقات"
+            }.show()
+    }
+    override fun onResume() { super.onResume(); prefs.registerOnSharedPreferenceChangeListener(liveStatus); refresh() }
+    override fun onPause() { prefs.unregisterOnSharedPreferenceChangeListener(liveStatus); super.onPause() }
     private fun refresh() {
         val allowed = Settings.canDrawOverlays(this)
         start.isEnabled = allowed
         position.text = "الموضع · " + Placement.from(prefs.getString("position", null)).title
-        status.text = if (allowed) "الإذن مفعّل" else "يلزم السماح بعرض النص فوق التطبيقات"
+        status.text = if (allowed) (if (OverlayService.active) prefs.getString("status","الإذن مفعّل") else "الإذن مفعّل") else "يلزم السماح بعرض النص فوق التطبيقات"
     }
 }

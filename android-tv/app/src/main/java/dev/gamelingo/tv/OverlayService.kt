@@ -17,6 +17,11 @@ class OverlayService : Service() {
     private var view: TextView? = null
     private val handler = Handler(Looper.getMainLooper())
     private val expire = Runnable { stopSelf() }
+    private val hide = Runnable { view?.visibility = View.GONE }
+    private var receiver: Receiver? = null
+    private var live = false
+    private val prefs by lazy { getSharedPreferences("overlay", MODE_PRIVATE) }
+    private fun status(message: String) { prefs.edit().putString("status",message).apply() }
     private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
 
     override fun onCreate() {
@@ -54,14 +59,40 @@ class OverlayService : Service() {
                     background = GradientDrawable().apply { setColor(0xc923292b.toInt()); cornerRadius = dp(9).toFloat() }
                     maxWidth = (resources.displayMetrics.widthPixels * 0.88).toInt()
                 }
+                label.visibility = View.GONE
                 wm.addView(label, params()); view = label; active = true
-                Log.i("GameLingo", "Test overlay attached")
+                Log.i("GameLingo", "Overlay attached")
             } else { wm.updateViewLayout(existing, params()) }
-            handler.removeCallbacks(expire); handler.postDelayed(expire, 600_000)
+            when (intent?.action) {
+                "move" -> Unit
+                "connect" -> {
+                    handler.removeCallbacks(expire); receiver?.stop(); live = true
+                    receiver = Receiver(this, { message ->
+                        handler.removeCallbacks(hide)
+                        val label = view
+                        if (message == null || label == null) hide.run() else {
+                            label.text = message.getString("translated")
+                            label.textSize = message.optDouble("font_sp",25.0).toFloat().coerceIn(14f,48f)
+                            label.maxLines = 5
+                            label.visibility = View.VISIBLE
+                            wm.updateViewLayout(label,params())
+                            handler.postDelayed(hide,message.getLong("remaining_ms"))
+                            Log.i("GameLingo","Rendered sequence " + message.optLong("seq"))
+                        }
+                    }, ::status).also { it.start(intent.getStringExtra("host") ?: "", intent.getStringExtra("code") ?: "") }
+                }
+                else -> {
+                    receiver?.stop(); receiver = null; live = false; handler.removeCallbacks(hide)
+                    view?.apply { text = SAMPLE; visibility = View.VISIBLE }
+                    status("اختبار الطبقة · ١٠ دقائق")
+                    handler.removeCallbacks(expire); handler.postDelayed(expire, 600_000)
+                }
+            }
         } catch (e: RuntimeException) { Log.e("GameLingo", "Overlay unavailable", e); stopSelf() }
         return START_NOT_STICKY
     }
     override fun onDestroy() {
+        receiver?.stop(); receiver = null
         handler.removeCallbacksAndMessages(null)
         view?.let { if (it.isAttachedToWindow) wm.removeViewImmediate(it) }; view = null; active = false
         Log.i("GameLingo", "Overlay service stopped")

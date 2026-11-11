@@ -1,0 +1,27 @@
+$ settings get global device_name
+Aljulanda TV
+$ getprop ro.product.manufacturer
+TCL
+$ getprop ro.product.model
+Smart TV Pro
+$ getprop ro.product.device
+G10
+$ getprop ro.build.version.release
+12
+$ dumpsys package dev.gamelingo.tv | grep versionName
+    versionName=0.2.0
+$ cmd appops get dev.gamelingo.tv SYSTEM_ALERT_WINDOW
+SYSTEM_ALERT_WINDOW: allow; time=+10m51s959ms ago (running)
+$ dumpsys package sa.urtv.home | grep versionName
+    versionName=3.1000004
+$ dumpsys package sa.urtv.screensaver | grep versionName
+    versionName=3.1000001
+$ settings get secure enabled_accessibility_services
+sa.urtv.home/sa.urtv.home.NetflixShortcutService
+$ settings get secure screensaver_components
+sa.urtv.screensaver/.ScreenDream
+$ cmd package resolve-activity --brief -a android.intent.action.MAIN -c android.intent.category.HOME
+priority=0 preferredOrder=0 match=0x108000 specificIndex=-1 isDefault=true
+sa.urtv.home/.MainActivity
+$ getprop persist.sys.timezone
+Asia/Muscat

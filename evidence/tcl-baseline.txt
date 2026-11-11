@@ -1,0 +1,19 @@
+$ settings get global device_name
+Aljulanda TV
+$ dumpsys package sa.urtv.home | grep versionName
+    versionName=3.1000004
+$ dumpsys package sa.urtv.screensaver | grep versionName
+    versionName=3.1000001
+$ settings get secure enabled_accessibility_services
+sa.urtv.home/sa.urtv.home.NetflixShortcutService
+$ settings get secure screensaver_components
+sa.urtv.screensaver/.ScreenDream
+$ cmd package resolve-activity --brief -a android.intent.action.MAIN -c android.intent.category.HOME
+priority=0 preferredOrder=0 match=0x108000 specificIndex=-1 isDefault=true
+sa.urtv.home/.MainActivity
+$ pm list packages dev.gamelingo
+
+$ getprop persist.sys.timezone
+Asia/Muscat
+$ dumpsys power | grep 'mWakefulness='
+  mWakefulness=Awake

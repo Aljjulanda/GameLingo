@@ -1,0 +1,1 @@
+Physical Windows display: (2560, 1600) in-memory RGB frames: 24 capture p50/p95 ms: 87.1 107.56

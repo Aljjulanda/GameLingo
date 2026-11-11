@@ -1,0 +1,10 @@
+$ logcat -d -b all -v brief -s GameLingo | tail -8
+--------- beginning of main
+I/GameLingo(27090): Rendered sequence 2
+I/GameLingo(27090): Rendered sequence 3
+I/GameLingo(27090): Rendered sequence 4
+I/GameLingo(27090): Rendered sequence 5
+I/GameLingo(27090): Rendered sequence 6
+I/GameLingo(27090): Rendered sequence 7
+$ dumpsys window | grep mCurrentFocus | head -1
+  mCurrentFocus=Window{c751fe0 u0 com.tcl.tv/com.tcl.tv.TVActivity}

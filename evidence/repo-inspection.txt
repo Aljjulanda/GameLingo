@@ -1,0 +1,9 @@
+RapidAI/RapidOCR 2026-11-11T13:53:04Z Apache-2.0
+PaddlePaddle/PaddleOCR 2026-09-16T03:31:50Z Apache-2.0
+manjotsc/tvassist_android 2026-11-10T04:09:46Z Apache-2.0
+gugutab/TvOverlay 2024-09-20T03:55:04Z None
+ra1nty/DXcam 2026-09-23T03:39:55Z MIT
+argosopentech/argos-translate 2026-08-08T12:09:57Z MIT
+chiaki-ng/chiaki-ng 2026-11-09T08:20:25Z AGPL-3.0
+DeskTranslate/DeskTranslate 2026-11-01T12:58:02Z MIT
+tesseract-ocr/tesseract 2026-11-11T11:29:16Z Apache-2.0

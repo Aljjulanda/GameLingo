@@ -1,0 +1,12 @@
+$ dumpsys activity services dev.gamelingo.tv | grep -E 'isForeground|ServiceRecord' | head -2
+  * ServiceRecord{6a723fe u0 dev.gamelingo.tv/.OverlayService}
+    isForeground=true foregroundId=1 foregroundNoti=Notification(channel=overlay shortcut=null contentView=null vibrate=null sound=null defaults=0x0 flags=0x62 color=0x00000000 vis=PRIVATE)
+$ logcat -d -b all -v brief -s GameLingo | tail -12
+--------- beginning of main
+I/GameLingo(27090): Overlay attached
+I/GameLingo(27090): Rendered sequence 1
+I/GameLingo(27090): Rendered sequence 2
+I/GameLingo(27090): Rendered sequence 3
+I/GameLingo(27090): Rendered sequence 4
+$ settings get secure enabled_accessibility_services
+sa.urtv.home/sa.urtv.home.NetflixShortcutService

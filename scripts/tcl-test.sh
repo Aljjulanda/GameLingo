@@ -14,15 +14,16 @@ case "${1:-status}" in
   status)
     tv "pm path $pkg; cmd appops get $pkg SYSTEM_ALERT_WINDOW; dumpsys activity services $pkg | grep -E 'ServiceRecord|isForeground'; dumpsys window windows | grep -E 'mCurrentFocus|GameLingo subtitle' | head -12"
     ;;
-  install)
+  install|update)
     file=${2:?Supply the absolute path to the GameLingo test APK}
     existing=$(tv "pm path $pkg" | tr -d '\r')
-    [[ -z "$existing" ]] || { echo 'GameLingo is already installed; use the app or review an update separately'; exit 3; }
+    if [[ "$1" == "install" && -n "$existing" ]]; then echo 'GameLingo already installed'; exit 3; fi
+    if [[ "$1" == "update" && -z "$existing" ]]; then echo 'Expected the existing overlay test'; exit 3; fi
     tv --push-b64 "$file" /data/local/tmp/gamelingo-overlay-test.apk
-    result=$(tv 'pm install /data/local/tmp/gamelingo-overlay-test.apk' | tr -d '\r')
+    result=$(tv 'pm install -r /data/local/tmp/gamelingo-overlay-test.apk' | tr -d '\r')
     tv 'rm -f /data/local/tmp/gamelingo-overlay-test.apk'
     echo "$result"; [[ "$result" == *Success* ]]
-    tv "cmd appops set $pkg SYSTEM_ALERT_WINDOW allow"
+    if [[ "$1" == "install" ]]; then tv "cmd appops set $pkg SYSTEM_ALERT_WINDOW allow"; fi
     tv "cmd appops get $pkg SYSTEM_ALERT_WINDOW"
     tv "am start -W -n $pkg/.MainActivity"
     ;;
