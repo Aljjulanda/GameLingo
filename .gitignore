@@ -1,0 +1,12 @@
+/.gradle/
+/android-tv/.gradle/
+**/build/
+local.properties
+__pycache__/
+*.pyc
+*.keystore
+*.jks
+*.p12
+.venv/
+*.spec.tmp
+
