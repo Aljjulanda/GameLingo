@@ -1,0 +1,222 @@
+{
+  "fixture": "generated window, changing corner HUD and previously uncached English lines",
+  "expected": [
+    "Go!",
+    "Wait here. I will come back.",
+    "Follow me",
+    "Follow me to the gate.",
+    "Take the key.",
+    "Run!"
+  ],
+  "results": [
+    {
+      "ocr": "Go!",
+      "arabic": "انطلق!",
+      "frame_to_ready_ms": 24,
+      "visible_to_ready_ms": 141
+    },
+    {
+      "ocr": "Wait here. I will come back.",
+      "arabic": "انتظر هنا، سأعود",
+      "frame_to_ready_ms": 45,
+      "visible_to_ready_ms": 109
+    },
+    {
+      "ocr": "Follow me",
+      "arabic": "اتبعني",
+      "frame_to_ready_ms": 40,
+      "visible_to_ready_ms": 125
+    },
+    {
+      "ocr": "Follow me to the gate.",
+      "arabic": "اتبعني إلى البوابة",
+      "frame_to_ready_ms": 54,
+      "visible_to_ready_ms": 266
+    },
+    {
+      "ocr": "Take the key.",
+      "arabic": "خذ المفتاح",
+      "frame_to_ready_ms": 48,
+      "visible_to_ready_ms": 141
+    },
+    {
+      "ocr": "Run!",
+      "arabic": "اركض!",
+      "frame_to_ready_ms": 20,
+      "visible_to_ready_ms": 31
+    }
+  ],
+  "missed": [],
+  "errors": [],
+  "finished": true,
+  "warmup_seen": true,
+  "pipeline_metrics": {
+    "ocr_last_ms": 2.45,
+    "ocr_mean_ms": 8.31,
+    "ocr_attempts": 12,
+    "skipped_ocr": 16,
+    "ocr_per_second": 1.58,
+    "queue_depth": 0,
+    "capture_width": 1440,
+    "capture_height": 853,
+    "roi_pixels": 234220,
+    "capture_converted_frames": 28,
+    "capture_native_callbacks": 450,
+    "capture_conversion_mean_ms": 5.91,
+    "capture_conversion_peak_ms": 58.81,
+    "capture_ms": 15,
+    "ocr_ms": 8,
+    "translation_ms": 7,
+    "latency_ms": 20,
+    "cache_hits": 0,
+    "requests": 7
+  },
+  "process_samples": [
+    {
+      "cpu_percent": 12.5,
+      "rss_mb": 27.71875,
+      "total_cpu": 36.4,
+      "process_gpu": 0,
+      "total_gpu": 1.0
+    },
+    {
+      "cpu_percent": 7.8,
+      "rss_mb": 45.69921875,
+      "total_cpu": 32.6,
+      "process_gpu": 0,
+      "total_gpu": 1.0
+    },
+    {
+      "cpu_percent": 7.025,
+      "rss_mb": 53.1171875,
+      "total_cpu": 29.7,
+      "process_gpu": 0,
+      "total_gpu": 1.0
+    },
+    {
+      "cpu_percent": 0.0,
+      "rss_mb": 53.1171875,
+      "total_cpu": 36.8,
+      "process_gpu": 0,
+      "total_gpu": 1.0
+    },
+    {
+      "cpu_percent": 10.95,
+      "rss_mb": 108.03125,
+      "total_cpu": 36.7,
+      "process_gpu": 0,
+      "total_gpu": 11.6
+    },
+    {
+      "cpu_percent": 11.725,
+      "rss_mb": 123.3671875,
+      "total_cpu": 48.1,
+      "process_gpu": 14.3,
+      "total_gpu": 47.2
+    },
+    {
+      "cpu_percent": 34.375,
+      "rss_mb": 228.2890625,
+      "total_cpu": 56.6,
+      "process_gpu": 14.7,
+      "total_gpu": 39.6
+    },
+    {
+      "cpu_percent": 7.575,
+      "rss_mb": 229.11328125,
+      "total_cpu": 23.1,
+      "process_gpu": 15.4,
+      "total_gpu": 34.1
+    },
+    {
+      "cpu_percent": 0.0,
+      "rss_mb": 229.12109375,
+      "total_cpu": 7.8,
+      "process_gpu": 16.1,
+      "total_gpu": 31.5
+    },
+    {
+      "cpu_percent": 14.05,
+      "rss_mb": 229.5,
+      "total_cpu": 26.4,
+      "process_gpu": 15.5,
+      "total_gpu": 30.6
+    },
+    {
+      "cpu_percent": 1.55,
+      "rss_mb": 229.71484375,
+      "total_cpu": 9.4,
+      "process_gpu": 15.6,
+      "total_gpu": 31.0
+    },
+    {
+      "cpu_percent": 13.275,
+      "rss_mb": 229.9765625,
+      "total_cpu": 26.4,
+      "process_gpu": 15.4,
+      "total_gpu": 30.5
+    },
+    {
+      "cpu_percent": 7.8,
+      "rss_mb": 230.04296875,
+      "total_cpu": 23.4,
+      "process_gpu": 15.5,
+      "total_gpu": 31.1
+    },
+    {
+      "cpu_percent": 9.1,
+      "rss_mb": 230.04296875,
+      "total_cpu": 53.0,
+      "process_gpu": 14.7,
+      "total_gpu": 36.6
+    },
+    {
+      "cpu_percent": 21.1,
+      "rss_mb": 230.08203125,
+      "total_cpu": 72.9,
+      "process_gpu": 15.7,
+      "total_gpu": 42.2
+    },
+    {
+      "cpu_percent": 3.9,
+      "rss_mb": 230.2578125,
+      "total_cpu": 46.1,
+      "process_gpu": 15.4,
+      "total_gpu": 33.0
+    },
+    {
+      "cpu_percent": 6.825,
+      "rss_mb": 230.2578125,
+      "total_cpu": 45.5,
+      "process_gpu": 15.3,
+      "total_gpu": 29.7
+    },
+    {
+      "cpu_percent": 4.7,
+      "rss_mb": 230.2734375,
+      "total_cpu": 42.2,
+      "process_gpu": 15.2,
+      "total_gpu": 30.5
+    },
+    {
+      "cpu_percent": 0.775,
+      "rss_mb": 230.2734375,
+      "total_cpu": 48.4,
+      "process_gpu": 15.8,
+      "total_gpu": 30.6
+    },
+    {
+      "cpu_percent": 1.55,
+      "rss_mb": 230.2734375,
+      "total_cpu": 9.4,
+      "process_gpu": 15.6,
+      "total_gpu": 30.9
+    }
+  ],
+  "process_cpu_mean_percent": 8.82875,
+  "process_ram_peak_mb": 230.2734375,
+  "process_gpu_mean": 11.51,
+  "total_gpu_mean": 26.235000000000003,
+  "total_cpu_mean": 35.545,
+  "gpu_method": "Windows PDH GPU Engine counters; busiest physical engine, process-specific contribution; samples every 0.5s"
+}

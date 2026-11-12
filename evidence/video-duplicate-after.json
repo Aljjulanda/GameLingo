@@ -1,0 +1,22 @@
+{
+  "events": [
+    {
+      "type": "subtitle_show",
+      "id": "4401293dc2f8-1",
+      "translated": "لنذهب!"
+    },
+    {
+      "type": "subtitle_update",
+      "id": "4401293dc2f8-1",
+      "translated": "لنذهب."
+    },
+    {
+      "type": "subtitle_show",
+      "id": "4401293dc2f8-2",
+      "translated": "لنذهب!"
+    }
+  ],
+  "errors": [],
+  "correction_reuses_id": true,
+  "repeat_has_new_id": true
+}

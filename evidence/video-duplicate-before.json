@@ -1,0 +1,22 @@
+{
+  "events": [
+    {
+      "type": "subtitle_show",
+      "id": "dialogue-1",
+      "translated": "لنذهب!"
+    },
+    {
+      "type": "subtitle_show",
+      "id": "dialogue-2",
+      "translated": "لنذهب."
+    },
+    {
+      "type": "subtitle_show",
+      "id": "dialogue-3",
+      "translated": "لنذهب!"
+    }
+  ],
+  "errors": [],
+  "correction_reuses_id": false,
+  "repeat_has_new_id": true
+}

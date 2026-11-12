@@ -17,6 +17,8 @@ class CanvasRunner : Instrumentation() {
     override fun onStart() {
         val result=Bundle();var view: SubtitleCanvas?=null;var bitmap: Bitmap?=null;var shortAnchor: Pair<Float,Float>?=null
         val wm=targetContext.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+        val prefs=targetContext.getSharedPreferences("overlay",Context.MODE_PRIVATE)
+        val originalX=prefs.getFloat("anchor_x",0f);val originalY=prefs.getFloat("anchor_y",0f)
         fun message(id: String,text: String)=JSONObject().put("type","subtitle_show").put("id",id).put("translated",text)
         try {
             runOnMainSync {
@@ -53,6 +55,15 @@ class CanvasRunner : Instrumentation() {
                 check(view!!.measuredAnchor.first-anchor.first==1f)
                 check(view!!.measuredAnchor.second==anchor.second)
                 view!!.message(null);check(view!!.state.entries.isEmpty())
+                view!!.message(message("same-event","انتظر!"));view!!.draw(Canvas(bitmap!!))
+                val until=view!!.state.entries.single().until
+                repeat(3) { view!!.message(message("same-event","انتظر!"));view!!.draw(Canvas(bitmap!!)) }
+                view!!.message(message("same-event","انتظر هنا!").put("type","subtitle_update"));view!!.draw(Canvas(bitmap!!))
+                check(view!!.state.entries.size==1 && view!!.state.entries.single().until==until)
+                view!!.message(message("genuine-repeat","انتظر هنا!"));view!!.draw(Canvas(bitmap!!))
+                check(view!!.state.entries.size==2)
+                check(view!!.measuredBoxes.size==1) {"Identical Arabic rendered in two boxes"}
+                view!!.message(null)
                 view!!.message(JSONObject().put("type","context_show").put("translated","افتح").put("x",.42).put("y",.36).put("w",.08).put("h",.03))
                 view!!.draw(Canvas(bitmap!!))
                 check(kotlin.math.abs(view!!.measuredContext!!.centerX()-883.2f)<.1f)
@@ -65,6 +76,9 @@ class CanvasRunner : Instrumentation() {
             result.putString("result","PASS: real Canvas content sizing, RTL wrap, isolated expiry, duplicate, stacking, pixel anchor, disconnect clear, nearby mapping and expiry")
             finish(Activity.RESULT_OK,result)
         } catch(t: Throwable) {result.putString("error",t.toString());finish(Activity.RESULT_CANCELED,result)}
-        finally { runOnMainSync {view?.let {wm.removeViewImmediate(it)};bitmap?.recycle()} }
+        finally { runOnMainSync {
+            view?.let {wm.removeViewImmediate(it)};bitmap?.recycle()
+            prefs.edit().putFloat("anchor_x",originalX).putFloat("anchor_y",originalY).apply()
+        } }
     }
 }

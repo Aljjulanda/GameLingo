@@ -1,0 +1,125 @@
+{
+  "same_frame_pairs": [
+    {
+      "native_size": [
+        2564,
+        1536
+      ],
+      "output_size": [
+        1440,
+        863
+      ],
+      "old_ms": 129.67829999979585,
+      "new_ms": 46.138599998812424,
+      "old_words": 14,
+      "new_words": 14,
+      "equal_words": true
+    },
+    {
+      "native_size": [
+        2564,
+        1536
+      ],
+      "output_size": [
+        1440,
+        863
+      ],
+      "old_ms": 48.364300000685034,
+      "new_ms": 59.15079999977024,
+      "old_words": 14,
+      "new_words": 14,
+      "equal_words": true
+    },
+    {
+      "native_size": [
+        2564,
+        1536
+      ],
+      "output_size": [
+        1440,
+        863
+      ],
+      "old_ms": 82.64040000358364,
+      "new_ms": 135.69579999966663,
+      "old_words": 14,
+      "new_words": 14,
+      "equal_words": true
+    },
+    {
+      "native_size": [
+        2564,
+        1536
+      ],
+      "output_size": [
+        1440,
+        863
+      ],
+      "old_ms": 35.482799998135306,
+      "new_ms": 50.321400001848815,
+      "old_words": 13,
+      "new_words": 13,
+      "equal_words": true
+    },
+    {
+      "native_size": [
+        2564,
+        1536
+      ],
+      "output_size": [
+        1440,
+        863
+      ],
+      "old_ms": 39.395499999955064,
+      "new_ms": 34.17719999924884,
+      "old_words": 0,
+      "new_words": 0,
+      "equal_words": true
+    },
+    {
+      "native_size": [
+        2564,
+        1536
+      ],
+      "output_size": [
+        1440,
+        863
+      ],
+      "old_ms": 86.55210000142688,
+      "new_ms": 53.40680000153952,
+      "old_words": 0,
+      "new_words": 0,
+      "equal_words": true
+    },
+    {
+      "native_size": [
+        2564,
+        1536
+      ],
+      "output_size": [
+        1440,
+        863
+      ],
+      "old_ms": 37.49450000032084,
+      "new_ms": 29.160099998989608,
+      "old_words": 10,
+      "new_words": 10,
+      "equal_words": true
+    },
+    {
+      "native_size": [
+        2564,
+        1536
+      ],
+      "output_size": [
+        1440,
+        863
+      ],
+      "old_ms": 67.69179999901098,
+      "new_ms": 91.02700000221375,
+      "old_words": 9,
+      "new_words": 9,
+      "equal_words": true
+    }
+  ],
+  "no_images_or_dialogue_saved": true
+}

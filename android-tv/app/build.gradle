@@ -9,8 +9,8 @@ android {
         applicationId 'dev.gamelingo.tv'
         minSdk 26
         targetSdk 32
-        versionCode 4
-        versionName '0.4.0'
+        versionCode 6
+        versionName '0.5.1'
         testInstrumentationRunner 'dev.gamelingo.tv.CanvasRunner'
     }
     compileOptions { sourceCompatibility JavaVersion.VERSION_1_8; targetCompatibility JavaVersion.VERSION_1_8 }

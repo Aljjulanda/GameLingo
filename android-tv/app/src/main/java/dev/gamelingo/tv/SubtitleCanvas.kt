@@ -15,7 +15,7 @@ class SubtitleCanvas(context: Context, private val report: (String)->Unit) : Vie
     var measuredBoxes: List<Pair<Float,Float>> = emptyList(); private set
     var measuredAnchor: Pair<Float,Float> = Pair(0f,0f); private set
     var measuredContext: RectF? = null; private set
-    private data class Queued(val id:String,val text:String,val duration:Long,val receivedAt:Long)
+    private data class Queued(val id:String,val text:String,val duration:Long,val receivedAt:Long,val source:String,val box:SourceBox?)
     private val pending=java.util.ArrayDeque<Queued>()
     var style = JSONObject()
     private val ink = TextPaint(Paint.ANTI_ALIAS_FLAG)
@@ -74,7 +74,8 @@ class SubtitleCanvas(context: Context, private val report: (String)->Unit) : Vie
                 val text=message.getString("translated")
                 val duration=state.duration(text,b("adaptive",true),n("reading_speed",13.0).toDouble(),
                     (n("min_seconds",4.0)*1000).toLong(),(n("max_seconds",8.0)*1000).toLong(),(n("fixed_seconds",5.0)*1000).toLong()).coerceAtMost((n("hard_seconds",8.0)*1000).toLong())
-                pending.add(Queued(message.getString("id"),text,duration,now))
+                val box=if(listOf("x","y","w","h").all {message.has(it)}) SourceBox(message.optDouble("x"),message.optDouble("y"),message.optDouble("w"),message.optDouble("h")) else null
+                pending.add(Queued(message.getString("id"),text,duration,now,message.optString("source",""),box))
                 while(pending.size>3) pending.removeFirst()
                 removeCallbacks(tick); post(tick)
             }
@@ -90,13 +91,18 @@ class SubtitleCanvas(context: Context, private val report: (String)->Unit) : Vie
         while(pending.isNotEmpty()) {
             val entry=pending.removeFirst()
             if(now-entry.receivedAt>(n("hard_seconds",8.0)*1000).toLong()) continue
-            state.show(entry.id,entry.text,now,entry.duration,n("max_entries",3.0).toInt())
+            val merges=state.coalesced
+            state.show(entry.id,entry.text,now,entry.duration,n("max_entries",3.0).toInt(),entry.source,entry.box)
+            if(state.coalesced>merges) android.util.Log.i("GameLingoDedup","coalesced="+state.coalesced+" incoming="+entry.id+" active="+state.entries.size)
             android.util.Log.i("GameLingoEntries","visible=" + state.entries.map {it.id} + " newestUntil=" + state.entries.lastOrNull()?.until)
         }
         // The first tick can execute before onDraw creates the first entry.
         // Always arm the local clock after making queued entries visible.
         if(hadPending) { removeCallbacks(tick); postDelayed(tick,50) }
-        val texts=if(previewUntil>now) listOf("جملة سابقة للمعاينة",sample) else state.entries.map { it.text }
+        val compactions=state.visualCompactions
+        val renderEntries=state.visibleEntries()
+        if(state.visualCompactions>compactions) android.util.Log.i("GameLingoDedup","visual_compactions="+state.visualCompactions+" visible="+renderEntries.size+" active_events="+state.entries.size)
+        val texts=if(previewUntil>now) listOf("جملة سابقة للمعاينة",sample) else renderEntries.map { it.text }
         drawContext(canvas,now)
         if(texts.isEmpty()) return
         val density=resources.displayMetrics.density
@@ -132,14 +138,17 @@ class SubtitleCanvas(context: Context, private val report: (String)->Unit) : Vie
         for(i in texts.indices.reversed()) {
             val layout=layouts[i]; val h=layout.height+2*py
             if(drawn>0 && (drawn>=retained || top-h<safe)) {
-                if(previewUntil<=now) while(state.entries.size>drawn) state.entries.removeAt(0)
+                if(previewUntil<=now) {
+                    val retainedIds=renderEntries.takeLast(drawn).map {it.id}.toSet()
+                    state.entries.removeAll {it.id !in retainedIds}
+                }
                 break
             }
             if(drawn==0 && h>maxHeight && !warned) { report("الجملة تتجاوز ارتفاع منطقة الترجمة المحدد"); warned=true }
             top-=h
             val actualWidth=widths[i]
             val left=anchorX-actualWidth/2
-            val fade=if(previewUntil>now) 1f else state.alpha(state.entries[i],now,n("fade_ms",200.0).toLong())
+            val fade=if(previewUntil>now) 1f else state.alpha(renderEntries[i],now,n("fade_ms",200.0).toLong())
             val alpha=(if(i==texts.lastIndex) 1f else n("older_opacity",85.0)/100)*fade
             val bg=Paint(Paint.ANTI_ALIAS_FLAG)
             val rect=RectF(left,top,left+actualWidth,top+h)

@@ -1,0 +1,14 @@
+TCL
+Smart TV Pro
+G10
+12
+Aljulanda TV
+    versionName=0.5.1
+    versionName=3.1000004
+    versionName=3.1000001
+sa.urtv.home/sa.urtv.home.NetflixShortcutService
+sa.urtv.screensaver/.ScreenDream
+Asia/Muscat
+SYSTEM_ALERT_WINDOW: allow; time=+11m12s366ms ago (running)
+  * ServiceRecord{3c10c5 u0 dev.gamelingo.tv/.OverlayService}
+    isForeground=true foregroundId=1 foregroundNoti=Notification(channel=overlay shortcut=null contentView=null vibrate=null sound=null defaults=0x0 flags=0x62 color=0x00000000 vis=PRIVATE)

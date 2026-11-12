@@ -51,7 +51,7 @@ def test_visible_typewriter_prefix_does_not_cancel_first_translation(tmp_path,mo
     monkeypatch.setattr(pipeline,"ArgosTranslationProvider",Engine)
     shown=[]
     def publish(m):
-        if m["type"]=="subtitle_show":
+        if m["type"] in ("subtitle_show","subtitle_update"):
             shown.append(m["source"])
             if len(shown)==2:complete.set()
     p=pipeline.Pipeline(Source(),(0,0,1,1),5,tmp_path,tmp_path/"db",{},"test",lambda *_:None,publish,subtitles_only=True)
@@ -120,4 +120,39 @@ def test_repeated_still_does_not_repeat_ocr(tmp_path,monkeypatch):
     finally:
         p.stop();p.thread.join(5)
     assert counts==dict(ocr=1,translation=1)
+
+
+def test_old_prefix_result_cannot_cross_a_disappearance(tmp_path,monkeypatch):
+    entered=threading.Event();new_seen=threading.Event();finished=threading.Event()
+    out=[];phase=[0]
+    class Source:
+        def read(self):return Frame(sample_image(str(phase[0])),time.time(),"event boundary")
+    class OCR:
+        def __init__(self,_):pass
+        async def read(self,_):
+            phase[0]+=1
+            if phase[0]==1:return [Reading("Follow me",(.3,.6,.4,.08))]
+            if phase[0]<=3:return []
+            new_seen.set();return [Reading("Follow me to the gate",(.2,.6,.6,.08))]
+    class Engine:
+        def __init__(self,_):pass
+        def translate(self,line):
+            if line=="Follow me":
+                entered.set();assert new_seen.wait(4)
+            return "عربي "+line
+    class Scheduler:
+        rate=10;changed=False
+        def should_read(self,*_):return True
+        def interval(self,*_):return .1
+        def activity(self,*_):pass
+    monkeypatch.setattr(pipeline,"WindowsOCR",OCR)
+    monkeypatch.setattr(pipeline,"ArgosTranslationProvider",Engine)
+    def publish(m):
+        out.append(m)
+        if m.get('source')=="Follow me to the gate":finished.set()
+    p=pipeline.Pipeline(Source(),(0,0,1,1),10,tmp_path,tmp_path/"db",{},"test",lambda *_:None,publish,subtitles_only=True)
+    p.scheduler=Scheduler();p.thread.start()
+    try:assert entered.wait(4) and finished.wait(5)
+    finally:p.stop();p.thread.join(6)
+    assert [m['source'] for m in out if m['type'] in ('subtitle_show','subtitle_update')]==["Follow me to the gate"]
 

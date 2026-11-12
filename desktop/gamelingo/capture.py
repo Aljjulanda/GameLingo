@@ -94,6 +94,11 @@ class ChiakiStreamSource:
         self.next_check = 0.0
         self.stream = None
         self.reader = None
+        self.pixel_format='RGB'
+
+    def set_pixel_format(self,mode):
+        self.pixel_format=mode
+        if self.reader:self.reader.set_pixel_format(mode)
 
     def detect(self):
         now = time.monotonic()
@@ -125,6 +130,7 @@ class ChiakiStreamSource:
             from .window_capture import BackgroundWindowCapture
             self.close()
             self.reader = BackgroundWindowCapture(self.stream.hwnd.value)
+            self.reader.set_pixel_format(self.pixel_format)
         return self.reader.read()
 
     def activate(self):

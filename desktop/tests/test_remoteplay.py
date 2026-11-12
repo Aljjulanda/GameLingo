@@ -49,15 +49,18 @@ def test_background_stream_keeps_its_session_until_minimized(monkeypatch):
             opened.append(hwnd)
             self.closed=threading.Event()
         def read(self): return "frame from stream"
+        def set_pixel_format(self,mode):self.pixel_format=mode
         def close(self): self.closed.set()
     source=capture.ChiakiStreamSource("chiaki.exe")
     source.stream=capture.WindowCaptureSource(700)
+    source.set_pixel_format('L')
     monkeypatch.setattr(source,"detect",lambda:None)
     monkeypatch.setattr(window_capture,"BackgroundWindowCapture",Reader)
     monkeypatch.setattr(capture.user,"GetForegroundWindow",lambda:123)
     monkeypatch.setattr(capture.user,"IsIconic",lambda hwnd:False)
     assert source.read()==source.read()=="frame from stream"
     assert opened==[700]
+    assert source.reader.pixel_format=='L'
     old=source.reader
     monkeypatch.setattr(capture.user,"IsIconic",lambda hwnd:True)
     with pytest.raises(capture.CaptureUnavailable):

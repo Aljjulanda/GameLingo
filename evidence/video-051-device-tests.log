@@ -1,0 +1,19 @@
+
+   uploading app-debug-androidTest.apk: 100%
+pushed C:\Users\julanda\Documents\Codex\2026-11-11\aljulanda-tv-tcl-smart-tv-pro-2\work\GameLingo\android-tv\app\build\outputs\apk\androidTest\debug\app-debug-androidTest.apk -> /data/local/tmp/gamelingo-canvas-test.apk (18748 bytes, md5 ok)
+Success
+INSTRUMENTATION_RESULT: context_center_x=883.19995
+INSTRUMENTATION_RESULT: context_top=431.2
+INSTRUMENTATION_RESULT: long_box_height=440.0
+INSTRUMENTATION_RESULT: long_box_width=1152.0
+INSTRUMENTATION_RESULT: result=PASS: real Canvas content sizing, RTL wrap, isolated expiry, duplicate, stacking, pixel anchor, disconnect clear, nearby mapping and expiry
+INSTRUMENTATION_RESULT: short_box_width=143.0
+INSTRUMENTATION_CODE: -1
+Success
+Starting: Intent { cmp=dev.gamelingo.tv/.MainActivity }
+Status: ok
+LaunchState: COLD
+Activity: dev.gamelingo.tv/.MainActivity
+TotalTime: 1577
+WaitTime: 1602
+Complete

@@ -1,11 +1,16 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="dev.gamelingo.tv.SubtitleStateTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-11-12T17:02:28" hostname="DESKTOP-2VV1KVO" time="0.135">
+<testsuite name="dev.gamelingo.tv.SubtitleStateTest" tests="10" skipped="0" failures="0" errors="0" timestamp="2026-11-12T20:55:43" hostname="DESKTOP-2VV1KVO" time="0.398">
   <properties/>
-  <testcase name="tenSentencesAndIndependentTimers" classname="dev.gamelingo.tv.SubtitleStateTest" time="0.036"/>
-  <testcase name="disappearanceRespectsMinimumAndGraceAndFade" classname="dev.gamelingo.tv.SubtitleStateTest" time="0.003"/>
-  <testcase name="correctionsDoNotResetTimersAndDuplicateDoesNotStack" classname="dev.gamelingo.tv.SubtitleStateTest" time="0.021"/>
-  <testcase name="finalEntryExpiresWithoutAnyNewMessagesAndCannotResurrect" classname="dev.gamelingo.tv.SubtitleStateTest" time="0.003"/>
-  <testcase name="durationsAndReset" classname="dev.gamelingo.tv.SubtitleStateTest" time="0.065"/>
+  <testcase name="tenSentencesAndIndependentTimers" classname="dev.gamelingo.tv.SubtitleStateTest" time="0.177"/>
+  <testcase name="dropoutReappearanceAndGlyphCorrectionDoNotStackOrRenew" classname="dev.gamelingo.tv.SubtitleStateTest" time="0.05"/>
+  <testcase name="disappearanceRespectsMinimumAndGraceAndFade" classname="dev.gamelingo.tv.SubtitleStateTest" time="0.011"/>
+  <testcase name="repeatedArabicAroundAnotherEventIsNotSuppressed" classname="dev.gamelingo.tv.SubtitleStateTest" time="0.006"/>
+  <testcase name="correctionsDoNotResetTimersAndDuplicateDoesNotStack" classname="dev.gamelingo.tv.SubtitleStateTest" time="0.002"/>
+  <testcase name="genuineRepeatAfterInterveningDialogueMovesToNewestWithNewClock" classname="dev.gamelingo.tv.SubtitleStateTest" time="0.007"/>
+  <testcase name="distinctEventsWithIdenticalArabicRenderOnceWithoutLosingNewEventClock" classname="dev.gamelingo.tv.SubtitleStateTest" time="0.099"/>
+  <testcase name="finalEntryExpiresWithoutAnyNewMessagesAndCannotResurrect" classname="dev.gamelingo.tv.SubtitleStateTest" time="0.001"/>
+  <testcase name="identicalArabicIsNotEnoughAndNumbersRemainDistinct" classname="dev.gamelingo.tv.SubtitleStateTest" time="0.02"/>
+  <testcase name="durationsAndReset" classname="dev.gamelingo.tv.SubtitleStateTest" time="0.001"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

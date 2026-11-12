@@ -1,0 +1,7 @@
+{
+  "hw_decoder": "d3d11va",
+  "resolution_local_ps5": "720p",
+  "fps_local_ps5": 30,
+  "codec_local_ps5": "h264",
+  "bitrate_local_ps5": 5000
+}

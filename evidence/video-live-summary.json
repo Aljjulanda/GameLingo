@@ -1,0 +1,60 @@
+{
+  "duration_seconds": 600,
+  "samples": 465,
+  "control_connected_samples": 465,
+  "conditions": "Live gameplay during build and investigation; not a controlled before/after comparison",
+  "system_cpu": {
+    "mean": 95.774,
+    "median": 99.7,
+    "p95": 100.0,
+    "peak": 100.0
+  },
+  "system_gpu": {
+    "mean": 92.943,
+    "median": 96.4,
+    "p95": 99.4,
+    "peak": 100
+  },
+  "processes": {
+    "GameLingo": {
+      "cpu": {
+        "mean": 5.439,
+        "median": 4.925,
+        "p95": 8.45,
+        "peak": 22.525
+      },
+      "gpu": {
+        "mean": 3.267,
+        "median": 3.1,
+        "p95": 6.6,
+        "peak": 7.9
+      },
+      "rss_mb": {
+        "mean": 276.952,
+        "median": 276.512,
+        "p95": 281.586,
+        "peak": 285.973
+      }
+    },
+    "Chiaki_stream": {
+      "cpu": {
+        "mean": 10.34,
+        "median": 10.55,
+        "p95": 13.925,
+        "peak": 16.25
+      },
+      "gpu": {
+        "mean": 27.966,
+        "median": 30.0,
+        "p95": 39.1,
+        "peak": 46.9
+      },
+      "rss_mb": {
+        "mean": 332.377,
+        "median": 331.258,
+        "p95": 337.957,
+        "peak": 365.766
+      }
+    }
+  }
+}

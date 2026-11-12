@@ -1,0 +1,16 @@
+{
+  "windows_version": "0.5.2",
+  "tv_version": "0.5.1",
+  "python_tests_passed": 51,
+  "kotlin_tests_passed": 14,
+  "device_canvas": "PASS",
+  "msi_install_exit": 0,
+  "installed_binary_matches_build": true,
+  "user_settings_equal_excluding_display_revision": true,
+  "tv_tls_connected": true,
+  "live_user_feedback_before_final_fix": "التكرار أكثر من قبل؛ أكثر من سطر",
+  "live_user_feedback_after_final_fix": "اختفى التكرار الآن",
+  "roi_features_changed": false,
+  "chiaki_settings_changed": false,
+  "direct_frame_acquisition_implemented": false
+}

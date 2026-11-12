@@ -3,11 +3,11 @@ import concurrent.futures
 import hashlib
 import threading
 import time
-from difflib import SequenceMatcher
 from .capture import CaptureUnavailable, crop, native_roi
 from .ocr import WindowsOCR
 from .tracking import Tracker, dialogue_block, still_visible_prefix
 from .translation import Memory, ArgosTranslationProvider
+from .dialogue_events import DialogueEvents
 from .network import envelope
 from .recognition import DialogueFilter, Presence, CONTEXT_TERMS, map_context, term, valid_roi
 
@@ -26,6 +26,7 @@ class Pipeline:
         self.scheduler=None
         self.subtitles_only = subtitles_only
         self.recognition=recognition or {}
+        if hasattr(source,'set_pixel_format'):source.set_pixel_format('L')
 
     def _run(self):
         try:
@@ -59,7 +60,7 @@ class Pipeline:
         skipped = 0
         stable = 0
         last_state = None
-        display_id=0
+        events=DialogueEvents()
         anchor = (.5,.59,.10)
         retry_digest = None
         next_retry = 0.0
@@ -119,11 +120,18 @@ class Pipeline:
                     previous_text=track.current
                     gone=presence.observe(reads,observed)
                     change = track.observe(text, time.monotonic(),grace=0) if observed and (text or gone) else None
+                    event_info=None
+                    if observed and text and not change:events.last_seen=time.monotonic()
                     if change:
                         seq, line = change
                         if self.scheduler:self.scheduler.activity(line,time.monotonic())
-                        correction=bool(previous_text and line and len(line)>=12 and SequenceMatcher(None,previous_text,line).ratio()>=.88)
-                        if line and not still_visible_prefix(previous_text,line) and not correction:display_id+=1
+                        if line:
+                            rx, ry, rw, rh = native_roi(frame.image.size,self.roi)
+                            x=min(r.box[0] for r in reads); y=min(r.box[1] for r in reads)
+                            right=max(r.box[0]+r.box[2] for r in reads); bottom=max(r.box[1]+r.box[3] for r in reads)
+                            box=(rx+x*rw,ry+y*rh,(right-x)*rw,(bottom-y)*rh)
+                            event_info=events.observe(line,box,time.monotonic())
+                        correction=bool(event_info and event_info[1])
                         if job and not still_visible_prefix(job[1][1],line):
                             job[2].set()
                         if active and (not line or (line and not correction and not still_visible_prefix(active['source'],line))):
@@ -133,12 +141,9 @@ class Pipeline:
                             # Source changes do not erase reading-time entries on TV.
                             pass
                         if line:
-                            rx, ry, rw, rh = native_roi(frame.image.size,self.roi)
-                            x=min(r.box[0] for r in reads); y=min(r.box[1] for r in reads)
-                            right=max(r.box[0]+r.box[2] for r in reads); bottom=max(r.box[1]+r.box[3] for r in reads)
-                            box=(rx+x*rw,ry+y*rh,(right-x)*rw,(bottom-y)*rh)
-                            pending = (seq, line, frame.timestamp, box, capture_ms, ocr_ms)
+                            pending = (seq, line, frame.timestamp, box, capture_ms, ocr_ms, event_info[0], correction)
                         else:
+                            events.absent()
                             pending = None; self.notify("clear", "")
                     # Optional context costs zero OCR/model work while disabled. It uses
                     # only explicit ROIs and never enters the main dialogue stream.
@@ -182,12 +187,18 @@ class Pipeline:
                         if job:
                             job[2].set()
                         previous = active = pending = None
+                        events.absent()
                         track.seq += 1
                         track.current = ""
                         track.empty_since = None
                         self.notify("clear","")
                 if self.scheduler:self.rate=self.scheduler.rate
                 self.metrics.update(ocr_attempts=self.ocr_count,skipped_ocr=skipped,ocr_per_second=round(self.ocr_count/max(.1,time.monotonic()-self.started_at),2),queue_depth=int(job is not None)+int(pending is not None),capture_width=frame.image.width if previous else 0,capture_height=frame.image.height if previous else 0,roi_pixels=roi.width*roi.height if previous else 0)
+                meter=getattr(self.source,'reader',self.source)
+                if hasattr(meter,'metrics') and 'converted_frames' in meter.metrics:
+                    cm=meter.metrics;cnt=cm['converted_frames']
+                    self.metrics.update(capture_converted_frames=cnt,capture_native_callbacks=cm['native_callbacks'],
+                        capture_conversion_mean_ms=round(cm['conversion_total_ms']/max(1,cnt),2),capture_conversion_peak_ms=round(cm['conversion_peak_ms'],2))
                 interval = self.scheduler.interval(time.monotonic()) if self.scheduler else 1/self.rate
                 if stable > 8 and not self.subtitles_only:
                     interval = max(interval, min(.45, interval*1.5))
@@ -209,13 +220,13 @@ class Pipeline:
                         arabic, trans_ms, hits, count = future.result()
                     except concurrent.futures.CancelledError:
                         continue
-                    seq, line, stamp, box, cap_ms, rec_ms = info
-                    visible = seq == track.seq or still_visible_prefix(line,track.current)
+                    seq, line, stamp, box, cap_ms, rec_ms, subtitle_id, is_update = info
+                    # Prefix results are useful while a single typewriter event
+                    # grows, but must never survive a disappearance/new event.
+                    visible = subtitle_id == events.id and (seq == track.seq or still_visible_prefix(line,track.current))
                     if visible and not self.stop_event.is_set() and track.current:
                         now = time.time()
-                        subtitle_id=f"dialogue-{display_id}"
-                        if active and still_visible_prefix(active["source"],line): subtitle_id=active["id"]
-                        active = envelope("subtitle_show", id=subtitle_id,update_type="new", source=line, translated=arabic,
+                        active = envelope("subtitle_update" if is_update else "subtitle_show", id=subtitle_id,update_type="correction" if is_update else "new", source=line, translated=arabic,
                             source_lang="en", target_lang="ar", frame_ms=round(stamp*1000), translation_ms=round(now*1000),
                             x=box[0], y=box[1], w=box[2], h=box[3], category="text", confidence=None, font_sp=self.font,
                             duration_ms=4500, expires_at=round(now*1000)+4500)

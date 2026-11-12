@@ -1,8 +1,7 @@
 """Windows Graphics Capture for a single explicitly selected chiaki window."""
 import threading
 import time
-import cv2
-from PIL import Image
+from .frame_conversion import owned_image
 from windows_capture import WindowsCapture
 from .capture import CaptureUnavailable, Frame
 
@@ -11,6 +10,8 @@ class BackgroundWindowCapture:
     def __init__(self, hwnd):
         self.hwnd = hwnd
         self.latest = None
+        self.pixel_format='RGB'
+        self.metrics={'native_callbacks':0,'converted_frames':0,'conversion_total_ms':0.,'conversion_peak_ms':0.}
         self.needed = threading.Event()
         self.ready = threading.Event()
         self.closed = threading.Event()
@@ -19,21 +20,18 @@ class BackgroundWindowCapture:
 
         @self.capture.event
         def on_frame_arrived(frame, _control):
+            self.metrics['native_callbacks']+=1
             # Copy only the frames requested by the OCR worker. The mapped GPU
             # buffer belongs to this callback and must not outlive it.
             if not self.needed.is_set() or self.closed.is_set():
                 return
             self.needed.clear()
             stamp = time.time()
-            pixels = frame.frame_buffer
-            # The current Remote Play feed is 720p. A maximized HiDPI window
-            # can quadruple the pixel count without adding any subtitle detail.
-            width, height = frame.width, frame.height
-            if width > 1440:
-                height = max(1, round(height * 1440 / width))
-                width = 1440
-                pixels = cv2.resize(pixels, (width,height), interpolation=cv2.INTER_LINEAR)
-            image = Image.frombytes("RGB", (width,height), pixels.tobytes(), "raw", "BGRX")
+            begin=time.perf_counter()
+            image=owned_image(frame.frame_buffer,frame.width,frame.height,self.pixel_format)
+            elapsed=(time.perf_counter()-begin)*1000
+            self.metrics['converted_frames']+=1;self.metrics['conversion_total_ms']+=elapsed
+            self.metrics['conversion_peak_ms']=max(self.metrics['conversion_peak_ms'],elapsed)
             self.latest = Frame(image, stamp, "chiaki-window")
             self.ready.set()
 
@@ -43,6 +41,10 @@ class BackgroundWindowCapture:
             self.ready.set()
 
         self.control = self.capture.start_free_threaded()
+
+    def set_pixel_format(self,mode):
+        if mode not in ('L','RGB'):raise ValueError('Unsupported capture format')
+        self.pixel_format=mode
 
     def read(self):
         self.ready.clear()
