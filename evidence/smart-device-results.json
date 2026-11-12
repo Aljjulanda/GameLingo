@@ -1,0 +1,66 @@
+{
+  "events": [
+    {
+      "type": "listening",
+      "value": ""
+    },
+    {
+      "type": "connected",
+      "value": ""
+    },
+    {
+      "type": "settings_ack",
+      "value": {
+        "revision": 1794475418311,
+        "width_px": 1920,
+        "height_px": 1080,
+        "anchor_x": 960,
+        "anchor_y": 993.6000366210938
+      }
+    },
+    {
+      "type": "settings_ack",
+      "value": {
+        "revision": 1794475451016,
+        "width_px": 1920,
+        "height_px": 1080,
+        "anchor_x": 960,
+        "anchor_y": 993.6000366210938
+      }
+    },
+    {
+      "type": "settings_ack",
+      "value": {
+        "revision": 1794475452318,
+        "width_px": 1920,
+        "height_px": 1080,
+        "anchor_x": 961,
+        "anchor_y": 993.6000366210938
+      }
+    },
+    {
+      "type": "settings_ack",
+      "value": {
+        "revision": 1794475453621,
+        "width_px": 1920,
+        "height_px": 1080,
+        "anchor_x": 960,
+        "anchor_y": 993.6000366210938
+      }
+    },
+    {
+      "type": "settings_ack",
+      "value": {
+        "revision": 1794475453621,
+        "width_px": 1920,
+        "height_px": 1080,
+        "anchor_x": 960,
+        "anchor_y": 993.6000366210938
+      }
+    },
+    {
+      "type": "disconnected",
+      "value": ""
+    }
+  ]
+}

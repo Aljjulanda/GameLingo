@@ -1,0 +1,43 @@
+{
+  "fixture": "generated window, changing corner HUD and previously uncached English lines",
+  "expected": [
+    "Go!",
+    "Wait here. I will come back.",
+    "Follow me",
+    "Follow me to the gate.",
+    "Take the key.",
+    "Run!"
+  ],
+  "results": [
+    {
+      "ocr": "Follow me",
+      "arabic": "اتبعني",
+      "frame_to_ready_ms": 181,
+      "visible_to_ready_ms": 469
+    }
+  ],
+  "missed": [
+    "Go!",
+    "Wait here. I will come back.",
+    "Follow me to the gate.",
+    "Take the key.",
+    "Run!"
+  ],
+  "errors": [],
+  "finished": true,
+  "warmup_seen": true,
+  "pipeline_metrics": {
+    "ocr_attempts": 11,
+    "skipped_ocr": 14,
+    "ocr_per_second": 1.32,
+    "queue_depth": 1,
+    "capture_width": 1440,
+    "capture_height": 853,
+    "capture_ms": 31,
+    "ocr_ms": 32,
+    "translation_ms": 95,
+    "latency_ms": 181,
+    "cache_hits": 0,
+    "requests": 3
+  }
+}

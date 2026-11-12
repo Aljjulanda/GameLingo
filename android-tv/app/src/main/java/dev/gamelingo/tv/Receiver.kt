@@ -50,6 +50,8 @@ object Pairing {
 }
 
 class Receiver(context: Context, private val render: (JSONObject?) -> Unit, private val status: (String) -> Unit) {
+    private val contextWidth = context.resources.displayMetrics.widthPixels
+    private val contextHeight = context.resources.displayMetrics.heightPixels
     private val prefs = context.getSharedPreferences("overlay", Context.MODE_PRIVATE)
     private val main = Handler(Looper.getMainLooper())
     private var socket: WebSocket? = null
@@ -129,10 +131,29 @@ class Receiver(context: Context, private val render: (JSONObject?) -> Unit, priv
                             if (session.isEmpty() || m.optString("session") != session || m.getLong("seq") <= sequence) return@onMain
                             sequence = m.getLong("seq")
                             if (m.getString("type") in listOf("subtitle_clear","subtitle_hide")) { render(null); return@onMain }
-                            val left = m.getLong("expires_at") - (serverTime + SystemClock.elapsedRealtime() - syncTime)
-                            if (left <= 0) { render(null); return@onMain }
+                            val left = m.optLong("expires_at",Long.MAX_VALUE) - (serverTime + SystemClock.elapsedRealtime() - syncTime)
+                            if (left <= 0) return@onMain
                             require(m.getString("translated").length <= 2400 && m.getString("target_lang") == "ar")
-                            render(m.put("remaining_ms",left.coerceIn(1,15000)))
+                            render(m)
+                        }
+                        "settings_sync", "subtitle_style_update", "subtitle_position_update", "subtitle_timing_update",
+                        "subtitle_preview_show", "subtitle_preview_hide" -> {
+                            if(m.optString("session")!=session || m.getLong("seq")<=sequence) return@onMain
+                            sequence=m.getLong("seq")
+                            if(m.has("settings")) {
+                                val incoming=m.getJSONObject("settings")
+                                val rev=incoming.optLong("revision",0)
+                                if(rev<prefs.getLong("settings_revision",0)) return@onMain
+                                prefs.edit().putString("display_settings",incoming.toString()).putLong("settings_revision",rev).apply()
+                                main.postDelayed({
+                                    if(generation==epoch) {
+                                ws.send(JSONObject().put("v",1).put("type","settings_ack").put("revision",rev)
+                                    .put("width_px",contextWidth).put("height_px",contextHeight).put("anchor_x",prefs.getFloat("anchor_x",0f).toDouble()).put("anchor_y",prefs.getFloat("anchor_y",0f).toDouble()).toString())
+                                    }
+                                },180)
+
+                            }
+                            render(m)
                         }
                         "heartbeat" -> { serverTime = m.getLong("time_ms"); syncTime = SystemClock.elapsedRealtime() }
                         "error" -> { render(null); status("خطأ من الكمبيوتر") }

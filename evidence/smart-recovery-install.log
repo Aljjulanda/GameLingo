@@ -1,0 +1,31 @@
+
+   uploading GameLingo-TV-smart.apk: 5%
+   uploading GameLingo-TV-smart.apk: 10%
+   uploading GameLingo-TV-smart.apk: 15%
+   uploading GameLingo-TV-smart.apk: 20%
+   uploading GameLingo-TV-smart.apk: 25%
+   uploading GameLingo-TV-smart.apk: 30%
+   uploading GameLingo-TV-smart.apk: 35%
+   uploading GameLingo-TV-smart.apk: 40%
+   uploading GameLingo-TV-smart.apk: 45%
+   uploading GameLingo-TV-smart.apk: 50%
+   uploading GameLingo-TV-smart.apk: 55%
+   uploading GameLingo-TV-smart.apk: 60%
+   uploading GameLingo-TV-smart.apk: 66%
+   uploading GameLingo-TV-smart.apk: 71%
+   uploading GameLingo-TV-smart.apk: 76%
+   uploading GameLingo-TV-smart.apk: 81%
+   uploading GameLingo-TV-smart.apk: 86%
+   uploading GameLingo-TV-smart.apk: 91%
+   uploading GameLingo-TV-smart.apk: 96%
+   uploading GameLingo-TV-smart.apk: 100%
+pushed C:\Users\julanda\Documents\Codex\2026-11-11\aljulanda-tv-tcl-smart-tv-pro-2\work\GameLingo-TV-smart.apk -> /data/local/tmp/gamelingo-overlay-test.apk (1417856 bytes, md5 ok)
+
+Success
+SYSTEM_ALERT_WINDOW: allow; time=+7m28s506ms ago; duration=+105ms
+Starting: Intent { cmp=dev.gamelingo.tv/.MainActivity }
+Status: ok
+LaunchState: UNKNOWN (0)
+Activity: dev.gamelingo.tv/.MainActivity
+WaitTime: 3013
+Complete

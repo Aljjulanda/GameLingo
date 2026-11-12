@@ -8,6 +8,7 @@ from PySide6.QtCore import Qt, QTimer, QObject, Signal
 from PySide6.QtGui import QPainter, QColor, QFont
 from PySide6.QtWidgets import QApplication, QWidget
 from gamelingo.pipeline import Pipeline
+from gamelingo.performance import Scheduler
 from gamelingo.storage import data_root
 from gamelingo.ui import REGIONS
 from gamelingo.window_capture import BackgroundWindowCapture
@@ -69,6 +70,7 @@ def verify_window(path,app):
         source=BackgroundWindowCapture(int(scene.winId()))
         pipe=Pipeline(source,REGIONS["subtitles"],4,data_root()/"models",Path(tmp)/"cache.sqlite",{},
                       "fixture",events.event.emit,lambda _m:None,subtitles_only=True)
+        pipe.scheduler=Scheduler("Balanced",False)
         pipe.thread.start()
         QTimer.singleShot(25000,app.quit);app.exec()
         pipe.stop();pipe.thread.join(10)
@@ -76,6 +78,6 @@ def verify_window(path,app):
     seen={r["ocr"] for r in results}
     report={"fixture":"generated window, changing corner HUD and previously uncached English lines",
             "expected":expected,"results":results,"missed":[line for line in expected if line not in seen],
-            "errors":errors,"finished":not pipe.thread.is_alive(),"warmup_seen":started}
+            "errors":errors,"finished":not pipe.thread.is_alive(),"warmup_seen":started,"pipeline_metrics":pipe.metrics}
     Path(path).write_text(json.dumps(report,ensure_ascii=False,indent=2),encoding="utf-8")
     return 0 if not report["missed"] and not errors and report["finished"] else 1

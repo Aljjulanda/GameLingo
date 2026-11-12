@@ -1,0 +1,143 @@
+{
+  "fixture": "generated window, changing corner HUD and previously uncached English lines",
+  "expected": [
+    "Go!",
+    "Wait here. I will come back.",
+    "Follow me",
+    "Follow me to the gate.",
+    "Take the key.",
+    "Run!"
+  ],
+  "results": [
+    {
+      "ocr": "Go!",
+      "arabic": "!",
+      "frame_to_ready_ms": 134,
+      "visible_to_ready_ms": 172
+    },
+    {
+      "ocr": "Wait here. I will come back.",
+      "arabic": "انتظر هنا، سأعود",
+      "frame_to_ready_ms": 136,
+      "visible_to_ready_ms": 329
+    },
+    {
+      "ocr": "Follow me",
+      "arabic": "اتبعني",
+      "frame_to_ready_ms": 85,
+      "visible_to_ready_ms": 329
+    },
+    {
+      "ocr": "Follow me to the gate.",
+      "arabic": "اتبعني إلى البوابة",
+      "frame_to_ready_ms": 89,
+      "visible_to_ready_ms": 203
+    },
+    {
+      "ocr": "Take the key.",
+      "arabic": "خذ المفتاح",
+      "frame_to_ready_ms": 101,
+      "visible_to_ready_ms": 344
+    },
+    {
+      "ocr": "Run!",
+      "arabic": "اركضوا!",
+      "frame_to_ready_ms": 128,
+      "visible_to_ready_ms": 266
+    }
+  ],
+  "missed": [],
+  "errors": [],
+  "finished": true,
+  "warmup_seen": true,
+  "pipeline_metrics": {
+    "ocr_attempts": 12,
+    "skipped_ocr": 15,
+    "ocr_per_second": 1.6,
+    "queue_depth": 0,
+    "capture_width": 1440,
+    "capture_height": 853,
+    "capture_ms": 31,
+    "ocr_ms": 34,
+    "translation_ms": 62,
+    "latency_ms": 128,
+    "cache_hits": 0,
+    "requests": 7
+  },
+  "process_samples": [
+    {
+      "cpu_percent": 23.45,
+      "rss_mb": 39.859375
+    },
+    {
+      "cpu_percent": 25.775,
+      "rss_mb": 74.421875
+    },
+    {
+      "cpu_percent": 17.975,
+      "rss_mb": 126.56640625
+    },
+    {
+      "cpu_percent": 29.7,
+      "rss_mb": 231.703125
+    },
+    {
+      "cpu_percent": 26.55,
+      "rss_mb": 233.94921875
+    },
+    {
+      "cpu_percent": 21.2,
+      "rss_mb": 233.96875
+    },
+    {
+      "cpu_percent": 9.375,
+      "rss_mb": 234.203125
+    },
+    {
+      "cpu_percent": 19.525,
+      "rss_mb": 235.1015625
+    },
+    {
+      "cpu_percent": 4.7,
+      "rss_mb": 247.39453125
+    },
+    {
+      "cpu_percent": 16.4,
+      "rss_mb": 235.04296875
+    },
+    {
+      "cpu_percent": 17.975,
+      "rss_mb": 234.57421875
+    },
+    {
+      "cpu_percent": 7.025,
+      "rss_mb": 234.6015625
+    },
+    {
+      "cpu_percent": 21.1,
+      "rss_mb": 235.11328125
+    },
+    {
+      "cpu_percent": 15.625,
+      "rss_mb": 235.234375
+    },
+    {
+      "cpu_percent": 10.15,
+      "rss_mb": 235.234375
+    },
+    {
+      "cpu_percent": 7.025,
+      "rss_mb": 235.34765625
+    },
+    {
+      "cpu_percent": 7.025,
+      "rss_mb": 235.94921875
+    },
+    {
+      "cpu_percent": 9.375,
+      "rss_mb": 113.1953125
+    }
+  ],
+  "process_cpu_mean_percent": 16.108333333333334,
+  "process_ram_peak_mb": 247.39453125
+}

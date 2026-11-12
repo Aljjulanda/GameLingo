@@ -1,0 +1,27 @@
+$ logcat -d -b all -v time -s AndroidRuntime GameLingo GameLingoPosition GameLingoEntries | tail -65
+--------- beginning of main
+11-12 13:14:36.244 I/GameLingo(21980): Applied subtitle_preview_show sequence 4
+11-12 13:14:36.254 I/GameLingoPosition(21980): anchor=960.0,993.60004 output=1920x1080
+11-12 13:14:37.544 I/GameLingo(21980): Applied subtitle_preview_hide sequence 5
+11-12 13:14:37.561 I/GameLingoEntries(21980): visible=[smart-test-0] newestUntil=1622989822
+11-12 13:14:37.561 I/GameLingo(21980): Applied subtitle_show sequence 6
+11-12 13:14:38.539 I/GameLingoEntries(21980): visible=[smart-test-0, smart-test-1] newestUntil=1622990801
+11-12 13:14:38.539 I/GameLingo(21980): Applied subtitle_show sequence 7
+11-12 13:14:39.558 I/GameLingoEntries(21980): visible=[smart-test-0, smart-test-1, smart-test-2] newestUntil=1622991819
+11-12 13:14:39.558 I/GameLingo(21980): Applied subtitle_show sequence 8
+11-12 13:14:40.553 I/GameLingoEntries(21980): visible=[smart-test-1, smart-test-2, smart-test-3] newestUntil=1622992812
+11-12 13:14:40.553 I/GameLingo(21980): Applied subtitle_show sequence 9
+11-12 13:14:41.550 I/GameLingoEntries(21980): visible=[smart-test-2, smart-test-3, smart-test-4] newestUntil=1622993812
+11-12 13:14:41.550 I/GameLingo(21980): Applied subtitle_show sequence 10
+11-12 13:14:42.551 I/GameLingoEntries(21980): visible=[smart-test-3, smart-test-4, smart-test-5] newestUntil=1622994813
+11-12 13:14:42.551 I/GameLingo(21980): Applied subtitle_show sequence 11
+11-12 13:14:43.552 I/GameLingoEntries(21980): visible=[smart-test-4, smart-test-5, smart-test-6] newestUntil=1622995814
+11-12 13:14:43.553 I/GameLingo(21980): Applied subtitle_show sequence 12
+11-12 13:14:44.553 I/GameLingoEntries(21980): visible=[smart-test-5, smart-test-6, smart-test-7] newestUntil=1622996815
+11-12 13:14:44.558 I/GameLingo(21980): Applied subtitle_show sequence 13
+11-12 13:14:45.554 I/GameLingoEntries(21980): visible=[smart-test-6, smart-test-7, smart-test-8] newestUntil=1622997816
+11-12 13:14:45.554 I/GameLingo(21980): Applied subtitle_show sequence 14
+11-12 13:14:46.558 I/GameLingoEntries(21980): visible=[smart-test-7, smart-test-8, smart-test-9] newestUntil=1622998820
+11-12 13:14:46.558 I/GameLingo(21980): Applied subtitle_show sequence 15
+$ dumpsys window | grep mCurrentFocus | head -1
+  mCurrentFocus=Window{c751fe0 u0 com.tcl.tv/com.tcl.tv.TVActivity}

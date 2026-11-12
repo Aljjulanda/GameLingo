@@ -1,0 +1,129 @@
+{
+  "fixture": "generated window, changing corner HUD and previously uncached English lines",
+  "expected": [
+    "Go!",
+    "Wait here. I will come back.",
+    "Follow me",
+    "Follow me to the gate.",
+    "Take the key.",
+    "Run!"
+  ],
+  "results": [
+    {
+      "ocr": "Go!",
+      "arabic": "!",
+      "frame_to_ready_ms": 86,
+      "visible_to_ready_ms": 188
+    },
+    {
+      "ocr": "Wait here. I will come back.",
+      "arabic": "انتظر هنا، سأعود",
+      "frame_to_ready_ms": 88,
+      "visible_to_ready_ms": 359
+    },
+    {
+      "ocr": "Follow me",
+      "arabic": "اتبعني",
+      "frame_to_ready_ms": 99,
+      "visible_to_ready_ms": 140
+    },
+    {
+      "ocr": "Follow me to the gate.",
+      "arabic": "اتبعني إلى البوابة",
+      "frame_to_ready_ms": 238,
+      "visible_to_ready_ms": 391
+    },
+    {
+      "ocr": "Take the key.",
+      "arabic": "خذ المفتاح",
+      "frame_to_ready_ms": 96,
+      "visible_to_ready_ms": 125
+    },
+    {
+      "ocr": "Run!",
+      "arabic": "اركضوا!",
+      "frame_to_ready_ms": 152,
+      "visible_to_ready_ms": 343
+    }
+  ],
+  "missed": [],
+  "errors": [],
+  "finished": true,
+  "warmup_seen": true,
+  "process_samples": [
+    {
+      "cpu_percent": 23.45,
+      "rss_mb": 38.49609375
+    },
+    {
+      "cpu_percent": 24.225,
+      "rss_mb": 71.58203125
+    },
+    {
+      "cpu_percent": 18.75,
+      "rss_mb": 125.57421875
+    },
+    {
+      "cpu_percent": 32.8,
+      "rss_mb": 232.90625
+    },
+    {
+      "cpu_percent": 23.475,
+      "rss_mb": 233.19140625
+    },
+    {
+      "cpu_percent": 14.85,
+      "rss_mb": 236.578125
+    },
+    {
+      "cpu_percent": 6.25,
+      "rss_mb": 248.5703125
+    },
+    {
+      "cpu_percent": 17.975,
+      "rss_mb": 234.5859375
+    },
+    {
+      "cpu_percent": 18.75,
+      "rss_mb": 234.65625
+    },
+    {
+      "cpu_percent": 6.25,
+      "rss_mb": 234.67578125
+    },
+    {
+      "cpu_percent": 24.225,
+      "rss_mb": 234.74609375
+    },
+    {
+      "cpu_percent": 17.975,
+      "rss_mb": 234.75
+    },
+    {
+      "cpu_percent": 11.725,
+      "rss_mb": 234.28515625
+    },
+    {
+      "cpu_percent": 14.05,
+      "rss_mb": 234.34765625
+    },
+    {
+      "cpu_percent": 12.5,
+      "rss_mb": 234.46875
+    },
+    {
+      "cpu_percent": 4.7,
+      "rss_mb": 234.921875
+    },
+    {
+      "cpu_percent": 5.475,
+      "rss_mb": 234.97265625
+    },
+    {
+      "cpu_percent": 8.6,
+      "rss_mb": 111.99609375
+    }
+  ],
+  "process_cpu_mean_percent": 15.890277777777776,
+  "process_ram_peak_mb": 248.5703125
+}

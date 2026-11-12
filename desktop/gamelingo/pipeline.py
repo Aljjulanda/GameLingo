@@ -3,7 +3,7 @@ import concurrent.futures
 import hashlib
 import threading
 import time
-from collections import deque
+from difflib import SequenceMatcher
 from .capture import CaptureUnavailable, crop
 from .ocr import WindowsOCR
 from .tracking import Tracker, dialogue_block, still_visible_prefix
@@ -19,7 +19,10 @@ class Pipeline:
         self.notify, self.publish, self.font = notify, publish, font
         self.stop_event = threading.Event()
         self.thread = threading.Thread(target=self._run, daemon=True)
-        self.context = deque(maxlen=4)
+        self.ocr_count=0
+        self.started_at=time.monotonic()
+        self.metrics={}
+        self.scheduler=None
         self.subtitles_only = subtitles_only
 
     def _run(self):
@@ -51,8 +54,8 @@ class Pipeline:
         reads = []
         skipped = 0
         stable = 0
-        last_renew = 0
         last_state = None
+        display_id=0
         anchor = (.5,.59,.10)
         retry_digest = None
         next_retry = 0.0
@@ -69,8 +72,9 @@ class Pipeline:
                     roi = crop(frame.image, self.roi).convert("L")
                     digest = hashlib.blake2b(roi.tobytes(), digest_size=12).digest()
                     ocr_ms = 0.
-                    if digest != previous:
+                    if self.scheduler.should_read(roi,time.monotonic()) if self.scheduler else digest != previous:
                         start = time.perf_counter()
+                        self.ocr_count+=1
                         reads = await ocr.read(roi)
                         if self.subtitles_only:
                             reads = dialogue_block(reads)
@@ -90,14 +94,18 @@ class Pipeline:
                             next_retry=time.monotonic()+.27
                     state("ok")
                     text = " ".join(r.text for r in reads)[:1800]
+                    previous_text=track.current
                     change = track.observe(text, time.monotonic())
                     if change:
                         seq, line = change
+                        correction=bool(previous_text and line and len(line)>=12 and SequenceMatcher(None,previous_text,line).ratio()>=.88)
+                        if line and not still_visible_prefix(previous_text,line) and not correction:display_id+=1
                         if job and not still_visible_prefix(job[1][1],line):
                             job[2].set()
                         if not active or not still_visible_prefix(active["source"],line):
                             active = None
-                            self.publish(envelope("subtitle_clear"))
+                            # Source changes do not erase reading-time entries on TV.
+                            pass
                         if line:
                             rx, ry, rw, rh = self.roi
                             x=min(r.box[0] for r in reads); y=min(r.box[1] for r in reads)
@@ -115,7 +123,9 @@ class Pipeline:
                         track.seq += 1
                         track.current = ""
                         track.empty_since = None
-                        self.publish(envelope("subtitle_clear")); self.notify("clear","")
+                        self.notify("clear","")
+                if self.scheduler:self.rate=self.scheduler.rate
+                self.metrics.update(ocr_attempts=self.ocr_count,skipped_ocr=skipped,ocr_per_second=round(self.ocr_count/max(.1,time.monotonic()-self.started_at),2),queue_depth=int(job is not None)+int(pending is not None),capture_width=frame.image.width if previous else 0,capture_height=frame.image.height if previous else 0)
                 interval = 1/self.rate
                 if stable > 8 and not self.subtitles_only:
                     interval = max(interval, min(.45, interval*1.5))
@@ -141,18 +151,17 @@ class Pipeline:
                     visible = seq == track.seq or still_visible_prefix(line,track.current)
                     if visible and not self.stop_event.is_set() and track.current:
                         now = time.time()
-                        active = envelope("subtitle_show", id="dialogue", source=line, translated=arabic,
+                        subtitle_id=f"dialogue-{display_id}"
+                        if active and still_visible_prefix(active["source"],line): subtitle_id=active["id"]
+                        active = envelope("subtitle_show", id=subtitle_id,update_type="new", source=line, translated=arabic,
                             source_lang="en", target_lang="ar", frame_ms=round(stamp*1000), translation_ms=round(now*1000),
                             x=box[0], y=box[1], w=box[2], h=box[3], category="text", confidence=None, font_sp=self.font,
                             duration_ms=4500, expires_at=round(now*1000)+4500)
-                        self.publish(active.copy()); last_renew = time.monotonic(); self.context.append(line)
+                        self.publish(active.copy())
+                        self.metrics.update(capture_ms=round(cap_ms),ocr_ms=round(rec_ms),translation_ms=round(trans_ms),latency_ms=round((now-stamp)*1000),cache_hits=hits,requests=count)
                         self.notify("result", dict(source=line, translated=arabic, latency_ms=round((now-stamp)*1000),
                             capture_ms=round(cap_ms), ocr_ms=round(rec_ms), translation_ms=round(trans_ms),
                             hits=hits, requests=count, skipped=skipped))
-                if active and time.monotonic()-last_renew >= 2:
-                    last_renew=time.monotonic()
-                    active.update(type="subtitle_update", expires_at=round(time.time()*1000)+4500)
-                    self.publish(active.copy())
                 self.stop_event.wait(max(.005, next_frame-time.monotonic()))
         finally:
             pool.submit(memory.close).result(); pool.shutdown()

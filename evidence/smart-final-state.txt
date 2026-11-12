@@ -1,0 +1,10 @@
+$ dumpsys power | grep -E 'mWakefulness=|mInteractive='
+  mWakefulness=Asleep
+$ dumpsys activity activities | grep mResumedActivity | head -1
+
+$ getprop ro.product.model
+Smart TV Pro
+$ settings get secure enabled_accessibility_services
+sa.urtv.home/sa.urtv.home.NetflixShortcutService
+$ settings get secure screensaver_components
+sa.urtv.screensaver/.ScreenDream

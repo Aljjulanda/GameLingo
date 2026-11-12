@@ -58,6 +58,11 @@ class MainActivity : Activity() {
         }
         button("إخفاء النص وإيقاف الخدمة") { stopService(Intent(this, OverlayService::class.java)); refresh() }
         button("الاتصال بتطبيق Windows") { connectionDialog() }
+        val savedHost=prefs.getString("host","") ?: ""
+        if(Settings.canDrawOverlays(this) && prefs.contains("token") && Pairing.privateIp(savedHost)) {
+            startForegroundService(Intent(this,OverlayService::class.java).setAction("connect")
+                .putExtra("host",savedHost).putExtra("code",""))
+        }
         val link = intent.data
         if (intent.action == Intent.ACTION_VIEW && link?.scheme == "gamelingo" && link.host == "pair") {
             connectionDialog(link.getQueryParameter("host"), link.getQueryParameter("code"))

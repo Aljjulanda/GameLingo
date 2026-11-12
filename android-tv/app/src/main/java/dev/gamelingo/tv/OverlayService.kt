@@ -14,7 +14,7 @@ import android.widget.TextView
 class OverlayService : Service() {
     companion object { var active = false; private set }
     private lateinit var wm: WindowManager
-    private var view: TextView? = null
+    private var view: SubtitleCanvas? = null
     private val handler = Handler(Looper.getMainLooper())
     private val expire = Runnable { stopSelf() }
     private val hide = Runnable { view?.visibility = View.GONE }
@@ -38,11 +38,11 @@ class OverlayService : Service() {
     private fun params(): WindowManager.LayoutParams {
         val placement = Placement.from(getSharedPreferences("overlay", MODE_PRIVATE).getString("position", null))
         val anchor = when (placement) { Placement.BOTTOM -> Gravity.BOTTOM; Placement.TOP -> Gravity.TOP; Placement.CENTER -> Gravity.CENTER_VERTICAL }
-        return WindowManager.LayoutParams(-2, -2, WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+        return WindowManager.LayoutParams(-1, -1, WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
             PixelFormat.TRANSLUCENT).apply {
-            gravity = Gravity.CENTER_HORIZONTAL or anchor
-            y = if (placement == Placement.CENTER) 0 else (resources.displayMetrics.heightPixels * 0.08).toInt()
+            gravity = Gravity.TOP or Gravity.LEFT
+            y = 0
             setTitle("GameLingo subtitle")
         }
     }
@@ -51,39 +51,34 @@ class OverlayService : Service() {
         try {
             val existing = view
             if (existing == null) {
-                val label = TextView(this).apply {
-                    text = SAMPLE; textSize = 25f; setTextColor(Color.WHITE)
-                    setShadowLayer(2f, 0f, 1f, Color.BLACK)
-                    textDirection = View.TEXT_DIRECTION_RTL; gravity = Gravity.CENTER
-                    setPadding(dp(18), dp(6), dp(18), dp(6))
-                    background = GradientDrawable().apply { setColor(0xc923292b.toInt()); cornerRadius = dp(9).toFloat() }
-                    maxWidth = (resources.displayMetrics.widthPixels * 0.88).toInt()
+                val label = SubtitleCanvas(this, ::status).apply {
+                    val saved=prefs.getString("display_settings",null)
+                    if(saved!=null) style=org.json.JSONObject(saved)
                 }
                 label.visibility = View.GONE
                 wm.addView(label, params()); view = label; active = true
                 Log.i("GameLingo", "Overlay attached")
             } else { wm.updateViewLayout(existing, params()) }
             when (intent?.action) {
-                "move" -> Unit
+                "move" -> {
+                    val place=Placement.from(prefs.getString("position",null))
+                    val settings=view?.style ?: org.json.JSONObject()
+                    val offset=when(place) { Placement.BOTTOM -> 0; Placement.CENTER -> -(resources.displayMetrics.heightPixels*.42).toInt(); Placement.TOP -> -(resources.displayMetrics.heightPixels*.78).toInt() }
+                    settings.put("x",0).put("y",offset)
+                    view?.message(org.json.JSONObject().put("type","settings_sync").put("settings",settings))
+                    prefs.edit().putString("display_settings",settings.toString()).apply()
+                }
                 "connect" -> {
                     handler.removeCallbacks(expire); receiver?.stop(); live = true
                     receiver = Receiver(this, { message ->
-                        handler.removeCallbacks(hide)
-                        val label = view
-                        if (message == null || label == null) hide.run() else {
-                            label.text = message.getString("translated")
-                            label.textSize = message.optDouble("font_sp",25.0).toFloat().coerceIn(14f,48f)
-                            label.maxLines = 5
-                            label.visibility = View.VISIBLE
-                            wm.updateViewLayout(label,params())
-                            handler.postDelayed(hide,message.getLong("remaining_ms"))
-                            Log.i("GameLingo","Rendered sequence " + message.optLong("seq"))
-                        }
+                        view?.visibility = View.VISIBLE
+                        view?.message(message)
+                        if(message!=null) Log.i("GameLingo","Applied " + message.optString("type") + " sequence " + message.optLong("seq"))
                     }, ::status).also { it.start(intent.getStringExtra("host") ?: "", intent.getStringExtra("code") ?: "") }
                 }
                 else -> {
                     receiver?.stop(); receiver = null; live = false; handler.removeCallbacks(hide)
-                    view?.apply { text = SAMPLE; visibility = View.VISIBLE }
+                    view?.apply { visibility = View.VISIBLE; message(org.json.JSONObject().put("type","subtitle_preview_show")) }
                     status("اختبار الطبقة · ١٠ دقائق")
                     handler.removeCallbacks(expire); handler.postDelayed(expire, 600_000)
                 }

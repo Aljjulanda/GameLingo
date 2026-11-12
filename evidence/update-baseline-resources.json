@@ -1,0 +1,24 @@
+{
+  "system_cpu_percent": 26.4,
+  "system_ram_percent": 52.1,
+  "processes": [
+    {
+      "pid": 1756,
+      "name": "chiaki.exe",
+      "cpu_percent_one_core": 0.8,
+      "ram_mb": 217.5
+    },
+    {
+      "pid": 9680,
+      "name": "chiaki.exe",
+      "cpu_percent_one_core": 0.8,
+      "ram_mb": 619.1
+    },
+    {
+      "pid": 14816,
+      "name": "GameLingo.exe",
+      "cpu_percent_one_core": 0.0,
+      "ram_mb": 109.6
+    }
+  ]
+}

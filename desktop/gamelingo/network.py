@@ -81,6 +81,7 @@ class Hub:
         self.thread = threading.Thread(target=self._run, daemon=True)
         self.client = None
         self.last = None
+        self.display_settings = None
 
     def _run(self):
         try:
@@ -93,7 +94,7 @@ class Hub:
 
     async def _serve(self):
         self.loop = asyncio.get_running_loop()
-        self.queue = asyncio.Queue(maxsize=1)
+        self.queue = asyncio.Queue(maxsize=8)
         async with serve(self._client, self.address, self.port, ssl=self.context, compression=None,
                          max_size=16384, max_queue=4, open_timeout=5, ping_interval=6, ping_timeout=8, close_timeout=2) as server:
             self.port = server.sockets[0].getsockname()[1]
@@ -139,14 +140,19 @@ class Hub:
                 await ws.close(1008); return
             self.client = ws
             await ws.send(json.dumps(envelope("connection_status", session=self.session, state="connected", time_ms=int(time.time()*1000))))
+            if self.display_settings:
+                await self._control(envelope("settings_sync",settings=self.display_settings))
             self.notice("connected", ws.remote_address[0])
             if self.last and self.last.get("expires_at", 0) > int(time.time()*1000):
                 await ws.send(json.dumps(self.last, ensure_ascii=False))
             async for raw in ws:
                 m = json.loads(raw)
-                if not isinstance(m, dict) or m.get("v") != 1 or m.get("type") != "heartbeat":
+                if not isinstance(m, dict) or m.get("v") != 1 or m.get("type") not in ("heartbeat","settings_ack"):
                     await ws.close(1002); return
-                await ws.send(json.dumps(envelope("heartbeat", time_ms=int(time.time()*1000))))
+                if m["type"]=="settings_ack":
+                    self.notice("settings_ack",{k:m.get(k) for k in ("revision","width_px","height_px","anchor_x","anchor_y")})
+                else:
+                    await ws.send(json.dumps(envelope("heartbeat", time_ms=int(time.time()*1000))))
         except (ConnectionClosed, TimeoutError, ValueError, TypeError):
             await ws.close(1002)
         finally:
@@ -160,6 +166,21 @@ class Hub:
             self.queue.put_nowait(dict(message))
         if self.ready.is_set() and self.loop and self.loop.is_running() and not self.stopping.is_set():
             self.loop.call_soon_threadsafe(offer)
+
+    async def _control(self, message):
+        if not self.client:
+            return
+        self.counter += 1
+        message.update(seq=self.counter, session=self.session)
+        try:
+            await asyncio.wait_for(self.client.send(json.dumps(message,ensure_ascii=False)),1)
+        except (ConnectionClosed,TimeoutError):
+            await self.client.close()
+
+    def configure(self, values, kind="settings_sync"):
+        self.display_settings=dict(values)
+        if self.loop and self.loop.is_running():
+            asyncio.run_coroutine_threadsafe(self._control(envelope(kind,settings=values)),self.loop)
 
     def stop(self):
         self.stopping.set()

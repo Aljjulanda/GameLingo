@@ -1,0 +1,6 @@
+{
+  "fixture": "same bright subtitle, changing dark background over six seconds",
+  "pixel_hash_changes": 60,
+  "smart_ocr_requests": 10,
+  "periodic_verification_seconds": 0.65
+}

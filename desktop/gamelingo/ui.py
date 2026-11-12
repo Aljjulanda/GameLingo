@@ -15,8 +15,11 @@ from .capture import DesktopCaptureSource, WindowCaptureSource, ImageFileSource,
 from .network import Hub, local_address
 from .pipeline import Pipeline
 from . import remoteplay
+from .appearance import Appearance
+from .performance import Performance
+from .display_settings import validate
 
-REGIONS = {"subtitles":(0.04,.54,.92,.44), "dialogue":(.03,.45,.94,.52), "menus":(.03,.03,.94,.94), "full":(0,0,1,1)}
+REGIONS = {"subtitles":(0.04,.54,.92,.44), "dialogue":(.03,.45,.94,.52)}
 class Events(QObject):
     signal = Signal(str,object)
 
@@ -67,10 +70,10 @@ class MainWindow(QMainWindow):
         profiles=QHBoxLayout(); f.addRow(profiles);self.btn(profiles,"نسخ باسم…","Duplicate as…",self.duplicate)
         self.btn(profiles,"حذف الملف","Delete profile",self.delete_profile)
         self.region=QComboBox()
-        for k,a,b in [("subtitles","الترجمة السفلية","Subtitles"),("dialogue","الحوار","Dialogue"),("menus","القوائم","Menus"),("full","كامل الصورة","Full frame"),("custom","مخصص","Custom")]:self.region.addItem(self.tr2(a,b),k)
+        for k,a,b in [("subtitles","الترجمة السفلية","Subtitles"),("dialogue","الحوار","Dialogue"),("custom","مخصص","Custom")]:self.region.addItem(self.tr2(a,b),k)
         f.addRow(self.tr2("منطقة القراءة","Reading region"),self.region)
         self.custom=QLineEdit("0.04,0.62,0.92,0.35"); f.addRow(self.tr2("منطقة مخصصة · x, y, w, h","Custom ROI · x, y, w, h"),self.custom)
-        self.rate=QSpinBox();self.rate.setRange(1,10);self.rate.setValue(4);f.addRow(self.tr2("عينات في الثانية","Samples per second"),self.rate)
+        self.rate=QSpinBox();self.rate.setRange(1,8);self.rate.setValue(4);f.addRow(self.tr2("عينات في الثانية","Samples per second"),self.rate)
         self.font=QSpinBox();self.font.setRange(14,48);self.font.setValue(25);f.addRow(self.tr2("حجم نص التلفزيون","TV text size"),self.font)
         self.gloss=QPlainTextEdit();self.gloss.setMaximumHeight(70);self.gloss.setPlaceholderText("Gate = البوابة")
         f.addRow(self.tr2("قاموس اللعبة · مصطلح = ترجمة","Glossary · term = translation"),self.gloss)
@@ -101,6 +104,16 @@ class MainWindow(QMainWindow):
         self.btn(f,"مسح ذاكرة الترجمة…","Clear translation cache…",self.clear_cache)
         self.btn(f,"العربية / English","العربية / English",self.language)
         self.btn(f,"حفظ إعدادات الملف","Save profile settings",self.save_all)
+        self.appearance=Appearance(self.cfg,self.apply_display)
+        self.tabs.addTab(self.appearance,"إعدادات عرض الترجمة")
+        self.resources=Performance(self.cfg,self.change_performance,lambda:self.pipeline)
+        self.tabs.addTab(self.resources,"الأداء واستهلاك الموارد")
+        self.font.valueChanged.connect(lambda value:self.appearance.controls["font_size"].setValue(value))
+        self.appearance.controls["font_size"].valueChanged.connect(lambda value:self.font.setValue(int(value)))
+        self.font.setValue(int(self.appearance.values()["font_size"]))
+        self.rate.setValue(self.resources.scheduler.rate)
+        self.rate.valueChanged.connect(self.custom_rate)
+
         f=self.form("التشخيص","Diagnostics")
         self.diag=QPlainTextEdit();self.diag.setReadOnly(True);f.addRow(self.diag)
         self.btn(f,"تصدير تقرير…","Export report…",self.export)
@@ -205,6 +218,8 @@ class MainWindow(QMainWindow):
             del self.profile_data[name];self.profile.removeItem(self.profile.currentIndex());self.save_all()
     def save_all(self):
         self.cfg["broadcast_profile"]=self.broadcast_profile.currentData()
+        if hasattr(self,"appearance"):
+            self.cfg["display_presets"]=self.appearance.custom
         self.profile_data[self.profile.currentText()]=self.profile_settings()
         self.cfg.update(profile=self.profile.currentText(),profiles=self.profile_data,models=str(self.models),host=self.host.currentText())
         save(self.root,self.cfg)
@@ -244,6 +259,7 @@ class MainWindow(QMainWindow):
         if self.hub:return
         try:
             self.hub=Hub(self.root/"network",self.host.currentText().strip(),self.events.signal.emit)
+            self.hub.display_settings=self.cfg.get("display",validate({}))
             self.pair.setText(self.hub.fingerprint[:12]+"-"+self.hub.pin);self.hub.thread.start()
             self.cfg["auto_listen"]=True
             self.listen.setEnabled(False);self.save_all()
@@ -268,12 +284,40 @@ class MainWindow(QMainWindow):
                 hub=self.hub
                 if hub:hub.publish(m)
             self.pipeline=Pipeline(source,roi,self.rate.value(),self.models,self.root/"memory.sqlite",glossary,self.profile.currentText(),self.events.signal.emit,publish,self.font.value(),subtitles_only=self.region.currentData()=="subtitles")
+            self.pipeline.scheduler=self.resources.scheduler
             self.play.setEnabled(False);self.halt.setEnabled(True);self.pipeline.thread.start();self.tabs.setCurrentIndex(0)
             if isinstance(source,WindowCaptureSource):source.activate()
         except Exception as err:self.fail(err)
     def stop(self):
         if self.pipeline:self.pipeline.stop();self.halt.setEnabled(False)
+    def custom_rate(self,value):
+        self.resources.scheduler.CAPS[self.resources.scheduler.mode]=value
+        self.resources.scheduler.rate=value
+        self.change_performance(self.resources.scheduler)
+    def change_performance(self,scheduler):
+        self.rate.blockSignals(True);self.rate.setValue(scheduler.CAPS[scheduler.mode]);self.rate.blockSignals(False)
+        self.cfg["performance_caps"]=scheduler.CAPS.copy()
+
+        self.cfg.update(performance_mode=scheduler.mode,automatic_performance=scheduler.automatic)
+        if self.pipeline:self.pipeline.scheduler=scheduler
+        self.save_all()
+    def apply_display(self,values,kind):
+        import time
+        values["revision"]=time.time_ns()//1000000
+        self.cfg["display"]=values
+        if kind=="live":
+            if not hasattr(self,"display_timer"):
+                self.display_timer=QTimer(self);self.display_timer.setSingleShot(True)
+                self.display_timer.timeout.connect(lambda:self.apply_display(self.cfg["display"],"settings_sync"))
+            self.display_timer.start(180)
+            return
+        if self.hub:self.hub.configure(values,kind)
+        if hasattr(self,"profile"):self.save_all()
     def on_status(self,kind,payload=None):
+        if kind=="settings_ack":
+            self.netstate.setText(f"الإعدادات مطبقة · {payload.get('width_px')} × {payload.get('height_px')} px · المرساة {payload.get('anchor_x')}, {payload.get('anchor_y')}")
+            return
+
         if kind in ("open_stream","stream_error"):
             self.open_stream.setEnabled(True)
             if kind=="stream_error":

@@ -16,8 +16,8 @@ def ident(prefix,path):
 def guid(s):
     return str(uuid.uuid5(uuid.NAMESPACE_URL,"https://gamelingo.local/windows/"+s))
 root=ET.Element("{"+ns+"}Wix")
-product=node(root,"Product",Id=guid("product/0.2.3"),Name="GameLingo Desktop",Language="1033",
-             Version="0.2.3",Manufacturer="GameLingo",UpgradeCode=guid("upgrade"))
+product=node(root,"Product",Id=guid("product/0.3.1"),Name="GameLingo Desktop",Language="1033",
+             Version="0.3.1",Manufacturer="GameLingo",UpgradeCode=guid("upgrade"))
 node(product,"Package",InstallerVersion="500",Compressed="yes",InstallScope="perUser",InstallPrivileges="limited",Platform="x64")
 node(product,"MajorUpgrade",DowngradeErrorMessage="A newer version of GameLingo is installed.")
 compression=os.environ.get("GAMELINGO_CAB_COMPRESSION","mszip")
