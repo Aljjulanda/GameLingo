@@ -1,0 +1,19 @@
+{
+  "hardware": "TCL Smart TV Pro G10 / local 720p PS5 via GameLingo-B",
+  "user_observed": "Local controller works on first PS5 account while streaming with second. Arabic visible in the game. Some sentences missed and some initially late.",
+  "observations": 78,
+  "arabic_outputs": 54,
+  "all_outputs": {
+    "n": 78,
+    "p50_ms": 328,
+    "p95_ms": 2674,
+    "maximum_ms": 3262
+  },
+  "translation_stage_over_10_ms": {
+    "n": 9,
+    "p50_ms": 1242,
+    "p95_ms": 3243,
+    "maximum_ms": 3243
+  },
+  "timing": "software frame acquisition timestamp to Arabic result; not optical HDMI latency; includes cache hits and repeated readings"
+}

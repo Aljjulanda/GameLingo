@@ -11,11 +11,12 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QTabWidget, Q
     QMessageBox, QPlainTextEdit, QSpinBox, QInputDialog)
 from .storage import data_root, settings, save
 from .models import install, ready, MODEL_ID
-from .capture import DesktopCaptureSource, WindowCaptureSource, ImageFileSource, windows, crop
+from .capture import DesktopCaptureSource, WindowCaptureSource, ImageFileSource, ChiakiStreamSource, chiaki_windows, windows, crop
 from .network import Hub, local_address
 from .pipeline import Pipeline
+from . import remoteplay
 
-REGIONS = {"subtitles":(0.04,.62,.92,.35), "dialogue":(.03,.45,.94,.52), "menus":(.03,.03,.94,.94), "full":(0,0,1,1)}
+REGIONS = {"subtitles":(0.04,.54,.92,.44), "dialogue":(.03,.45,.94,.52), "menus":(.03,.03,.94,.94), "full":(0,0,1,1)}
 class Events(QObject):
     signal = Signal(str,object)
 
@@ -52,9 +53,14 @@ class MainWindow(QMainWindow):
         self.halt=self.btn(row,"إيقاف","Stop",self.stop); self.halt.setEnabled(False)
         f=self.form("المصدر والملف","Capture & profile")
         self.src=QComboBox(); f.addRow(self.tr2("مصدر الصورة","Frame source"),self.src); self.refresh_sources()
+        self.broadcast_profile=QComboBox()
+        self.broadcast_profile.addItem(self.tr2("الحساب الأول","First account"),"")
+        self.broadcast_profile.addItem(self.tr2("الحساب الثاني","Second account"),remoteplay.SECOND_PROFILE)
+        self.broadcast_profile.setCurrentIndex(max(0,self.broadcast_profile.findData(self.cfg.get("broadcast_profile",""))))
+        f.addRow(self.tr2("حساب بث chiaki-ng","chiaki-ng streaming account"),self.broadcast_profile)
         bar=QHBoxLayout();f.addRow(bar); self.btn(bar,"تحديث النوافذ","Refresh windows",self.refresh_sources)
         self.btn(bar,"اختيار صورة…","Choose image…",self.choose_image)
-        self.btn(bar,"فتح chiaki-ng","Open chiaki-ng",self.open_chiaki)
+        self.open_stream=self.btn(bar,"فتح بث PS5","Open PS5 stream",self.open_chiaki)
         self.btn(bar,"معاينة بعد ٣ ثوانٍ","Preview after 3 s",self.preview)
         self.preview_label=QLabel();self.preview_label.setAlignment(Qt.AlignmentFlag.AlignCenter);f.addRow(self.preview_label)
         self.profile=QComboBox();self.profile.addItems(self.profile_data);f.addRow(self.tr2("ملف اللعبة","Game profile"),self.profile)
@@ -116,8 +122,12 @@ class MainWindow(QMainWindow):
         old=self.src.currentData(); self.src.clear(); self.src.addItem(self.tr2("اختر مصدرًا","Select a source"),None)
         if self.cfg.get("image") and Path(self.cfg["image"]).is_file():self.src.addItem(Path(self.cfg["image"]).name,("image",self.cfg["image"]))
         self.src.addItem(self.tr2("عينة اختبار · باب مغلق","Test scene · closed door"),("sample",None))
+        client=Path(self.cfg.get("chiaki",data_root()/"clients/chiaki-ng-1.10.1/chiaki-ng-Win/chiaki.exe"))
+        managed={h for h,_ in chiaki_windows(client)}
+        if client.is_file():
+            self.src.addItem(self.tr2("بث PS5 من chiaki-ng","PS5 stream from chiaki-ng"),("chiaki",str(client)))
         for h,t in sorted(windows(),key=lambda v:"chiaki" not in v[1].lower()):
-            if t!="GameLingo Desktop":self.src.addItem(t,("window",h))
+            if t!="GameLingo Desktop" and h not in managed:self.src.addItem(t,("window",h))
         with mss.MSS() as cap:
             for i,m in enumerate(cap.monitors[1:],1):
                 l,t,w,h=(m[k] for k in ("left","top","width","height"))
@@ -129,15 +139,27 @@ class MainWindow(QMainWindow):
                 if "chiaki" in self.src.itemText(i).lower():
                     self.src.setCurrentIndex(i);break
     def open_chiaki(self):
-        import subprocess
         path=Path(self.cfg.get("chiaki",data_root()/"clients/chiaki-ng-1.10.1/chiaki-ng-Win/chiaki.exe"))
         if not path.is_file():
             selected,_=QFileDialog.getOpenFileName(self,"chiaki-ng","","chiaki-ng (chiaki.exe)")
             if not selected:return
             path=Path(selected);self.cfg["chiaki"]=str(path);self.save_all()
-        for h,t in windows():
-            if "chiaki" in t.lower():WindowCaptureSource(h).activate();return
-        subprocess.Popen([str(path),"--opengl"],cwd=path.parent)
+        existing=ChiakiStreamSource(path)
+        existing.detect()
+        if existing.stream:
+            existing.activate()
+            return
+        profile=self.broadcast_profile.currentData()
+        local_ip=self.host.currentText().strip()
+        self.save_all()
+        self.open_stream.setEnabled(False)
+        def lookup():
+            try:
+                console=remoteplay.registered_console(path,profile,local_ip)
+                self.events.signal.emit("open_stream",(path,profile,console))
+            except Exception as err:
+                self.events.signal.emit("stream_error",str(err))
+        threading.Thread(target=lookup,daemon=True).start()
     def source(self):
         value=self.src.currentData()
         if not value:raise ValueError(self.tr2("اختر نافذة البث أو شاشة أو صورة من تبويب المصدر.","Choose a window, display or image on the Capture tab."))
@@ -145,7 +167,7 @@ class MainWindow(QMainWindow):
         if typ=="sample":
             from .diagnostics import SampleSource
             return SampleSource()
-        return {"image":ImageFileSource,"display":DesktopCaptureSource,"window":WindowCaptureSource}[typ](arg)
+        return {"image":ImageFileSource,"display":DesktopCaptureSource,"window":WindowCaptureSource,"chiaki":ChiakiStreamSource}[typ](arg)
     def choose_image(self):
         f,_=QFileDialog.getOpenFileName(self,"GameLingo","","Images (*.png *.jpg *.jpeg *.bmp *.webp)")
         if f:self.cfg["image"]=f;self.refresh_sources();self.src.setCurrentIndex(1)
@@ -165,6 +187,8 @@ class MainWindow(QMainWindow):
                 im=crop(source.read().image,roi).convert("RGB");im.thumbnail((420,145))
                 self.events.signal.emit("preview",QImage(im.tobytes(),im.width,im.height,im.width*3,QImage.Format.Format_RGB888).copy())
             except Exception as e:self.events.signal.emit("error",str(e))
+            finally:
+                if hasattr(source,"close"):source.close()
         threading.Thread(target=task,daemon=True).start()
     def profile_settings(self):
         return dict(region=self.region.currentData(),custom=self.custom.text(),rate=self.rate.value(),font=self.font.value(),gloss=self.gloss.toPlainText())
@@ -180,6 +204,7 @@ class MainWindow(QMainWindow):
         if name!="Default" and self.yes(self.tr2("حذف ملف اللعبة؟","Delete this profile?")):
             del self.profile_data[name];self.profile.removeItem(self.profile.currentIndex());self.save_all()
     def save_all(self):
+        self.cfg["broadcast_profile"]=self.broadcast_profile.currentData()
         self.profile_data[self.profile.currentText()]=self.profile_settings()
         self.cfg.update(profile=self.profile.currentText(),profiles=self.profile_data,models=str(self.models),host=self.host.currentText())
         save(self.root,self.cfg)
@@ -242,13 +267,24 @@ class MainWindow(QMainWindow):
             def publish(m):
                 hub=self.hub
                 if hub:hub.publish(m)
-            self.pipeline=Pipeline(source,roi,self.rate.value(),self.models,self.root/"memory.sqlite",glossary,self.profile.currentText(),self.events.signal.emit,publish,self.font.value())
+            self.pipeline=Pipeline(source,roi,self.rate.value(),self.models,self.root/"memory.sqlite",glossary,self.profile.currentText(),self.events.signal.emit,publish,self.font.value(),subtitles_only=self.region.currentData()=="subtitles")
             self.play.setEnabled(False);self.halt.setEnabled(True);self.pipeline.thread.start();self.tabs.setCurrentIndex(0)
             if isinstance(source,WindowCaptureSource):source.activate()
         except Exception as err:self.fail(err)
     def stop(self):
         if self.pipeline:self.pipeline.stop();self.halt.setEnabled(False)
     def on_status(self,kind,payload=None):
+        if kind in ("open_stream","stream_error"):
+            self.open_stream.setEnabled(True)
+            if kind=="stream_error":
+                self.fail(payload)
+                return
+            path,profile,console=payload
+            try:
+                remoteplay.launch(path,profile,console)
+            except OSError as err:
+                self.fail(err)
+            return
         if kind=="preview":self.preview_label.setPixmap(QPixmap.fromImage(payload));return
         if kind=="model":self.busy=False;self.model_state();return
         if kind=="result":

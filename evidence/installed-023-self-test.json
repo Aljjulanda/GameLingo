@@ -1,0 +1,25 @@
+{
+  "pass": true,
+  "tabs": 5,
+  "fixture": "original synthetic EN image",
+  "measured": [
+    {
+      "source": "Open the door.",
+      "translated": "افتح الباب",
+      "latency_ms": 97,
+      "capture_ms": 0,
+      "ocr_ms": 45,
+      "translation_ms": 40,
+      "hits": 0,
+      "requests": 1,
+      "skipped": 0
+    }
+  ],
+  "messages": [
+    "subtitle_clear",
+    "subtitle_show",
+    "subtitle_clear"
+  ],
+  "errors": [],
+  "local_tls_listener": true
+}

@@ -7,159 +7,159 @@
       "ocr": "Open the door.",
       "arabic": "افتح الباب",
       "exact": true,
-      "prep_ms": 0.5515000002560555,
-      "ocr_ms": 32.60580000005575,
-      "translation_ms": 84.23679999987144,
-      "cache_ms": 0.11889999996128608,
-      "total_ms": 117.39410000018324
+      "prep_ms": 1.349499994830694,
+      "ocr_ms": 39.63640000438318,
+      "translation_ms": 48.885700001847,
+      "cache_ms": 0.10029999975813553,
+      "total_ms": 89.87160000106087
     },
     {
       "source": "Find the hidden key.",
       "ocr": "Find the hidden key.",
-      "arabic": "اعثر على المفتاح المخفي",
+      "arabic": "ابحث عن المفتاح المخفي",
       "exact": true,
-      "prep_ms": 0.6490000000667351,
-      "ocr_ms": 12.091000000054919,
-      "translation_ms": 112.38299999968149,
-      "cache_ms": 0.07580000010420918,
-      "total_ms": 125.12299999980314
+      "prep_ms": 1.188700000056997,
+      "ocr_ms": 13.442900002701208,
+      "translation_ms": 99.63659999630181,
+      "cache_ms": 0.19050000264542177,
+      "total_ms": 114.26819999906002
     },
     {
       "source": "Collect 12 coins.",
       "ocr": "Collect 12 coins.",
-      "arabic": "اجمع 12 عملة",
+      "arabic": "جمع 12 عملة",
       "exact": true,
-      "prep_ms": 0.22540000009030337,
-      "ocr_ms": 6.830600000284903,
-      "translation_ms": 91.89189999960945,
-      "cache_ms": 0.07040000036795391,
-      "total_ms": 98.94789999998466
+      "prep_ms": 0.8077999955276027,
+      "ocr_ms": 5.5309000017587095,
+      "translation_ms": 74.6447999990778,
+      "cache_ms": 0.20419999782461673,
+      "total_ms": 80.98349999636412
     },
     {
       "source": "Press X to continue.",
       "ocr": "Press X to continue.",
       "arabic": "إضغط X للاستمرار.",
       "exact": true,
-      "prep_ms": 0.23000000010142685,
-      "ocr_ms": 7.036199999674864,
-      "translation_ms": 135.4527000003145,
-      "cache_ms": 0.08859999979904387,
-      "total_ms": 142.7189000000908
+      "prep_ms": 0.21579999884124845,
+      "ocr_ms": 8.659400002215989,
+      "translation_ms": 111.11679999885382,
+      "cache_ms": 0.09010000212583691,
+      "total_ms": 119.99199999991106
     },
     {
       "source": "Turn left at the gate.",
       "ocr": "Turn left at the gate.",
       "arabic": "استدر يساراً عند البوابة",
       "exact": true,
-      "prep_ms": 0.6137999998827581,
-      "ocr_ms": 6.20840000010503,
-      "translation_ms": 116.48409999997966,
-      "cache_ms": 0.07409999989249627,
-      "total_ms": 123.30629999996745
+      "prep_ms": 0.7690999991609715,
+      "ocr_ms": 5.516299999726471,
+      "translation_ms": 123.45279999863124,
+      "cache_ms": 0.3311000036774203,
+      "total_ms": 129.73819999751868
     },
     {
       "source": "Save game",
       "ocr": "Save game",
       "arabic": "انقذوا اللعبة",
       "exact": true,
-      "prep_ms": 0.2165999999306223,
-      "ocr_ms": 10.040000000117288,
-      "translation_ms": 57.04719999994268,
-      "cache_ms": 0.0918999999157677,
-      "total_ms": 67.30379999999059
+      "prep_ms": 0.23130000045057386,
+      "ocr_ms": 13.12859999598004,
+      "translation_ms": 77.25010000285693,
+      "cache_ms": 0.1357000001007691,
+      "total_ms": 90.60999999928754
     },
     {
       "source": "Return to the village.",
       "ocr": "Return to the village.",
-      "arabic": "العودة إلى القرية.",
+      "arabic": "عودي إلى القرية",
       "exact": true,
-      "prep_ms": 0.22120000039649312,
-      "ocr_ms": 12.02659999989919,
-      "translation_ms": 85.26009999968664,
-      "cache_ms": 0.07760000016787671,
-      "total_ms": 97.50789999998233
+      "prep_ms": 0.283499997749459,
+      "ocr_ms": 13.84200000029523,
+      "translation_ms": 109.07070000394015,
+      "cache_ms": 0.21729999571107328,
+      "total_ms": 123.19620000198483
     },
     {
       "source": "The door is locked.",
       "ocr": "The door is locked.",
       "arabic": "الباب مقفل",
       "exact": true,
-      "prep_ms": 0.23890000011306256,
-      "ocr_ms": 6.295399999999063,
-      "translation_ms": 72.8411000000051,
-      "cache_ms": 0.10939999992842786,
-      "total_ms": 79.37540000011722
+      "prep_ms": 0.27239999326411635,
+      "ocr_ms": 6.23940000514267,
+      "translation_ms": 151.70450000005076,
+      "cache_ms": 0.31399999716086313,
+      "total_ms": 158.21629999845754
     },
     {
       "source": "Wait here.\nI will return.",
       "ocr": "Wait here. I will return.",
-      "arabic": "انتظر هنا سوف اعود",
+      "arabic": "انتظر هنا، سأعود",
       "exact": true,
-      "prep_ms": 0.49350000017511775,
-      "ocr_ms": 10.804900000039197,
-      "translation_ms": 88.74779999996463,
-      "cache_ms": 0.09700000009615906,
-      "total_ms": 100.04620000017894
+      "prep_ms": 0.2443999983370304,
+      "ocr_ms": 9.07510000251932,
+      "translation_ms": 113.25839999335585,
+      "cache_ms": 0.21980000019539148,
+      "total_ms": 122.5778999942122
     },
     {
       "source": "Meet Elena at dawn.",
       "ocr": "Meet Elena at dawn.",
       "arabic": "قابلي (إيلينا) عند الفجر",
       "exact": true,
-      "prep_ms": 0.20899999981338624,
-      "ocr_ms": 7.179000000178348,
-      "translation_ms": 181.0366999998223,
-      "cache_ms": 0.09890000001178123,
-      "total_ms": 188.42469999981404
+      "prep_ms": 0.23669999791309237,
+      "ocr_ms": 6.270999998378102,
+      "translation_ms": 199.25510000030044,
+      "cache_ms": 0.14760000340174884,
+      "total_ms": 205.76279999659164
     },
     {
       "source": "Inventory",
       "ocr": "Inventory",
       "arabic": "المخزون",
       "exact": true,
-      "prep_ms": 0.5556000000979111,
-      "ocr_ms": 11.268899999777204,
-      "translation_ms": 33.02140000005238,
-      "cache_ms": 0.09230000023308094,
-      "total_ms": 44.8458999999275
+      "prep_ms": 0.22590000298805535,
+      "ocr_ms": 13.509500000509433,
+      "translation_ms": 49.372800000128336,
+      "cache_ms": 0.1581999968038872,
+      "total_ms": 63.108200003625825
     },
     {
       "source": "You have 25 arrows.",
       "ocr": "You have 25 arrows.",
       "arabic": "لديك 25 سهم",
       "exact": true,
-      "prep_ms": 0.2382000002398854,
-      "ocr_ms": 5.752900000061345,
-      "translation_ms": 103.63369999959104,
-      "cache_ms": 0.0874000002113462,
-      "total_ms": 109.62479999989228
+      "prep_ms": 0.21009999909438193,
+      "ocr_ms": 9.270200003811624,
+      "translation_ms": 70.23320000007516,
+      "cache_ms": 0.08479999814881012,
+      "total_ms": 79.71350000298116
     }
   ],
   "summary": {
     "prep_ms": {
       "count": 12,
-      "p50_ms": 0.24,
-      "p95_ms": 0.65
+      "p50_ms": 0.26,
+      "p95_ms": 1.35
     },
     "ocr_ms": {
       "count": 12,
-      "p50_ms": 8.61,
-      "p95_ms": 32.61
+      "p50_ms": 9.17,
+      "p95_ms": 39.64
     },
     "translation_ms": {
       "count": 12,
-      "p50_ms": 90.32,
-      "p95_ms": 181.04
+      "p50_ms": 104.35,
+      "p95_ms": 199.26
     },
     "cache_ms": {
       "count": 12,
-      "p50_ms": 0.09,
-      "p95_ms": 0.12
+      "p50_ms": 0.17,
+      "p95_ms": 0.33
     },
     "total_ms": {
       "count": 12,
-      "p50_ms": 104.84,
-      "p95_ms": 188.42
+      "p50_ms": 117.13,
+      "p95_ms": 205.76
     }
   }
 }

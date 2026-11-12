@@ -1,5 +1,9 @@
 # Dependency selection
 
+The dedicated PS5 source captures the identified stream window using Windows.Graphics.Capture via windows-capture 2.0.1 (MIT). The Python wrapper imports OpenCV 5.0.0.93; wheel and bundled third-party notices are under licenses/opencv_python. The on-demand callback keeps a single owned image in memory. Other applications can cover the stream window. Minimizing or closing it suspends capture. See https://github.com/NiiightmareXD/windows-capture.
+
+The 0.2.2 Windows client uses psutil 7.2.2 (BSD-3-Clause) to identify whether a window from the configured chiaki.exe owns an established Remote Play connection to TCP port 9295. Its bundled license is in licenses/psutil. Discovery of a registered console uses chiaki-ng's published local DDP search format and its list/stream commands. Each command specifies the chosen profile; credential handling stays in chiaki-ng. See https://github.com/giampaolo/psutil and https://github.com/chiaki-ng/chiaki-ng/tree/v1.10.1.
+
 Exact Python build pins are in desktop/requirements-lock.txt. Hardware and execution results are in TEST_RESULTS.md. Selection was based on the Windows 10 host with two physical CPU cores, Intel Iris 6100 and approximately 16 GiB RAM.
 
 | Component | Version or evaluation | License | Role and limitation |

@@ -12,6 +12,8 @@ for dist in md.distributions():
             out=dest/name/p.name
             out.parent.mkdir(parents=True,exist_ok=True);shutil.copyfile(dist.locate_file(f),out)
 extra={
+ "windows-capture-MIT.txt":"https://raw.githubusercontent.com/NiiightmareXD/windows-capture/main/LICENCE",
+ "psutil-BSD.txt":"https://raw.githubusercontent.com/giampaolo/psutil/release-7.2.2/LICENSE",
  "Qt-LGPL-3.0.txt":"https://raw.githubusercontent.com/qt/qtbase/6.10/LICENSES/LGPL-3.0-only.txt",
  "Qt-GPL-3.0.txt":"https://raw.githubusercontent.com/qt/qtbase/6.10/LICENSES/GPL-3.0-only.txt",
  "CTranslate2-MIT.txt":"https://raw.githubusercontent.com/OpenNMT/CTranslate2/master/LICENSE",

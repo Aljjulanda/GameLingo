@@ -32,6 +32,17 @@ def test_tracker():
     assert t.observe("No",1.1)==(4,"No")
     assert t.observe("Go",1.2)==(5,"Go")
 
+def test_isolated_short_word_and_no_anchor_leak():
+    engine=WindowsOCR("en")
+    img=Image.new("L",(840,250),40)
+    assert asyncio.run(engine.short_dialogue(img,(.5,.5,.10)))==[]
+    draw=ImageDraw.Draw(img)
+    draw.text((420,125),"Go!",anchor="mm",fill=246,font=ImageFont.truetype("arial.ttf",31))
+    result=asyncio.run(engine.short_dialogue(img,(.5,.5,.10)))
+    assert [r.text for r in result]==["Go!"]
+    x,y,w,h=result[0].box
+    assert .42<x<x+w<.58 and .32<y<y+h<.68
+
 def test_settings(tmp_path):
     save(tmp_path,{"profile":"لعبة"});assert settings(tmp_path)=={"profile":"لعبة"}
 

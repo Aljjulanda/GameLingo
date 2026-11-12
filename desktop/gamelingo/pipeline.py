@@ -6,20 +6,21 @@ import time
 from collections import deque
 from .capture import CaptureUnavailable, crop
 from .ocr import WindowsOCR
-from .tracking import Tracker
+from .tracking import Tracker, dialogue_block, still_visible_prefix
 from .translation import Memory, ArgosTranslationProvider
 from .network import envelope
 
 
 class Pipeline:
     """One OCR worker and one translator. Only the newest outstanding line is retained."""
-    def __init__(self, source, roi, rate, models, db, glossary, profile, notify, publish, font=25):
+    def __init__(self, source, roi, rate, models, db, glossary, profile, notify, publish, font=25, subtitles_only=False):
         self.source, self.roi, self.rate = source, roi, rate
         self.models, self.db, self.glossary, self.profile = models, db, glossary, profile
         self.notify, self.publish, self.font = notify, publish, font
         self.stop_event = threading.Event()
         self.thread = threading.Thread(target=self._run, daemon=True)
         self.context = deque(maxlen=4)
+        self.subtitles_only = subtitles_only
 
     def _run(self):
         try:
@@ -27,6 +28,8 @@ class Pipeline:
         except Exception as err:
             self.notify("error", str(err))
         finally:
+            if hasattr(self.source, "close"):
+                self.source.close()
             self.publish(envelope("subtitle_clear"))
             self.notify("stopped", "")
 
@@ -39,8 +42,9 @@ class Pipeline:
             engine, memory = pool.submit(create).result()
         except Exception:
             pool.shutdown(); raise
-        def translate(text):
+        def translate(text, cancelled):
             start = time.perf_counter()
+            engine.cancelled = lambda: self.stop_event.is_set() or cancelled.is_set()
             value = memory.resolve(text, engine, self.glossary, self.profile)
             return value, (time.perf_counter()-start)*1000, memory.hits, memory.requests
         pending = job = active = previous = None
@@ -49,6 +53,9 @@ class Pipeline:
         stable = 0
         last_renew = 0
         last_state = None
+        anchor = (.5,.59,.10)
+        retry_digest = None
+        next_retry = 0.0
         def state(value):
             nonlocal last_state
             if value != last_state:
@@ -65,17 +72,32 @@ class Pipeline:
                     if digest != previous:
                         start = time.perf_counter()
                         reads = await ocr.read(roi)
+                        if self.subtitles_only:
+                            reads = dialogue_block(reads)
                         ocr_ms = (time.perf_counter()-start)*1000
                         previous, stable = digest, 0
                     else:
                         skipped += 1; stable += 1
+                    if self.subtitles_only:
+                        if reads:
+                            x,y,w,h=reads[-1].box
+                            anchor=(x+w/2,y+h/2,h)
+                        elif retry_digest!=digest and time.monotonic()>=next_retry and hasattr(ocr,"short_dialogue"):
+                            start=time.perf_counter()
+                            reads=await ocr.short_dialogue(roi,anchor)
+                            ocr_ms+=(time.perf_counter()-start)*1000
+                            retry_digest=digest
+                            next_retry=time.monotonic()+.27
                     state("ok")
                     text = " ".join(r.text for r in reads)[:1800]
                     change = track.observe(text, time.monotonic())
                     if change:
                         seq, line = change
-                        active = None
-                        self.publish(envelope("subtitle_clear"))
+                        if job and not still_visible_prefix(job[1][1],line):
+                            job[2].set()
+                        if not active or not still_visible_prefix(active["source"],line):
+                            active = None
+                            self.publish(envelope("subtitle_clear"))
                         if line:
                             rx, ry, rw, rh = self.roi
                             x=min(r.box[0] for r in reads); y=min(r.box[1] for r in reads)
@@ -87,16 +109,37 @@ class Pipeline:
                 except CaptureUnavailable as err:
                     state(str(err))
                     if previous is not None:
+                        if job:
+                            job[2].set()
                         previous = active = pending = None
                         track.seq += 1
                         track.current = ""
                         track.empty_since = None
                         self.publish(envelope("subtitle_clear")); self.notify("clear","")
-                if job and job[0].done():
-                    future, info = job; job = None
-                    arabic, trans_ms, hits, count = future.result()
+                interval = 1/self.rate
+                if stable > 8 and not self.subtitles_only:
+                    interval = max(interval, min(.45, interval*1.5))
+                next_frame = tick + interval
+                # A finished translation can be published immediately, without
+                # starting another expensive OCR pass or exceeding the sample rate.
+                while (job or pending) and not self.stop_event.is_set():
+                    if job is None:
+                        cancelled = threading.Event()
+                        job = pool.submit(translate,pending[1],cancelled), pending, cancelled
+                        pending = None
+                    future, info, _ = job
+                    if not future.done():
+                        concurrent.futures.wait([future],timeout=max(0,next_frame-time.monotonic()))
+                    if not future.done():
+                        break
+                    job = None
+                    try:
+                        arabic, trans_ms, hits, count = future.result()
+                    except concurrent.futures.CancelledError:
+                        continue
                     seq, line, stamp, box, cap_ms, rec_ms = info
-                    if seq == track.seq and not self.stop_event.is_set() and track.current:
+                    visible = seq == track.seq or still_visible_prefix(line,track.current)
+                    if visible and not self.stop_event.is_set() and track.current:
                         now = time.time()
                         active = envelope("subtitle_show", id="dialogue", source=line, translated=arabic,
                             source_lang="en", target_lang="ar", frame_ms=round(stamp*1000), translation_ms=round(now*1000),
@@ -106,17 +149,11 @@ class Pipeline:
                         self.notify("result", dict(source=line, translated=arabic, latency_ms=round((now-stamp)*1000),
                             capture_ms=round(cap_ms), ocr_ms=round(rec_ms), translation_ms=round(trans_ms),
                             hits=hits, requests=count, skipped=skipped))
-                if pending and job is None:
-                    job = pool.submit(translate,pending[1]), pending
-                    pending = None
                 if active and time.monotonic()-last_renew >= 2:
                     last_renew=time.monotonic()
                     active.update(type="subtitle_update", expires_at=round(time.time()*1000)+4500)
                     self.publish(active.copy())
-                interval = 1/self.rate
-                if stable > 8: interval = min(.45, interval*1.5)
-                if job or pending: interval = min(interval, .08)
-                self.stop_event.wait(max(.005, interval - (time.monotonic()-tick)))
+                self.stop_event.wait(max(.005, next_frame-time.monotonic()))
         finally:
             pool.submit(memory.close).result(); pool.shutdown()
 

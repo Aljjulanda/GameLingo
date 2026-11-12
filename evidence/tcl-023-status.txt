@@ -1,0 +1,6 @@
+package:/data/app/~~8TssDQZz0Usq6KhRf9Lf9w==/dev.gamelingo.tv-6VzQ6FFHX86UEaHxJ3kpLA==/base.apk
+SYSTEM_ALERT_WINDOW: allow; time=+8h25m36s976ms ago (running)
+  * ServiceRecord{6a723fe u0 dev.gamelingo.tv/.OverlayService}
+    isForeground=true foregroundId=1 foregroundNoti=Notification(channel=overlay shortcut=null contentView=null vibrate=null sound=null defaults=0x0 flags=0x62 color=0x00000000 vis=PRIVATE)
+  Window #0 Window{d2cbab0 u0 GameLingo subtitle}:
+    WindowStateAnimator{d321c59 GameLingo subtitle}:

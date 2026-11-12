@@ -1,5 +1,6 @@
 """Create a per-user MSI from the PyInstaller onedir build using WiX 3.14."""
 import hashlib
+import os
 import subprocess
 import sys
 import uuid
@@ -15,11 +16,14 @@ def ident(prefix,path):
 def guid(s):
     return str(uuid.uuid5(uuid.NAMESPACE_URL,"https://gamelingo.local/windows/"+s))
 root=ET.Element("{"+ns+"}Wix")
-product=node(root,"Product",Id=guid("product/0.2.1"),Name="GameLingo Desktop",Language="1033",
-             Version="0.2.1",Manufacturer="GameLingo",UpgradeCode=guid("upgrade"))
+product=node(root,"Product",Id=guid("product/0.2.3"),Name="GameLingo Desktop",Language="1033",
+             Version="0.2.3",Manufacturer="GameLingo",UpgradeCode=guid("upgrade"))
 node(product,"Package",InstallerVersion="500",Compressed="yes",InstallScope="perUser",InstallPrivileges="limited",Platform="x64")
 node(product,"MajorUpgrade",DowngradeErrorMessage="A newer version of GameLingo is installed.")
-node(product,"MediaTemplate",EmbedCab="yes",CompressionLevel="medium")
+compression=os.environ.get("GAMELINGO_CAB_COMPRESSION","mszip")
+if compression not in {"mszip","none"}:
+    raise ValueError("Use mszip or none for GAMELINGO_CAB_COMPRESSION")
+node(product,"MediaTemplate",EmbedCab="yes",CompressionLevel=compression)
 directory=node(product,"Directory",Id="TARGETDIR",Name="SourceDir")
 local=node(directory,"Directory",Id="LocalAppDataFolder")
 programs=node(local,"Directory",Id="Programs",Name="Programs")

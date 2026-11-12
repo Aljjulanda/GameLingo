@@ -18,6 +18,9 @@ QFormLayout { margin: 12px; }
 """
 if __name__ == "__main__":
     app=QApplication(sys.argv)
+    if len(sys.argv)==3 and sys.argv[1]=="--window-test":
+        from gamelingo.dialogue_check import verify_window
+        sys.exit(verify_window(sys.argv[2],app))
     app.setApplicationName("GameLingo")
     icon=Path(__file__).with_name("GameLingo.ico")
     if icon.exists():app.setWindowIcon(QIcon(str(icon)))

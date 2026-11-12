@@ -1,0 +1,53 @@
+{
+  "fixture": "generated window, changing corner HUD and previously uncached English lines",
+  "expected": [
+    "Go!",
+    "Wait here. I will come back.",
+    "Follow me",
+    "Follow me to the gate.",
+    "Take the key.",
+    "Run!"
+  ],
+  "results": [
+    {
+      "ocr": "Go!",
+      "arabic": "!",
+      "frame_to_ready_ms": 105,
+      "visible_to_ready_ms": 188
+    },
+    {
+      "ocr": "Wait here. I will come back.",
+      "arabic": "انتظر هنا، سأعود",
+      "frame_to_ready_ms": 92,
+      "visible_to_ready_ms": 312
+    },
+    {
+      "ocr": "Follow me",
+      "arabic": "اتبعني",
+      "frame_to_ready_ms": 79,
+      "visible_to_ready_ms": 328
+    },
+    {
+      "ocr": "Follow me to the gate.",
+      "arabic": "اتبعني إلى البوابة",
+      "frame_to_ready_ms": 123,
+      "visible_to_ready_ms": 219
+    },
+    {
+      "ocr": "Take the key.",
+      "arabic": "خذ المفتاح",
+      "frame_to_ready_ms": 78,
+      "visible_to_ready_ms": 297
+    },
+    {
+      "ocr": "Run!",
+      "arabic": "اركضوا!",
+      "frame_to_ready_ms": 109,
+      "visible_to_ready_ms": 265
+    }
+  ],
+  "missed": [],
+  "errors": [],
+  "finished": true,
+  "warmup_seen": true
+}

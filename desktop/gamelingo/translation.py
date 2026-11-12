@@ -1,4 +1,5 @@
 import hashlib
+from concurrent.futures import CancelledError
 import json
 import re
 import sqlite3
@@ -28,10 +29,17 @@ class ArgosTranslationProvider:
         folder = root / MODEL_ID
         self.tokenizer = sentencepiece.SentencePieceProcessor(model_file=str(folder / "sentencepiece.model"))
         self.engine = ctranslate2.Translator(str(folder / "model"), device="cpu", compute_type="int8", intra_threads=2)
+        self.cancelled = lambda: False
 
     def translate(self, text: str) -> str:
         pieces = self.tokenizer.encode(text, out_type=str)
-        result = self.engine.translate_batch([pieces], beam_size=3, max_decoding_length=256)
+        limit = min(256,max(24,2*len(pieces)+12))
+        if self.cancelled():
+            raise CancelledError()
+        result = self.engine.translate_batch([pieces], beam_size=1, max_decoding_length=limit,
+                                             callback=lambda _step: self.cancelled())
+        if self.cancelled():
+            raise CancelledError()
         return self.tokenizer.decode(result[0].hypotheses[0]).strip()
 
 

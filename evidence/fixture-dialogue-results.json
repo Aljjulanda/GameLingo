@@ -1,0 +1,85 @@
+{
+  "fixture": "generated window, changing corner HUD and previously uncached English lines",
+  "expected": [
+    "Go!",
+    "Wait here. I will come back.",
+    "Follow me",
+    "Follow me to the gate.",
+    "Take the key.",
+    "Run!"
+  ],
+  "results": [
+    {
+      "ocr": "HP 13",
+      "arabic": "HP 13",
+      "frame_to_ready_ms": 136,
+      "visible_to_ready_ms": null
+    },
+    {
+      "ocr": "Wait here. I will come back.",
+      "arabic": "انتظر هنا، سأعود",
+      "frame_to_ready_ms": 149,
+      "visible_to_ready_ms": 359
+    },
+    {
+      "ocr": "Follow me",
+      "arabic": "اتبعني",
+      "frame_to_ready_ms": 121,
+      "visible_to_ready_ms": 375
+    },
+    {
+      "ocr": "Follow me to the gate.",
+      "arabic": "اتبعني إلى البوابة",
+      "frame_to_ready_ms": 135,
+      "visible_to_ready_ms": 250
+    },
+    {
+      "ocr": "Take the key.",
+      "arabic": "خذ المفتاح",
+      "frame_to_ready_ms": 102,
+      "visible_to_ready_ms": 344
+    },
+    {
+      "ocr": "Run!",
+      "arabic": "اركضوا!",
+      "frame_to_ready_ms": 151,
+      "visible_to_ready_ms": 563
+    },
+    {
+      "ocr": "HP 41",
+      "arabic": "HP 41",
+      "frame_to_ready_ms": 113,
+      "visible_to_ready_ms": null
+    },
+    {
+      "ocr": "HP 43",
+      "arabic": "HP 43",
+      "frame_to_ready_ms": 106,
+      "visible_to_ready_ms": null
+    },
+    {
+      "ocr": "HP 44",
+      "arabic": "HP 44",
+      "frame_to_ready_ms": 115,
+      "visible_to_ready_ms": null
+    },
+    {
+      "ocr": "HP 46",
+      "arabic": "HP 46",
+      "frame_to_ready_ms": 123,
+      "visible_to_ready_ms": null
+    },
+    {
+      "ocr": "HP 47",
+      "arabic": "HP 47",
+      "frame_to_ready_ms": 108,
+      "visible_to_ready_ms": null
+    }
+  ],
+  "missed": [
+    "Go!"
+  ],
+  "errors": [],
+  "finished": true,
+  "warmup_seen": true
+}

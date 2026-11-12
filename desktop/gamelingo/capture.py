@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 from PIL import Image, ImageGrab
+import psutil
 
 user = ctypes.windll.user32
 user.GetForegroundWindow.restype = wintypes.HWND
@@ -66,6 +67,75 @@ class WindowCaptureSource:
 
 class CaptureUnavailable(Exception):
     pass
+
+
+def chiaki_windows(executable):
+    """Return only visible windows owned by the selected installation."""
+    from os.path import normcase
+    result = []
+    for hwnd, title in windows():
+        if "chiaki" not in title.casefold():
+            continue
+        pid = wintypes.DWORD()
+        user.GetWindowThreadProcessId(wintypes.HWND(hwnd), ctypes.byref(pid))
+        try:
+            process = psutil.Process(pid.value)
+            if normcase(process.exe()) == normcase(str(executable)):
+                result.append((hwnd, process))
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            continue
+    return result
+
+
+class ChiakiStreamSource:
+    """Select the local PS5 stream even when the launcher has the same title."""
+    def __init__(self, executable):
+        self.executable = executable
+        self.next_check = 0.0
+        self.stream = None
+        self.reader = None
+
+    def detect(self):
+        now = time.monotonic()
+        if now < self.next_check:
+            return
+        self.next_check = now + .75
+        active_hwnd = None
+        for hwnd, process in chiaki_windows(self.executable):
+            try:
+                sockets = process.net_connections(kind="tcp4")
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
+            if any(s.status == psutil.CONN_ESTABLISHED and s.raddr and s.raddr.port == 9295 for s in sockets):
+                active_hwnd = hwnd
+                break
+        if self.stream and self.stream.hwnd.value == active_hwnd:
+            return
+        self.close()
+        self.stream = WindowCaptureSource(active_hwnd) if active_hwnd else None
+
+    def read(self):
+        self.detect()
+        if self.stream is None:
+            raise CaptureUnavailable("بانتظار بث PS5 · افتح بطاقة جهازك في chiaki-ng")
+        if user.IsIconic(self.stream.hwnd):
+            self.close()
+            raise CaptureUnavailable("نافذة بث PS5 مصغّرة · أعد فتحها حتى تصل الصورة")
+        if self.reader is None or self.reader.closed.is_set():
+            from .window_capture import BackgroundWindowCapture
+            self.close()
+            self.reader = BackgroundWindowCapture(self.stream.hwnd.value)
+        return self.reader.read()
+
+    def activate(self):
+        self.detect()
+        if self.stream:
+            self.stream.activate()
+
+    def close(self):
+        if self.reader:
+            self.reader.close()
+            self.reader = None
 
 
 class DesktopCaptureSource:

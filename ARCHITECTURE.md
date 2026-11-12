@@ -4,6 +4,12 @@ The PS5 sends its primary HDMI signal directly to the TCL. A separately register
 
 ## Windows
 
+Subtitle-only mode groups adjacent lines near the caption position, ignores numeric corner counters, and preserves a still-visible prefix when the game extends a sentence. It stops obsolete CTranslate2 decoding at the next token. Newly decoded results can be sent without waiting for the next OCR pass. Greedy decoding and a length limit proportional to the input bound CPU work. For isolated short words on a low-clutter background the OCR engine retries a small crop at the last caption position. It adds a fixed orientation word in a separate margin and accepts only word rectangles wholly inside the original image patch.
+
+For the detected chiaki stream, a Windows.Graphics.Capture session targets its HWND. The frame callback copies a BGRA frame when the OCR worker requests it, retaining a single most recent image in memory. Covering the window with another app does not change the capture target. Minimizing, disconnecting, switching stream handles, preview completion or stopping translation closes the capture session. Generic window capture still requires the foreground.
+
+The dedicated chiaki source checks the executable and active PS5 control connection (IPv4, TCP 9295) before reading a visible foreground window. It refreshes the binding between sessions and reports when it is waiting for a stream. The streaming account is selected independently of the game profile and OCR pipeline. The primary and secondary slots select the original chiaki settings and GameLingo-B respectively, using explicit profile arguments.
+
 The PySide6 event loop owns the GUI. FrameSource produces an RGB PIL image, source identifier, dimensions and capture timestamp. WindowCaptureSource reads the foreground client area in physical desktop coordinates and suspends if the window loses focus or is minimized. DesktopCaptureSource reads a chosen display. ImageFileSource and SampleSource make repeatable tests possible without a console. All frame buffers are ephemeral.
 
 The capture worker crops a normalized ROI, converts to grayscale, and hashes the exact region. Identical pixels reuse the latest OCR reading. Sampling slows on static frames. Windows.Media.Ocr returns words, lines and bounds. The subtitle region is grouped into one segment. The first shipped translation profile is English to Arabic. OCR returns no numeric confidence on this backend.
