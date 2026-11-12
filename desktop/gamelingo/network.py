@@ -143,8 +143,8 @@ class Hub:
             if self.display_settings:
                 await self._control(envelope("settings_sync",settings=self.display_settings))
             self.notice("connected", ws.remote_address[0])
-            if self.last and self.last.get("expires_at", 0) > int(time.time()*1000):
-                await ws.send(json.dumps(self.last, ensure_ascii=False))
+            # Reconnection starts with empty local subtitle state. Do not replay
+            # a previous sentence or reset its visible-time clock.
             async for raw in ws:
                 m = json.loads(raw)
                 if not isinstance(m, dict) or m.get("v") != 1 or m.get("type") not in ("heartbeat","settings_ack"):

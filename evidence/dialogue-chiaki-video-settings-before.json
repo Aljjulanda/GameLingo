@@ -1,0 +1,57 @@
+[
+  {
+    "profile": "HKCU:\\Software\\Chiaki\\Chiaki\\settings",
+    "name": "resolution_local_ps5",
+    "value": "720p"
+  },
+  {
+    "profile": "HKCU:\\Software\\Chiaki\\Chiaki\\settings",
+    "name": "fps_local_ps5",
+    "value": 30
+  },
+  {
+    "profile": "HKCU:\\Software\\Chiaki\\Chiaki\\settings",
+    "name": "codec_local_ps5",
+    "value": "h264"
+  },
+  {
+    "profile": "HKCU:\\Software\\Chiaki\\Chiaki\\settings",
+    "name": "bitrate_local_ps5",
+    "value": 5000
+  },
+  {
+    "profile": "HKCU:\\Software\\Chiaki\\Chiaki\\settings",
+    "name": "hw_decoder",
+    "value": ""
+  },
+  {
+    "profile": "HKCU:\\Software\\Chiaki\\Chiaki-GameLingo-B\\settings",
+    "name": "resolution_local_ps5",
+    "value": "720p"
+  },
+  {
+    "profile": "HKCU:\\Software\\Chiaki\\Chiaki-GameLingo-B\\settings",
+    "name": "fps_local_ps5",
+    "value": 30
+  },
+  {
+    "profile": "HKCU:\\Software\\Chiaki\\Chiaki-GameLingo-B\\settings",
+    "name": "codec_local_ps5",
+    "value": "h264"
+  },
+  {
+    "profile": "HKCU:\\Software\\Chiaki\\Chiaki-GameLingo-B\\settings",
+    "name": "bitrate_local_ps5",
+    "value": 5000
+  },
+  {
+    "profile": "HKCU:\\Software\\Chiaki\\Chiaki-GameLingo-B\\settings",
+    "name": "hw_decoder",
+    "value": "d3d11va"
+  },
+  {
+    "profile": "HKCU:\\Software\\Chiaki\\Chiaki-GameLingo-B\\settings",
+    "name": "window_type",
+    "value": "Selected Resolution"
+  }
+]

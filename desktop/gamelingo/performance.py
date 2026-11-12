@@ -7,6 +7,7 @@ import psutil
 from PySide6.QtCore import QTimer
 from PySide6.QtGui import QPainter,QColor,QPen
 from PySide6.QtWidgets import QWidget,QVBoxLayout,QHBoxLayout,QLabel,QComboBox,QCheckBox
+from .gpu_metrics import GPU
 
 class Scheduler:
     CAPS={"Economy":2,"Balanced":4,"Performance":8}
@@ -14,6 +15,12 @@ class Scheduler:
         self.CAPS=dict(type(self).CAPS)
         self.mode=mode;self.automatic=automatic;self.rate=self.CAPS.get(mode,4)
         self.signature=None;self.last_verify=0.;self.high=0;self.low=0;self.changed_at=0.
+        self.last_activity=0.;self.has_text=False
+    def activity(self,text,now):
+        if bool(text)!=self.has_text:self.last_activity=now
+        self.has_text=bool(text)
+    def interval(self,now):
+        return max(1/self.rate,.35 if now-self.last_activity>2 else 0)
     def load(self,cpu,now):
         cap=self.CAPS[self.mode]
         if not self.automatic:self.rate=cap;return
@@ -30,11 +37,14 @@ class Scheduler:
         # High-contrast bright strokes in a small mask are less sensitive to
         # background motion than hashing all pixels in the subtitle region.
         small=cv2.resize(a,(256,96),interpolation=cv2.INTER_AREA)
-        blur=cv2.GaussianBlur(small,(5,5),0)
-        mask=((small>160)&(cv2.subtract(small,blur)>18)).astype(np.uint8)
+        # Symmetric edges retain dark captions on light scenes as well as white
+        # captions, without hashing moving background pixels at full resolution.
+        mask=cv2.Canny(small,70,140)
         difference=1. if self.signature is None else float(np.count_nonzero(mask!=self.signature))/mask.size
         changed=difference>.0004
-        verify=now-self.last_verify>=.65
+        self.changed=changed
+        if changed:self.last_activity=now
+        verify=now-self.last_verify>=(.65 if self.has_text else 1.2)
         if changed or verify:
             self.signature=mask;self.last_verify=now;return True
         return False
@@ -62,7 +72,9 @@ class Performance(QWidget):
         self.mode.currentTextChanged.connect(self.changed);self.auto.toggled.connect(self.changed)
         self.system=QLabel();self.process=QLabel();self.stages=QLabel()
         for w in (self.system,self.process,self.stages):w.setWordWrap(True);layout.addWidget(w)
-        self.graph=Graph();layout.addWidget(self.graph);layout.addWidget(QLabel("استخدام CPU الكلي · عينة كل ثانية. GPU غير متاح للقياس الموثوق هنا."))
+        self.graph=Graph();layout.addWidget(self.graph);self.gpu_label=QLabel('GPU · جارٍ تهيئة عدادات Windows');self.gpu_label.setWordWrap(True);layout.addWidget(self.gpu_label)
+        self.gpu=GPU();self.last_gpu=0.
+        self.destroyed.connect(lambda *_:self.gpu.close())
         self.own=psutil.Process();self.own.cpu_percent();self.captures={}
         self.timer=QTimer(self);self.timer.timeout.connect(self.sample);self.timer.start(1000)
     def changed(self,*_):
@@ -86,6 +98,14 @@ class Performance(QWidget):
             except psutil.Error:pass
         self.captures={pid:p for pid,p in self.captures.items() if pid in active}
         self.process.setText("\n".join(details))
+        now=time.monotonic()
+        if now-self.last_gpu>=2:
+            self.last_gpu=now;gpu=self.gpu.sample()
+            if gpu is None:self.gpu_label.setText('GPU · العدادات غير متاحة: '+self.gpu.error)
+            else:
+                values=gpu['processes'];lines=[f"GPU النظام {gpu['total']:.1f}% · GameLingo {values.get(self.own.pid,0):.1f}%"]
+                lines.extend(f"chiaki PID {pid} GPU {values.get(pid,0):.1f}%" for pid in active)
+                self.gpu_label.setText(' · '.join(lines)+' · أكثر محرك انشغالًا، عينة كل ثانيتين')
         task=self.pipeline()
         if task:
             m=task.metrics

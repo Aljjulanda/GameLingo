@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="dev.gamelingo.tv.SubtitleStateTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-11-12T17:02:28" hostname="DESKTOP-2VV1KVO" time="0.135">
+  <properties/>
+  <testcase name="tenSentencesAndIndependentTimers" classname="dev.gamelingo.tv.SubtitleStateTest" time="0.036"/>
+  <testcase name="disappearanceRespectsMinimumAndGraceAndFade" classname="dev.gamelingo.tv.SubtitleStateTest" time="0.003"/>
+  <testcase name="correctionsDoNotResetTimersAndDuplicateDoesNotStack" classname="dev.gamelingo.tv.SubtitleStateTest" time="0.021"/>
+  <testcase name="finalEntryExpiresWithoutAnyNewMessagesAndCannotResurrect" classname="dev.gamelingo.tv.SubtitleStateTest" time="0.003"/>
+  <testcase name="durationsAndReset" classname="dev.gamelingo.tv.SubtitleStateTest" time="0.065"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

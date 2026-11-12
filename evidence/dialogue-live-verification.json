@@ -1,0 +1,25 @@
+{
+  "translated_events": 23,
+  "errors": [],
+  "authenticated_tv": true,
+  "capture_status": "ok",
+  "last_latency_ms": 2443,
+  "metrics": {
+    "ocr_last_ms": 29.7,
+    "ocr_mean_ms": 23.39,
+    "ocr_attempts": 139,
+    "skipped_ocr": 25,
+    "ocr_per_second": 1.7,
+    "queue_depth": 0,
+    "capture_width": 1440,
+    "capture_height": 863,
+    "roi_pixels": 238140,
+    "capture_ms": 62,
+    "ocr_ms": 21,
+    "translation_ms": 2382,
+    "latency_ms": 2443,
+    "cache_hits": 3,
+    "requests": 23
+  },
+  "elapsed_seconds": 91
+}

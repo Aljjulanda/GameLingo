@@ -30,3 +30,9 @@ For release distribution run `:app:assembleRelease` and sign the aligned APK wit
 
 Use scripts/tcl-test.sh from Git Bash only with an explicit TV_HOST, URTV_DIR, and package verified locally. Its identity guard checks manufacturer, model, G10, Android 12 and Aljulanda TV before any installation. The install path is for a new package; update uses pm install -r with the same signing identity. Neither operation alters Home or accessibility configuration. User consent is required before enabling the special overlay permission at installation.
 
+
+## Dialogue Focus verification
+
+Use `--start-translation` to launch the saved Chiaki session without a test timeout. `--window-test` remains an explicitly finite generated fixture. The optional native PDH GPU monitor needs no extra Python dependency. Run `scripts/benchmark-dialogue-focus.py --repo REPOSITORY --output REPORT.json` against a recoverable baseline with `--baseline` and against the current checkout without it. `scripts/measure-runtime.py EXE REPORT.json` collects process/system CPU, RSS and available GPU engine counters. Preserve every round; compare background conditions. See docs/DIALOGUE_FOCUS_RESULTS_AR.md for limitations.
+
+For native Canvas/Handler tests, build `:app:assembleDebugAndroidTest` then run `scripts/tcl-canvas-test.sh ABSOLUTE_TEST_APK` through Git Bash with explicit verified TV_HOST and URTV_DIR. The script guards TCL identity, temporarily installs only the test package, tests generated Arabic content, removes that test package and reconnects the real app. Never package signing secrets, user settings, pairing or translation data in source archives.

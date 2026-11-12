@@ -29,7 +29,7 @@ def test_pair_reconnect_expiry_and_unauthorized(tmp_path):
         ws=await opened();await ws.send(json.dumps(envelope("pair",pin=hub.pin)))
         token=json.loads(await ws.recv())["token"]
         assert json.loads(await ws.recv())["type"]=="connection_status"
-        hub.publish(envelope("subtitle_show",translated="افتح الباب",expires_at=int(time.time()*1000)+250))
+        hub.publish(envelope("subtitle_show",translated="افتح الباب",expires_at=int(time.time()*1000)+8000))
         msg=json.loads(await ws.recv());assert msg["seq"]==1 and msg["translated"]=="افتح الباب"
         await ws.close();await asyncio.sleep(.4)
         ws=await opened();await ws.send(json.dumps(envelope("hello",token=token)))

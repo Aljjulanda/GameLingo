@@ -16,13 +16,14 @@ class Reading:
 
 class WindowsOCR:
     def __init__(self, language="en"):
+        self.attempts=0
         self.engine = OcrEngine.try_create_from_language(Language(language))
         if self.engine is None:
             raise RuntimeError("حزمة OCR المطلوبة غير متوفرة في Windows · OCR language pack unavailable")
         self.limit = OcrEngine.max_image_dimension
 
     async def read(self, image: Image.Image, *, original_from_x: int = 0) -> list[Reading]:
-        image = image.convert("L")
+        if image.mode != "L": image = image.convert("L")
         if max(image.size) > self.limit:
             image.thumbnail((self.limit, self.limit))
         width, height = image.size
@@ -30,6 +31,7 @@ class WindowsOCR:
         writer.write_bytes(image.tobytes())
         bitmap = SoftwareBitmap.create_copy_from_buffer(writer.detach_buffer(), BitmapPixelFormat.GRAY8, width, height)
         try:
+            self.attempts+=1
             result = await self.engine.recognize_async(bitmap)
             lines = []
             for line in result.lines:

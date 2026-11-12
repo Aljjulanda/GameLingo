@@ -1,0 +1,30 @@
+{
+  "available": true,
+  "engine_samples": 242,
+  "nonzero_samples": [
+    {
+      "InstanceName": "pid_12716_luid_0x00000000_0x00007c6d_phys_0_eng_0_engtype_3d",
+      "CookedValue": 0.8674063119434182
+    },
+    {
+      "InstanceName": "pid_1636_luid_0x00000000_0x00007c6d_phys_0_eng_0_engtype_3d",
+      "CookedValue": 13.588879070472398
+    },
+    {
+      "InstanceName": "pid_4_luid_0x00000000_0x00007c6d_phys_0_eng_0_engtype_3d",
+      "CookedValue": 0.06901817577240155
+    },
+    {
+      "InstanceName": "pid_7684_luid_0x00000000_0x00007c6d_phys_0_eng_0_engtype_3d",
+      "CookedValue": 69.3797150463469
+    },
+    {
+      "InstanceName": "pid_7684_luid_0x00000000_0x00007c6d_phys_0_eng_4_engtype_videodecode",
+      "CookedValue": 1.810940687462053
+    },
+    {
+      "InstanceName": "pid_812_luid_0x00000000_0x00007c6d_phys_0_eng_0_engtype_3d",
+      "CookedValue": 0.15396210577718322
+    }
+  ]
+}

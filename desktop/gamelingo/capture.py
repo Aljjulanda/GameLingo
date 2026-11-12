@@ -158,12 +158,19 @@ class ImageFileSource:
         return Frame(self.image, time.time(), "image")
 
 
-def crop(image, roi):
+def crop_rect(size, roi):
     x, y, w, h = roi
     if not (0 <= x < 1 and 0 <= y < 1 and w > 0 and h > 0 and x+w <= 1.000001 and y+h <= 1.000001):
         raise ValueError("Invalid region")
-    width, height = image.size
+    width, height = size
     rect = (int(x*width), int(y*height), min(width, max(int(x*width)+1, round((x+w)*width))),
             min(height, max(int(y*height)+1, round((y+h)*height))))
-    return image.crop(rect)
+    return rect
+
+def native_roi(size,roi):
+    left,top,right,bottom=crop_rect(size,roi);w,h=size
+    return left/w,top/h,(right-left)/w,(bottom-top)/h
+
+def crop(image, roi):
+    return image.crop(crop_rect(image.size,roi))
 

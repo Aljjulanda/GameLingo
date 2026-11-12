@@ -32,6 +32,9 @@ class ArgosTranslationProvider:
         self.cancelled = lambda: False
 
     def translate(self, text: str) -> str:
+        # The small EN→AR model sometimes emits punctuation alone for these commands.
+        command={"go":"انطلق!","run":"اركض!","wait":"انتظر!","no":"لا!"}.get(text.strip().rstrip(".?!").casefold())
+        if command:return command
         pieces = self.tokenizer.encode(text, out_type=str)
         limit = min(256,max(24,2*len(pieces)+12))
         if self.cancelled():
@@ -51,7 +54,7 @@ class Memory:
         self.hot = OrderedDict()
         self.hits = self.requests = 0
 
-    def resolve(self, text, engine, glossary, profile="Default", source="en", target="ar", version=MODEL_ID):
+    def resolve(self, text, engine, glossary, profile="Default", source="en", target="ar", version=MODEL_ID+"/commands-v2"):
         text = normalized(text)
         key = hashlib.sha256(json.dumps([text, source, target, version, glossary, profile], sort_keys=True,
                                         ensure_ascii=False).encode()).hexdigest()
@@ -75,6 +78,7 @@ class Memory:
                 raise ValueError("Empty translation")
             with self.db:
                 self.db.execute("INSERT OR REPLACE INTO memory VALUES (?, ?)", (key, value))
+                self.db.execute("DELETE FROM memory WHERE rowid NOT IN (SELECT rowid FROM memory ORDER BY rowid DESC LIMIT 2048)")
         else:
             self.hits += 1
         self.hot[key] = value

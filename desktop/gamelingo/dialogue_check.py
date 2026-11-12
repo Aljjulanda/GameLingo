@@ -11,6 +11,7 @@ from gamelingo.pipeline import Pipeline
 from gamelingo.performance import Scheduler
 from gamelingo.storage import data_root
 from gamelingo.ui import REGIONS
+from gamelingo.recognition import DEFAULT_ROI
 from gamelingo.window_capture import BackgroundWindowCapture
 
 class Scene(QWidget):
@@ -68,8 +69,8 @@ def verify_window(path,app):
     timer=QTimer();timer.timeout.connect(update_hud);timer.start(160)
     with tempfile.TemporaryDirectory() as tmp:
         source=BackgroundWindowCapture(int(scene.winId()))
-        pipe=Pipeline(source,REGIONS["subtitles"],4,data_root()/"models",Path(tmp)/"cache.sqlite",{},
-                      "fixture",events.event.emit,lambda _m:None,subtitles_only=True)
+        pipe=Pipeline(source,DEFAULT_ROI,4,data_root()/"models",Path(tmp)/"cache.sqlite",{},
+                      "fixture",events.event.emit,lambda _m:None,subtitles_only=True,recognition={'focus':True})
         pipe.scheduler=Scheduler("Balanced",False)
         pipe.thread.start()
         QTimer.singleShot(25000,app.quit);app.exec()

@@ -1,0 +1,513 @@
+{
+  "fixture": "generated 1280x720, same moving background/captions/HUD/menus; uncached model; no game recordings",
+  "baseline": true,
+  "duration_seconds": 37.199999999999996,
+  "roi": [
+    0.04,
+    0.54,
+    0.92,
+    0.44
+  ],
+  "results": [
+    {
+      "source": "Ready now.",
+      "translated": "جاهز الآن",
+      "latency_ms": 50,
+      "capture_ms": 0,
+      "ocr_ms": 24,
+      "translation_ms": 21,
+      "hits": 0,
+      "requests": 1,
+      "skipped": 0,
+      "phase": "warm",
+      "visible_to_ready_ms": 47
+    },
+    {
+      "source": "Run!",
+      "translated": "اركضوا!",
+      "latency_ms": 37,
+      "capture_ms": 0,
+      "ocr_ms": 4,
+      "translation_ms": 31,
+      "hits": 0,
+      "requests": 2,
+      "skipped": 20,
+      "phase": "rapid",
+      "visible_to_ready_ms": 110
+    },
+    {
+      "source": "Wait!",
+      "translated": "انتظر!",
+      "latency_ms": 29,
+      "capture_ms": 0,
+      "ocr_ms": 4,
+      "translation_ms": 22,
+      "hits": 0,
+      "requests": 3,
+      "skipped": 23,
+      "phase": "rapid",
+      "visible_to_ready_ms": 175
+    },
+    {
+      "source": "Come here!",
+      "translated": "تعال هنا!",
+      "latency_ms": 18,
+      "capture_ms": 0,
+      "ocr_ms": 4,
+      "translation_ms": 19,
+      "hits": 0,
+      "requests": 4,
+      "skipped": 25,
+      "phase": "rapid",
+      "visible_to_ready_ms": 22
+    },
+    {
+      "source": "Follow me to the gate.",
+      "translated": "اتبعني إلى البوابة",
+      "latency_ms": 35,
+      "capture_ms": 0,
+      "ocr_ms": 5,
+      "translation_ms": 27,
+      "hits": 0,
+      "requests": 5,
+      "skipped": 28,
+      "phase": "rapid",
+      "visible_to_ready_ms": 166
+    },
+    {
+      "source": "Take the key.",
+      "translated": "خذ المفتاح",
+      "latency_ms": 32,
+      "capture_ms": 0,
+      "ocr_ms": 12,
+      "translation_ms": 17,
+      "hits": 0,
+      "requests": 6,
+      "skipped": 31,
+      "phase": "rapid",
+      "visible_to_ready_ms": 278
+    },
+    {
+      "source": "We should leave now.",
+      "translated": "يجب أن نرحل الآن",
+      "latency_ms": 46,
+      "capture_ms": 16,
+      "ocr_ms": 5,
+      "translation_ms": 38,
+      "hits": 0,
+      "requests": 7,
+      "skipped": 33,
+      "phase": "rapid",
+      "visible_to_ready_ms": 141
+    },
+    {
+      "source": "Settings Inventory Quit game",
+      "translated": "لعبة \"السجن\"",
+      "latency_ms": 57,
+      "capture_ms": 0,
+      "ocr_ms": 15,
+      "translation_ms": 40,
+      "hits": 0,
+      "requests": 8,
+      "skipped": 35,
+      "phase": "menu",
+      "visible_to_ready_ms": 0
+    },
+    {
+      "source": "Wait for me by the door.",
+      "translated": "انتظرني عند الباب",
+      "latency_ms": 52,
+      "capture_ms": 0,
+      "ocr_ms": 6,
+      "translation_ms": 42,
+      "hits": 0,
+      "requests": 9,
+      "skipped": 52,
+      "phase": "stable",
+      "visible_to_ready_ms": 97
+    }
+  ],
+  "missed": [],
+  "false_dialogue": [
+    {
+      "source": "Settings Inventory Quit game",
+      "translated": "لعبة \"السجن\"",
+      "latency_ms": 57,
+      "capture_ms": 0,
+      "ocr_ms": 15,
+      "translation_ms": 40,
+      "hits": 0,
+      "requests": 8,
+      "skipped": 35,
+      "phase": "menu",
+      "visible_to_ready_ms": 0
+    }
+  ],
+  "errors": [],
+  "metrics": {
+    "ocr_attempts": 60,
+    "skipped_ocr": 89,
+    "ocr_per_second": 1.54,
+    "queue_depth": 0,
+    "capture_width": 1280,
+    "capture_height": 720,
+    "capture_ms": 0,
+    "ocr_ms": 6,
+    "translation_ms": 42,
+    "latency_ms": 52,
+    "cache_hits": 0,
+    "requests": 9
+  },
+  "process_samples": [
+    {
+      "t": 1.0,
+      "phase": "warm",
+      "cpu": 19.625,
+      "rss_mb": 187.85546875,
+      "total_cpu": 48.0,
+      "chiaki": {}
+    },
+    {
+      "t": 2.0,
+      "phase": "warm",
+      "cpu": 1.15,
+      "rss_mb": 187.95703125,
+      "total_cpu": 23.4,
+      "chiaki": {}
+    },
+    {
+      "t": 3.1,
+      "phase": "warm",
+      "cpu": 0.375,
+      "rss_mb": 187.96484375,
+      "total_cpu": 23.7,
+      "chiaki": {}
+    },
+    {
+      "t": 4.1,
+      "phase": "idle",
+      "cpu": 0.775,
+      "rss_mb": 188.3984375,
+      "total_cpu": 36.8,
+      "chiaki": {}
+    },
+    {
+      "t": 5.1,
+      "phase": "idle",
+      "cpu": 1.55,
+      "rss_mb": 188.3984375,
+      "total_cpu": 10.9,
+      "chiaki": {}
+    },
+    {
+      "t": 6.1,
+      "phase": "idle",
+      "cpu": 0.775,
+      "rss_mb": 188.40625,
+      "total_cpu": 10.8,
+      "chiaki": {}
+    },
+    {
+      "t": 7.1,
+      "phase": "idle",
+      "cpu": 0.0,
+      "rss_mb": 188.4140625,
+      "total_cpu": 21.8,
+      "chiaki": {}
+    },
+    {
+      "t": 8.1,
+      "phase": "idle",
+      "cpu": 0.0,
+      "rss_mb": 188.41796875,
+      "total_cpu": 32.6,
+      "chiaki": {}
+    },
+    {
+      "t": 9.1,
+      "phase": "rapid",
+      "cpu": 5.85,
+      "rss_mb": 188.62109375,
+      "total_cpu": 15.1,
+      "chiaki": {}
+    },
+    {
+      "t": 10.1,
+      "phase": "rapid",
+      "cpu": 6.65,
+      "rss_mb": 188.73046875,
+      "total_cpu": 31.4,
+      "chiaki": {}
+    },
+    {
+      "t": 11.1,
+      "phase": "rapid",
+      "cpu": 5.475,
+      "rss_mb": 188.80078125,
+      "total_cpu": 37.9,
+      "chiaki": {}
+    },
+    {
+      "t": 12.1,
+      "phase": "rapid",
+      "cpu": 0.0,
+      "rss_mb": 188.80078125,
+      "total_cpu": 26.1,
+      "chiaki": {}
+    },
+    {
+      "t": 13.1,
+      "phase": "rapid",
+      "cpu": 5.85,
+      "rss_mb": 188.58203125,
+      "total_cpu": 22.9,
+      "chiaki": {}
+    },
+    {
+      "t": 14.1,
+      "phase": "rapid",
+      "cpu": 5.4,
+      "rss_mb": 188.66796875,
+      "total_cpu": 55.6,
+      "chiaki": {}
+    },
+    {
+      "t": 15.1,
+      "phase": "rapid",
+      "cpu": 8.6,
+      "rss_mb": 188.69140625,
+      "total_cpu": 51.9,
+      "chiaki": {}
+    },
+    {
+      "t": 16.1,
+      "phase": "menu",
+      "cpu": 7.425,
+      "rss_mb": 188.83984375,
+      "total_cpu": 41.4,
+      "chiaki": {}
+    },
+    {
+      "t": 17.1,
+      "phase": "menu",
+      "cpu": 0.775,
+      "rss_mb": 188.84375,
+      "total_cpu": 30.6,
+      "chiaki": {}
+    },
+    {
+      "t": 18.1,
+      "phase": "menu",
+      "cpu": 0.775,
+      "rss_mb": 189.28515625,
+      "total_cpu": 53.3,
+      "chiaki": {}
+    },
+    {
+      "t": 19.1,
+      "phase": "menu",
+      "cpu": 0.4,
+      "rss_mb": 188.85546875,
+      "total_cpu": 6.6,
+      "chiaki": {}
+    },
+    {
+      "t": 20.1,
+      "phase": "hud",
+      "cpu": 0.4,
+      "rss_mb": 188.84375,
+      "total_cpu": 29.8,
+      "chiaki": {}
+    },
+    {
+      "t": 21.1,
+      "phase": "hud",
+      "cpu": 0.4,
+      "rss_mb": 188.86328125,
+      "total_cpu": 13.6,
+      "chiaki": {}
+    },
+    {
+      "t": 22.1,
+      "phase": "hud",
+      "cpu": 0.0,
+      "rss_mb": 188.875,
+      "total_cpu": 50.0,
+      "chiaki": {}
+    },
+    {
+      "t": 23.1,
+      "phase": "hud",
+      "cpu": 0.0,
+      "rss_mb": 183.22265625,
+      "total_cpu": 29.8,
+      "chiaki": {}
+    },
+    {
+      "t": 24.1,
+      "phase": "stable",
+      "cpu": 5.075,
+      "rss_mb": 183.3046875,
+      "total_cpu": 51.0,
+      "chiaki": {}
+    },
+    {
+      "t": 25.1,
+      "phase": "stable",
+      "cpu": 1.175,
+      "rss_mb": 183.30859375,
+      "total_cpu": 11.7,
+      "chiaki": {}
+    },
+    {
+      "t": 26.1,
+      "phase": "stable",
+      "cpu": 0.0,
+      "rss_mb": 183.30078125,
+      "total_cpu": 11.3,
+      "chiaki": {}
+    },
+    {
+      "t": 27.1,
+      "phase": "stable",
+      "cpu": 0.0,
+      "rss_mb": 183.296875,
+      "total_cpu": 8.9,
+      "chiaki": {}
+    },
+    {
+      "t": 28.1,
+      "phase": "stable",
+      "cpu": 0.0,
+      "rss_mb": 183.3125,
+      "total_cpu": 36.2,
+      "chiaki": {}
+    },
+    {
+      "t": 29.1,
+      "phase": "stable",
+      "cpu": 0.375,
+      "rss_mb": 183.35546875,
+      "total_cpu": 17.3,
+      "chiaki": {}
+    },
+    {
+      "t": 30.1,
+      "phase": "final-empty",
+      "cpu": 0.4,
+      "rss_mb": 183.34765625,
+      "total_cpu": 8.6,
+      "chiaki": {}
+    },
+    {
+      "t": 31.1,
+      "phase": "final-empty",
+      "cpu": 0.0,
+      "rss_mb": 183.34765625,
+      "total_cpu": 10.1,
+      "chiaki": {}
+    },
+    {
+      "t": 32.1,
+      "phase": "final-empty",
+      "cpu": 0.0,
+      "rss_mb": 183.3515625,
+      "total_cpu": 21.0,
+      "chiaki": {}
+    },
+    {
+      "t": 33.1,
+      "phase": "final-empty",
+      "cpu": 0.4,
+      "rss_mb": 183.3515625,
+      "total_cpu": 9.7,
+      "chiaki": {}
+    },
+    {
+      "t": 34.1,
+      "phase": "final-empty",
+      "cpu": 0.4,
+      "rss_mb": 183.3515625,
+      "total_cpu": 11.9,
+      "chiaki": {}
+    },
+    {
+      "t": 35.1,
+      "phase": "final-empty",
+      "cpu": 0.0,
+      "rss_mb": 183.3515625,
+      "total_cpu": 5.1,
+      "chiaki": {}
+    },
+    {
+      "t": 36.1,
+      "phase": "final-empty",
+      "cpu": 0.0,
+      "rss_mb": 183.3515625,
+      "total_cpu": 36.3,
+      "chiaki": {}
+    },
+    {
+      "t": 37.1,
+      "phase": "final-empty",
+      "cpu": 0.4,
+      "rss_mb": 183.3515625,
+      "total_cpu": 23.2,
+      "chiaki": {}
+    },
+    {
+      "t": 38.1,
+      "phase": "final-empty",
+      "cpu": 0.775,
+      "rss_mb": 183.35546875,
+      "total_cpu": 12.4,
+      "chiaki": {}
+    },
+    {
+      "t": 39.1,
+      "phase": "final-empty",
+      "cpu": 0.4,
+      "rss_mb": 183.35546875,
+      "total_cpu": 7.4,
+      "chiaki": {}
+    }
+  ],
+  "phases": {
+    "menu": {
+      "cpu_mean": 2.34375,
+      "total_cpu_mean": 32.975
+    },
+    "rapid": {
+      "cpu_mean": 5.4035714285714285,
+      "total_cpu_mean": 34.41428571428571
+    },
+    "final-empty": {
+      "cpu_mean": 0.2775,
+      "total_cpu_mean": 14.57
+    },
+    "warm": {
+      "cpu_mean": 7.05,
+      "total_cpu_mean": 31.7
+    },
+    "idle": {
+      "cpu_mean": 0.62,
+      "total_cpu_mean": 22.58
+    },
+    "hud": {
+      "cpu_mean": 0.2,
+      "total_cpu_mean": 30.8
+    },
+    "stable": {
+      "cpu_mean": 1.1041666666666667,
+      "total_cpu_mean": 22.733333333333334
+    }
+  },
+  "process_cpu_mean": 2.0935897435897437,
+  "system_cpu_mean": 25.284615384615385,
+  "ram_peak_mb": 189.28515625,
+  "visible_to_ready_p50_ms": 141,
+  "visible_to_ready_max_ms": 278,
+  "gpu": "unavailable: no reliable counter collected",
+  "tv_display_latency": "not measured by this desktop-only fixture",
+  "finished": true
+}

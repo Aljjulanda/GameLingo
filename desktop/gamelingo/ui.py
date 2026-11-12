@@ -8,7 +8,7 @@ from PySide6.QtCore import Qt, Signal, QObject, QTimer
 from PySide6.QtGui import QPixmap, QImage
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QTabWidget, QVBoxLayout,
     QHBoxLayout, QLabel, QPushButton, QComboBox, QFormLayout, QLineEdit, QFileDialog,
-    QMessageBox, QPlainTextEdit, QSpinBox, QInputDialog)
+    QMessageBox, QPlainTextEdit, QSpinBox, QInputDialog, QCheckBox, QDialog, QScrollArea)
 from .storage import data_root, settings, save
 from .models import install, ready, MODEL_ID
 from .capture import DesktopCaptureSource, WindowCaptureSource, ImageFileSource, ChiakiStreamSource, chiaki_windows, windows, crop
@@ -18,6 +18,8 @@ from . import remoteplay
 from .appearance import Appearance
 from .performance import Performance
 from .display_settings import validate
+from .recognition import DEFAULT_ROI,valid_roi
+from .roi_editor import RegionEditor
 
 REGIONS = {"subtitles":(0.04,.54,.92,.44), "dialogue":(.03,.45,.94,.52)}
 class Events(QObject):
@@ -77,6 +79,22 @@ class MainWindow(QMainWindow):
         self.font=QSpinBox();self.font.setRange(14,48);self.font.setValue(25);f.addRow(self.tr2("حجم نص التلفزيون","TV text size"),self.font)
         self.gloss=QPlainTextEdit();self.gloss.setMaximumHeight(70);self.gloss.setPlaceholderText("Gate = البوابة")
         f.addRow(self.tr2("قاموس اللعبة · مصطلح = ترجمة","Glossary · term = translation"),self.gloss)
+        f=self.form("قراءة الحوار والنص القريب","Dialogue & context")
+        self.focus=QCheckBox("تركيز الحوار — موصى به");self.focus.setChecked(True);f.addRow(self.focus)
+        self.dialogue_roi=QLineEdit(','.join(map(str,DEFAULT_ROI)));f.addRow("منطقة الحوار · x,y,w,h",self.dialogue_roi)
+        self.btn(f,"تحديد منطقة الحوار بصريًا…","Select dialogue region…",lambda:self.edit_region(self.dialogue_roi))
+        self.strictness=QComboBox();self.strictness.addItem('متوازن','Balanced');self.strictness.addItem('متحفظ','Strict');f.addRow("تحفظ التعرّف",self.strictness)
+        note=QLabel("Windows OCR لا يعطي درجة ثقة رقمية. يعتمد الترشيح على الموضع وبنية النص وثباته. أوقف الترجمة عند فتح قائمة تشبه الحوار.");note.setWordWrap(True);f.addRow(note)
+        self.context_enabled=QCheckBox("ترجمة النص القريب — معطلة افتراضيًا");f.addRow(self.context_enabled)
+        self.context_enabled.toggled.connect(self.toggle_context)
+        self.context_roi=QLineEdit('0.3,0.3,0.4,0.3');f.addRow("منطقة النص القريب",self.context_roi)
+        self.btn(f,"تحديد منطقة النص القريب…","Select context region…",lambda:self.edit_region(self.context_roi))
+        self.video_roi=QLineEdit('0,0,1,1');f.addRow("حدود صورة اللعبة داخل البث",self.video_roi)
+        for field in (self.dialogue_roi,self.context_roi,self.video_roi):field.setLayoutDirection(Qt.LayoutDirection.LeftToRight)
+        self.calibrated_size=None
+        self.btn(f,"تحديد حدود الفيديو للمعايرة…","Calibrate video bounds…",lambda:self.edit_region(self.video_roi,True))
+        self.context_confirmed=QCheckBox("أكدت أن صورة HDMI كاملة 16:9 بلا قص أو تكبير");f.addRow(self.context_confirmed)
+        self.btn(f,"حفظ ملف اللعبة","Save game profile",self.save_all)
         self.profile.currentTextChanged.connect(self.load_profile)
         self.profile.setCurrentText(self.cfg.get("profile","Default"));self.load_profile()
         f=self.form("التلفزيون","Television")
@@ -124,7 +142,8 @@ class MainWindow(QMainWindow):
 
     def tr2(self,a,b): return b if self.english else a
     def form(self,ar,en):
-        page=QWidget(); form=QFormLayout(page); form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
+        page=QScrollArea();page.setWidgetResizable(True);body=QWidget();page.setWidget(body)
+        form=QFormLayout(body); form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
         self.tabs.addTab(page,self.tr2(ar,en));return form
     def btn(self,parent,ar,en,action):
         b=QPushButton(self.tr2(ar,en)); b.clicked.connect(action)
@@ -191,7 +210,7 @@ class MainWindow(QMainWindow):
         crop(Image.new("L",(8,8)),values)
         return values
     def preview(self):
-        try: source,roi=self.source(),self.roi()
+        try: source=self.source();roi=self.recognition_settings()['roi'] if self.focus.isChecked() else self.roi()
         except Exception as err:self.fail(err);return
         def task():
             import time
@@ -204,10 +223,56 @@ class MainWindow(QMainWindow):
                 if hasattr(source,"close"):source.close()
         threading.Thread(target=task,daemon=True).start()
     def profile_settings(self):
-        return dict(region=self.region.currentData(),custom=self.custom.text(),rate=self.rate.value(),font=self.font.value(),gloss=self.gloss.toPlainText())
+        return dict(region=self.region.currentData(),custom=self.custom.text(),rate=self.rate.value(),font=self.font.value(),gloss=self.gloss.toPlainText(),
+            recognition=dict(focus=self.focus.isChecked(),roi=self.dialogue_roi.text(),strictness=self.strictness.currentData(),
+                context=dict(enabled=self.context_enabled.isChecked(),roi=self.context_roi.text(),video=self.video_roi.text(),confirmed=self.context_confirmed.isChecked(),calibrated_size=self.calibrated_size)))
     def load_profile(self,*_):
+        old=getattr(self,'loaded_profile',None)
+        if old in self.profile_data:self.profile_data[old]=self.profile_settings()
+        self.loaded_profile=self.profile.currentText()
         d=self.profile_data.get(self.profile.currentText(),{}); self.region.setCurrentIndex(max(0,self.region.findData(d.get("region","subtitles"))))
         self.custom.setText(d.get("custom","0.04,0.62,0.92,0.35"));self.rate.setValue(d.get("rate",4));self.font.setValue(d.get("font",25));self.gloss.setPlainText(d.get("gloss",""))
+        r=d.get('recognition',{});c=r.get('context',{})
+        self.focus.setChecked(r.get('focus',True));self.dialogue_roi.setText(r.get('roi',','.join(map(str,DEFAULT_ROI))))
+        self.strictness.setCurrentIndex(max(0,self.strictness.findData(r.get('strictness','Balanced'))));self.context_enabled.setChecked(c.get('enabled',False))
+        self.context_roi.setText(c.get('roi','0.3,0.3,0.4,0.3'));self.video_roi.setText(c.get('video','0,0,1,1'))
+        self.context_confirmed.setChecked(c.get('confirmed',False));self.calibrated_size=c.get('calibrated_size')
+    def edit_region(self,field,calibrate=False):
+        if self.pipeline:self.fail('أوقف الترجمة مؤقتًا لتعديل منطقة القراءة.');return
+        source=None
+        try:
+            source=self.source()
+            if isinstance(source,WindowCaptureSource):
+                from .window_capture import BackgroundWindowCapture
+                source=BackgroundWindowCapture(source.hwnd.value)
+            frame=source.read()
+            roi=valid_roi(tuple(float(v) for v in field.text().split(','))) or DEFAULT_ROI
+            dialog=RegionEditor(frame.image,roi,self)
+            if dialog.exec()==QDialog.DialogCode.Accepted:
+                field.setText(','.join(f'{v:.6f}' for v in dialog.canvas.roi))
+                if calibrate:self.calibrated_size=frame.image.size;self.context_confirmed.setChecked(False)
+                self.save_all()
+        except Exception as err:self.fail(err)
+        finally:
+            if source is not None and hasattr(source,'close'):source.close()
+    def recognition_settings(self):
+        r=self.profile_settings()['recognition'];c=r['context']
+        r['roi']=valid_roi(tuple(float(v) for v in r['roi'].split(',')))
+        if r['focus'] and not r['roi']:raise ValueError('منطقة الحوار غير صالحة')
+        for key in ('roi','video'):
+            try:c[key]=valid_roi(tuple(float(v) for v in c[key].split(',')))
+            except ValueError:c[key]=None
+        c['tv_size']=getattr(self,'tv_size',None)
+        if c['enabled'] and (not c['confirmed'] or not c['calibrated_size'] or not c['tv_size'] or not c['roi'] or not c['video']):
+            raise ValueError('ترجمة النص القريب تحتاج معايرة صورة الفيديو وتأكيد HDMI واتصال التلفزيون أولًا.')
+        return r
+    def toggle_context(self,enabled):
+        if self.pipeline:
+            # Enabling requires the full calibration/start validation; disabling is immediate.
+            if not enabled:
+                self.pipeline.recognition.get('context',{})['enabled']=False
+                if self.hub:self.hub.publish(dict(v=1,type='context_clear'))
+            else:self.fail('أوقف الترجمة ثم ابدأها بعد المعايرة لتفعيل النص القريب.')
     def duplicate(self):
         name,ok=QInputDialog.getText(self,"GameLingo",self.tr2("اسم ملف اللعبة","Game profile name"))
         if ok and name.strip() and name.strip() not in self.profile_data:
@@ -272,7 +337,8 @@ class MainWindow(QMainWindow):
         if self.pipeline:return
         try:
             if not ready(self.models):raise ValueError(self.tr2("ثبّت النموذج من الإعدادات أولًا.","Install the model in Settings first."))
-            source,roi=self.source(),self.roi()
+            recognition=self.recognition_settings()
+            source=self.source();roi=recognition['roi'] if recognition['focus'] else self.roi()
             glossary={}
             for line in self.gloss.toPlainText().splitlines():
                 if not line.strip():continue
@@ -283,13 +349,25 @@ class MainWindow(QMainWindow):
             def publish(m):
                 hub=self.hub
                 if hub:hub.publish(m)
-            self.pipeline=Pipeline(source,roi,self.rate.value(),self.models,self.root/"memory.sqlite",glossary,self.profile.currentText(),self.events.signal.emit,publish,self.font.value(),subtitles_only=self.region.currentData()=="subtitles")
+            self.pipeline=Pipeline(source,roi,self.rate.value(),self.models,self.root/"memory.sqlite",glossary,self.profile.currentText(),self.events.signal.emit,publish,self.font.value(),subtitles_only=True,recognition=recognition)
             self.pipeline.scheduler=self.resources.scheduler
             self.play.setEnabled(False);self.halt.setEnabled(True);self.pipeline.thread.start();self.tabs.setCurrentIndex(0)
             if isinstance(source,WindowCaptureSource):source.activate()
         except Exception as err:self.fail(err)
     def stop(self):
         if self.pipeline:self.pipeline.stop();self.halt.setEnabled(False)
+    def start_saved_session(self):
+        """Optional CLI launch of the existing saved session, without a test timeout."""
+        for i in range(self.src.count()):
+            value=self.src.itemData(i)
+            if value and value[0]=='chiaki':self.src.setCurrentIndex(i);break
+        def connected(kind,_):
+            if kind=='connected' and not self.closing:
+                self.events.signal.disconnect(connected)
+                if not self.pipeline:self.start()
+        self.events.signal.connect(connected)
+        if not self.hub:self.listen_tv()
+        elif self.hub.client:connected('connected',None)
     def custom_rate(self,value):
         self.resources.scheduler.CAPS[self.resources.scheduler.mode]=value
         self.resources.scheduler.rate=value
@@ -315,6 +393,7 @@ class MainWindow(QMainWindow):
         if hasattr(self,"profile"):self.save_all()
     def on_status(self,kind,payload=None):
         if kind=="settings_ack":
+            self.tv_size=(payload.get('width_px'),payload.get('height_px'))
             self.netstate.setText(f"الإعدادات مطبقة · {payload.get('width_px')} × {payload.get('height_px')} px · المرساة {payload.get('anchor_x')}, {payload.get('anchor_y')}")
             return
 
@@ -341,6 +420,7 @@ class MainWindow(QMainWindow):
             self.original.clear();self.subtitle.clear()
             if self.closing:QTimer.singleShot(0,self.close)
         elif kind in ("listening","connected","disconnected"):
+            if kind=='disconnected':self.tv_size=None
             labels={"listening":self.tr2("بانتظار التلفزيون","Waiting for TV"),"connected":self.tr2("التلفزيون متصل","TV connected"),"disconnected":self.tr2("التلفزيون غير متصل","TV disconnected")}
             self.netstate.setText(labels[kind]+" "+str(payload))
             if kind=="connected":self.pair.clear()
@@ -353,9 +433,9 @@ class MainWindow(QMainWindow):
             self.logs=(self.logs+[line])[-100:];self.diag.setPlainText("\n".join(self.logs))
     def export(self):
         path,_=QFileDialog.getSaveFileName(self,"GameLingo","GameLingo-diagnostics.txt","Text (*.txt)")
-        if path:Path(path).write_text("GameLingo 0.2\n"+"\n".join(self.logs),encoding="utf-8")
+        if path:Path(path).write_text("GameLingo 0.4.0\n"+"\n".join(self.logs),encoding="utf-8")
     def closeEvent(self,e):
         if self.pipeline:
             self.closing=True;self.stop();e.ignore();return
-        self.closing=True;self.disconnect();self.save_all();super().closeEvent(e)
+        self.closing=True;self.disconnect();self.save_all();self.resources.timer.stop();self.resources.gpu.close();super().closeEvent(e)
 

@@ -1,0 +1,12 @@
+TCL
+Smart TV Pro
+G10
+Aljulanda TV
+    versionName=0.4.0
+    versionName=3.1000004
+    versionName=3.1000001
+sa.urtv.home/sa.urtv.home.NetflixShortcutService
+sa.urtv.screensaver/.ScreenDream
+Asia/Muscat
+priority=0 preferredOrder=0 match=0x108000 specificIndex=-1 isDefault=true
+sa.urtv.home/.MainActivity

@@ -1,5 +1,5 @@
 import sys
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt,QTimer
 from PySide6.QtWidgets import QApplication
 from PySide6.QtGui import QIcon
 from pathlib import Path
@@ -30,5 +30,6 @@ if __name__ == "__main__":
         from gamelingo.diagnostics import self_test
         sys.exit(self_test(sys.argv[2],window))
     window.show()
+    if '--start-translation' in sys.argv:QTimer.singleShot(0,window.start_saved_session)
     sys.exit(app.exec())
 

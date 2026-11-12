@@ -16,7 +16,7 @@ def sample_image(line="Open the door.", font_size=42, color="#fcfcfa"):
     draw.rectangle((275,115,374,320),fill="#14282d")
     draw.ellipse((345,220,353,228),fill="#aac8a0")
     draw.rounded_rectangle((115,361,846,474),12,fill="#12252b")
-    draw.multiline_text((146,380),line,font=ImageFont.truetype("arial.ttf",font_size),fill=color,spacing=4)
+    draw.multiline_text((480,412),line,font=ImageFont.truetype("arial.ttf",font_size),fill=color,spacing=4,anchor="mm",align="center")
     return im
 
 class SampleSource:

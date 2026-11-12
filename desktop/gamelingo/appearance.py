@@ -8,11 +8,13 @@ LABELS = dict(font_family="عائلة الخط",font_size="حجم الخط (sp)"
  text_color="لون النص",text_opacity="شفافية النص %",outline="حد النص",outline_color="لون حد النص",outline_width="سمك حد النص px",
  shadow="ظل النص",shadow_color="لون الظل",shadow_opacity="شفافية الظل %",shadow_x="إزاحة الظل X px",shadow_y="إزاحة الظل Y px",shadow_blur="تنعيم الظل",
  line_spacing="تباعد الأسطر px",alignment="محاذاة النص",max_width="أقصى عرض %",wrap="التفاف النص",
- background="الخلفية",background_color="لون الخلفية",background_opacity="شفافية الخلفية %",
+ background="الخلفية",fit_background="إحاطة الخلفية بالنص",background_color="لون الخلفية",background_opacity="شفافية الخلفية %",
  padding_x="حشو أفقي px",padding_y="حشو عمودي px",radius="استدارة الزوايا px",border="إطار الخلفية",
  border_color="لون الإطار",border_width="سمك الإطار px",x="إزاحة X px",y="إزاحة Y px",margin="هامش الأمان px",
  adaptive="مدة قراءة تكيفية",reading_speed="أحرف عربية في الثانية",min_seconds="أقل مدة بالثواني",max_seconds="أقصى مدة بالثواني",
- fixed_seconds="مدة ثابتة بالثواني",max_entries="أقصى جمل ظاهرة",max_height="أقصى ارتفاع للمجموعة %",older_opacity="عتامة الجمل السابقة %",spacing="المسافة بين الجمل px")
+ fixed_seconds="مدة ثابتة بالثواني",max_entries="أقصى جمل ظاهرة",max_height="أقصى ارتفاع للمجموعة %",older_opacity="عتامة الجمل السابقة %",spacing="المسافة بين الجمل px",
+ disappearance_grace="مهلة اختفاء المصدر بالثواني",hard_seconds="الحد النهائي للعمر بالثواني",fade_ms="تلاشي الإخفاء ms",
+ context_font_size="حجم النص القريب sp",context_max_width="أقصى عرض للنص القريب %",context_text_color="لون النص القريب",context_background_color="خلفية النص القريب",context_background_opacity="عتامة خلفية النص القريب %")
 
 class Preview(QWidget):
     def __init__(self,parent):
@@ -23,10 +25,12 @@ class Preview(QWidget):
         family={"sans-serif":"Segoe UI","sans-serif-medium":"Segoe UI","sans-serif-condensed":"Segoe UI","serif":"Times New Roman"}.get(s["font_family"],s["font_family"])
         font=QFont(family);font.setPixelSize(max(8,int(s["font_size"]*scale)))
         font.setWeight(QFont.Weight(max(700 if s["bold"] else 100,int(s["font_weight"]))))
-        w=int(self.width()*s["max_width"]/100);x=(self.width()-w)/2+s["x"]*.12
+        maximum=int(self.width()*s["max_width"]/100)
         bottom=self.height()-12+s["y"]*.12
         for text,opacity in reversed([("جملة سابقة للمعاينة",s["older_opacity"]/100),("هذه تجربة لعرض الترجمة العربية داخل الألعاب",1)]):
             doc=QTextDocument();doc.setDocumentMargin(0);doc.setDefaultFont(font);doc.setPlainText(text)
+            w=min(maximum,doc.idealWidth()+2*s["padding_x"]*scale+2) if s["fit_background"] else maximum
+            x=(self.width()-w)/2+s["x"]*.12
             opt=doc.defaultTextOption();opt.setWrapMode(QTextOption.WrapMode.WordWrap if s["wrap"] else QTextOption.WrapMode.NoWrap);doc.setDefaultTextOption(opt)
             doc.setTextWidth(max(20,w-2*s["padding_x"]*scale))
             cursor=QTextCursor(doc);cursor.select(QTextCursor.SelectionType.Document)

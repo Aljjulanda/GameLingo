@@ -1,0 +1,7 @@
+{
+  "windows_package": "0.4.1",
+  "installer_exit": 0,
+  "executable_matches": true,
+  "notices_present": true,
+  "license_files": 56
+}

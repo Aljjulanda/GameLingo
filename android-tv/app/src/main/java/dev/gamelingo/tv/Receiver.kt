@@ -127,10 +127,12 @@ class Receiver(context: Context, private val render: (JSONObject?) -> Unit, priv
                             serverTime = m.getLong("time_ms"); syncTime = SystemClock.elapsedRealtime()
                             render(null); status("متصل · في انتظار الترجمة")
                         }
-                        "subtitle_show", "subtitle_update", "subtitle_hide", "subtitle_clear" -> {
+                        "subtitle_show", "subtitle_update", "subtitle_hide", "subtitle_clear", "subtitle_source_gone", "context_show", "context_present", "context_clear" -> {
                             if (session.isEmpty() || m.optString("session") != session || m.getLong("seq") <= sequence) return@onMain
                             sequence = m.getLong("seq")
                             if (m.getString("type") in listOf("subtitle_clear","subtitle_hide")) { render(null); return@onMain }
+                            if(m.getString("type")=="subtitle_source_gone") { render(m); return@onMain }
+                            if(m.getString("type").startsWith("context_")) { render(m); return@onMain }
                             val left = m.optLong("expires_at",Long.MAX_VALUE) - (serverTime + SystemClock.elapsedRealtime() - syncTime)
                             if (left <= 0) return@onMain
                             require(m.getString("translated").length <= 2400 && m.getString("target_lang") == "ar")
