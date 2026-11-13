@@ -137,6 +137,10 @@ final class AppleIntegrationTests: XCTestCase {
         }
         XCTAssertTrue(text.lowercased().contains("follow me"),text)
         XCTAssertTrue(box.isValid)
+        XCTAssertGreaterThan(box.y,0.65)
+        XCTAssertLessThan(box.y+box.h,0.93)
+        XCTAssertGreaterThan(box.x,0.16)
+        XCTAssertLessThan(box.x+box.w,0.84)
     }
     func testOfflineArabicInferenceUsesVerifiedFixture() throws {
         let folder = try XCTUnwrap(Bundle(for:Self.self).url(forResource:"en_ar",withExtension:nil))

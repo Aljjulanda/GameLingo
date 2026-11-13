@@ -24,7 +24,11 @@ final class VisionDialogueOCR {
         let lines: [OCRLine] = (request.results ?? []).compactMap { observation in
             guard let candidate = observation.topCandidates(1).first, candidate.confidence >= 0.2 else { return nil }
             let b = observation.boundingBox
-            let box = SourceBox(x:Double(b.minX),y:Double(1-b.maxY),w:Double(b.width),h:Double(b.height))
+            // Vision reports observations relative to the request's ROI. Project
+            // into the full frame before applying dialogue geometry or event IDs.
+            let box = SourceBox(x:roi.x+Double(b.minX)*roi.w,
+                                y:roi.y+Double(1-b.maxY)*roi.h,
+                                w:Double(b.width)*roi.w,h:Double(b.height)*roi.h)
             return OCRLine(text:candidate.string,box:box)
         }
         let selected = select(lines,roi:roi)
