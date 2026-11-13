@@ -70,6 +70,7 @@ class Receiver(context: Context, private val render: (JSONObject?) -> Unit, priv
     private var observedFingerprint = ""
     private var stage = "TCP"
     private var settingsRevision = -1L
+    private var lastFailure = ""
     private fun diagnostic(code: String, text: String, show: Boolean = true) {
         val line = "${System.currentTimeMillis()} [$code] $text"
         val old = prefs.getString("connection_diagnostics", "") ?: ""
@@ -80,6 +81,7 @@ class Receiver(context: Context, private val render: (JSONObject?) -> Unit, priv
 
     fun start(host: String, code: String) {
         stop()
+        lastFailure = ""
         address = host
         val saved = prefs.getString("host", "") == host && prefs.contains("token")
         if (!Pairing.privateIp(host)) { diagnostic("input.ip", "عنوان IP محلي غير صالح"); return }
@@ -121,7 +123,7 @@ class Receiver(context: Context, private val render: (JSONObject?) -> Unit, priv
             .hostnameVerifier { host, _ -> host == address }.pingInterval(6, TimeUnit.SECONDS)
             .followRedirects(false).followSslRedirects(false).connectTimeout(5, TimeUnit.SECONDS).build()
         client = http
-        diagnostic("tcp.start", "جارٍ الاتصال بـ $address:38443" + if (attempts > 0) " · محاولة ${attempts + 1}" else "")
+        diagnostic("tcp.start", "جارٍ الاتصال بـ $address:38443" + (if (attempts > 0) " · محاولة ${attempts + 1}" else "") + (if (lastFailure.isNotEmpty()) "\nآخر خطأ: $lastFailure" else ""))
         main.postDelayed({
             if (generation == epoch && session.isEmpty()) retry("انتهت مهلة الاتصال عند $stage")
         }, 20000)
@@ -150,6 +152,7 @@ class Receiver(context: Context, private val render: (JSONObject?) -> Unit, priv
                         "connection_status" -> {
                             session = m.getString("session"); sequence = 0; attempts = 0
                             settingsRevision = -1L; stage = "متصل"
+                            lastFailure = ""
                             serverTime = m.getLong("time_ms"); syncTime = SystemClock.elapsedRealtime()
                             render(null); diagnostic("auth.ok", "متصل · في انتظار الترجمة")
                         }
@@ -211,6 +214,7 @@ class Receiver(context: Context, private val render: (JSONObject?) -> Unit, priv
         session = ""; sequence = 0; render(null)
     }
     private fun retry(reason: String) {
+        lastFailure = reason
         main.removeCallbacksAndMessages(null)
         dispose(); diagnostic("retry", "$reason · ستتم إعادة المحاولة")
         val delay = (1000L shl attempts.coerceAtMost(4)); attempts++

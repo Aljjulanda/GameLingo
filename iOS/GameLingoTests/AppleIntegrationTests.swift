@@ -9,6 +9,32 @@ import Network
 @testable import GameLingo
 
 final class AppleIntegrationTests: XCTestCase {
+    @MainActor
+    func testBackgroundStopsTVAndExplicitForegroundRestart() async throws {
+        let model = AppModel()
+        defer { model.hub.stop() }
+        model.connectTV()
+        for _ in 0..<100 {
+            if model.tvListening { break }
+            try await Task.sleep(nanoseconds:100_000_000)
+        }
+        XCTAssertTrue(model.tvListening)
+        XCTAssertTrue(UIApplication.shared.isIdleTimerDisabled,"Waiting for TV must prevent automatic screen lock")
+        model.background()
+        for _ in 0..<50 {
+            if !model.tvListening { break }
+            try await Task.sleep(nanoseconds:100_000_000)
+        }
+        XCTAssertFalse(model.tvListening)
+        XCTAssertTrue(model.pairingCode.isEmpty)
+        model.connectTV()
+        for _ in 0..<100 {
+            if model.tvListening { break }
+            try await Task.sleep(nanoseconds:100_000_000)
+        }
+        XCTAssertTrue(model.tvListening)
+        XCTAssertFalse(model.pairingCode.isEmpty)
+    }
     func testPeerAddressUsesBytesIncludingMappedIPv4() throws {
         XCTAssertEqual(TVHub.peerIPv4(.ipv4(try XCTUnwrap(IPv4Address("192.168.3.138")))) ,"192.168.3.138")
         XCTAssertEqual(TVHub.peerIPv4(.ipv6(try XCTUnwrap(IPv6Address("::ffff:192.168.3.138")))) ,"192.168.3.138")
@@ -50,6 +76,7 @@ final class AppleIntegrationTests: XCTestCase {
         let rejected = try await probe("bad-pin",code:wrongPIN)
         XCTAssertEqual(rejected["authentication_rejected"] as? Bool,true)
         let paired = try await probe("pair",code:code)
+        XCTAssertTrue(["TLSv1.2","TLSv1.3"].contains(paired["tls"] as? String ?? ""))
         let token = try XCTUnwrap(paired["token"] as? String)
         XCTAssertEqual(paired["heartbeat"] as? Bool,true)
         XCTAssertTrue(diagnostics.contains { $0.contains("[settings.ack]") })
@@ -136,10 +163,10 @@ final class AppleIntegrationTests: XCTestCase {
         hub.publish(TVProtocol.subtitle(job,arabic:"اتبعني",now:TVHub.now()))
         let subtitle = try await receive(socket); XCTAssertEqual(subtitle["id"] as? String,job.id)
         let disconnected = expectation(description:"disconnect")
-        hub.onStatus = { status in if status.hasPrefix("التلفزيون غير متصل") { disconnected.fulfill() } }
+        hub.onDisconnected = { disconnected.fulfill() }
         socket.cancel(with:.normalClosure,reason:nil)
         await fulfillment(of:[disconnected],timeout:10)
-        hub.onStatus = nil
+        hub.onDisconnected = nil
         let second = session.webSocketTask(with:url); second.resume()
         try await second.send(.string(String(data:TVProtocol.encode(TVProtocol.envelope("hello",fields:["token":token])),encoding:.utf8)!))
         let reconnected = try await receive(second)

@@ -48,7 +48,7 @@ public final class OkHttpProbe {
                 result.put("tls",response.handshake().tlsVersion().javaName());
                 JSONObject auth = new JSONObject().put("v",1);
                 if (mode.equals("hello") || mode.equals("bad-token")) auth.put("type","hello").put("token",input.getString("token"));
-                else auth.put("type","pair").put("pin",input.optString("pin"));
+                else auth.put("type","pair").put("pin",input.optString("pin")).put("padding",new String(new char[10000]).replace('\0','x'));
                 ws.send(auth.toString());
             }
             public void onMessage(WebSocket ws,String text) { events.add(new JSONObject(text)); }
