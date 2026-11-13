@@ -13,6 +13,7 @@ final class OfflineTranslator {
     private let queue = DispatchQueue(label:"dev.gamelingo.translation",qos:.userInitiated)
     private let lock = NSLock()
     private var engine: GLTranslation?
+    private var cancellationGeneration: UInt64 = 0
     private var cache = BoundedLRU<String,String>(capacity:256)
     init(folder: URL? = nil) {
         self.folder = folder ?? FileManager.default.urls(for:.applicationSupportDirectory,in:.userDomainMask)[0].appendingPathComponent(Self.modelID,isDirectory:true)
@@ -29,19 +30,27 @@ final class OfflineTranslator {
             } catch { DispatchQueue.main.async { completion(.failure(error)) } }
         }
     }
-    func cancel() { lock.lock(); engine?.cancel(); lock.unlock() }
+    func cancel() { lock.lock(); cancellationGeneration &+= 1; engine?.cancel(); lock.unlock() }
+    private func isCurrent(_ generation: UInt64) -> Bool {
+        lock.lock(); defer { lock.unlock() }; return cancellationGeneration == generation
+    }
     func translate(_ text: String, completion: @escaping (Result<String,Error>,Double) -> Void) {
+        lock.lock(); let generation = cancellationGeneration; lock.unlock()
         queue.async { [self] in
             let start = ProcessInfo.processInfo.systemUptime
             let result: Result<String,Error>
             do {
+                guard isCurrent(generation) else { throw CancellationError() }
                 let normalized = DialogueText.normalized(text)
                 let key = Self.modelID+"/commands-v2/en/ar/"+normalized
                 if let cached = cache.get(key) { result = .success(cached) }
                 else {
-                    lock.lock(); let current = engine; lock.unlock()
+                    lock.lock()
+                    let current = cancellationGeneration == generation ? engine : nil
+                    current?.resume()
+                    lock.unlock()
+                    guard isCurrent(generation) else { throw CancellationError() }
                     guard let current else { throw LingoError.invalid("نموذج الترجمة غير جاهز") }
-                    current.resume()
                     let command = normalized.lowercased().trimmingCharacters(in:CharacterSet(charactersIn:".?!"))
                     let commands = ["go":"انطلق!","run":"اركض!","wait":"انتظر!","no":"لا!"]
                     var error: NSError?
@@ -50,8 +59,9 @@ final class OfflineTranslator {
                     }
                     cache.put(value,for:key); result = .success(value)
                 }
-            } catch { result = .failure(error) }
-            completion(result,(ProcessInfo.processInfo.systemUptime-start)*1000)
+            } catch { result = .failure(isCurrent(generation) ? error : CancellationError()) }
+            let final = isCurrent(generation) ? result : .failure(CancellationError())
+            completion(final,(ProcessInfo.processInfo.systemUptime-start)*1000)
         }
     }
     /// Verify the original package before extraction; extract only the five known files.

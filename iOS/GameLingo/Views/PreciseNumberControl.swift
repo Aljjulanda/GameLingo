@@ -37,7 +37,7 @@ struct PreciseNumberControl: View {
             if invalid { Text("أدخل رقمًا صالحًا؛ لم تتغير القيمة المحفوظة").font(.caption).foregroundColor(.red) }
         }
         .onAppear { draft = NumericInput.format(value) }
-        .onChange(of:value) { if !focused { draft = NumericInput.format($0) } }
+        .onChange(of:value) { draft = NumericInput.format($0); invalid = false }
         .onChange(of:focused) { if !$0 { commit() } }
     }
     private func assign(_ number: Double) {

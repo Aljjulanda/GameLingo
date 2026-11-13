@@ -10,6 +10,27 @@ import AVFAudio
 @testable import GameLingo
 
 final class AppleIntegrationTests: XCTestCase {
+    func testNativeArgosAndContextRuleBenchmarkOnSyntheticDialogue() throws {
+        let folder = try XCTUnwrap(Bundle(for:Self.self).url(forResource:"en_ar",withExtension:nil))
+        var error: NSError?
+        let engine = try XCTUnwrap(GLTranslation(modelPath:folder.path,error:&error))
+        var context = DialogueMemory()
+        context.observe(DialogueJob(id:"river-fixture",text:"The river is deep",generation:1,correction:false,box:.dialogue,frameMilliseconds:0),now:0)
+        let rules = "river | Wait near the bank. = انتظر قرب ضفة النهر.\nCollect 11 coins. = اجمع 11 قطعة نقدية."
+        var records: [[String:Any]] = []
+        for source in ["Wait near the bank.","Collect 11 coins.","We will not go to the camp."] {
+            let start = ProcessInfo.processInfo.systemUptime
+            let baseline = try XCTUnwrap(engine.translate(source,error:&error))
+            let baselineMS = (ProcessInfo.processInfo.systemUptime-start)*1000
+            let prepared = ProcessInfo.processInfo.systemUptime
+            let assisted = Terminology.resolve(source,rules:rules,context:context.entries) ?? engine.translate(source,error:&error)
+            let assistedMS = (ProcessInfo.processInfo.systemUptime-prepared)*1000
+            XCTAssertNotNil(assisted)
+            records.append(["source":source,"argos":baseline,"argos_ms":baselineMS,"configured_rules":assisted ?? "","configured_rules_ms":assistedMS,"rss_bytes":ResourceMonitor.residentBytes()])
+        }
+        let json = try JSONSerialization.data(withJSONObject:["environment":"iOS Simulator on CI Mac, not physical iPhone; synthetic dialogue and explicit hand-written rules","results":records],options:[.sortedKeys])
+        print("SYNTHETIC_NATIVE_TRANSLATION_BENCHMARK "+String(decoding:json,as:UTF8.self))
+    }
     @MainActor
     func testAudioInterruptionRestorationCannotOverrideManualStop() async throws {
         let audio = BackgroundAudio()
@@ -41,6 +62,8 @@ final class AppleIntegrationTests: XCTestCase {
         translator.load { result in if case .failure = result { XCTFail("Model load failed") }; loaded.fulfill() }
         await fulfillment(of:[loaded],timeout:20)
         let pipeline = FramePipeline(translator:translator,publish:{ _ in })
+        var contextEntries = -1
+        pipeline.onMetrics = { contextEntries = $0.contextEntries }
         defer { pipeline.stop() }
         let waiting = expectation(description:"manual request waits for a fresh decoded frame")
         let ready = expectation(description:"coherent document translated into pages")
@@ -75,6 +98,7 @@ final class AppleIntegrationTests: XCTestCase {
         pipeline.offer(pixels)
         await fulfillment(of:[ready],timeout:30)
         XCTAssertFalse(translatedPages.isEmpty)
+        XCTAssertEqual(contextEntries,0,"Documents must not enter dialogue context memory")
         XCTAssertTrue(translatedPages.joined().range(of:"[\\u0600-\\u06FF]",options:.regularExpression) != nil)
         XCTAssertTrue(translatedPages.joined().contains("11") || translatedPages.joined().contains("١١"),"Document translation must retain the number")
         pipeline.closeReading()
@@ -168,6 +192,14 @@ final class AppleIntegrationTests: XCTestCase {
         XCTAssertEqual(stale["authentication_rejected"] as? Bool,true)
         let finalConnection = try await probe("hello",code:restartedCode,token:newToken)
         XCTAssertEqual(finalConnection["heartbeat"] as? Bool,true)
+        let documentCode = try await start()
+        let capabilities = expectation(description:"document receiver capability authenticated")
+        hub.onCapabilities = { if $0.contains("document_v1") { capabilities.fulfill() } }
+        hub.onConnected = { [weak hub] in hub?.publish(TVProtocol.envelope("document_show",fields:["translated":"هذه صفحة اختبار","page":1,"pages":2])) }
+        let document = try await probe("document",code:documentCode)
+        XCTAssertEqual(document["document"] as? Bool,true)
+        await fulfillment(of:[capabilities],timeout:2)
+        hub.onConnected = nil; hub.onCapabilities = nil
         // Diagnostics must not contain either issued token or either PIN.
         XCTAssertFalse(diagnostics.contains { $0.contains(token) || $0.contains(newToken) || $0.contains(String(restartedCode.suffix(6))) })
     }

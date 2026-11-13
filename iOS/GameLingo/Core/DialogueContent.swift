@@ -15,12 +15,12 @@ struct DialogueContent {
         }
         if let colon = first.firstIndex(of:":") {
             let label = first[..<colon].trimmingCharacters(in:.whitespaces)
-            if label.count <= 40 && (names.contains(label.lowercased()) || clearName(label)) {
+            if label.count <= 40 && ((confidence >= 0.35 && names.contains(label.lowercased())) || clearName(label)) {
                 let rest = String(first[first.index(after:colon)...])
                 return DialogueContent(text:DialogueText.normalized(([rest]+Array(lines.dropFirst())).joined(separator:" ")),speaker:label)
             }
         }
-        if lines.count > 1 && (names.contains(first.trimmingCharacters(in:.whitespaces).lowercased()) || (separateLabel && clearName(first) && DialogueText.words(lines.dropFirst().joined(separator:" ")).count >= 2)) {
+        if lines.count > 1 && ((confidence >= 0.35 && names.contains(first.trimmingCharacters(in:.whitespaces).lowercased())) || (separateLabel && clearName(first) && DialogueText.words(lines.dropFirst().joined(separator:" ")).count >= 2)) {
             return DialogueContent(text:DialogueText.normalized(lines.dropFirst().joined(separator:" ")),speaker:first.trimmingCharacters(in:.whitespaces))
         }
         // An ordinary word, uncertain OCR or uppercase alone is not a speaker.
@@ -44,7 +44,7 @@ struct DialogueMemory {
         if !enabled { entries.removeAll() }
     }
     mutating func observe(_ job: DialogueJob, now: TimeInterval) {
-        prune(now:now); guard enabled else { return }
+        prune(now:now); guard enabled, job.confidence >= 0.45 else { return }
         let entry = DialogueMemoryEntry(id:job.id,source:job.text,speaker:job.speaker,timestamp:now,confidence:job.confidence)
         if let index = entries.firstIndex(where:{ $0.id == job.id }) { entries[index] = entry }
         else { entries.append(entry) }
@@ -66,7 +66,7 @@ enum Terminology {
             guard key(input) == key(source) else { continue }
             if condition.count == 2 {
                 let trigger = key(condition[0]); guard !trigger.isEmpty,
-                    context.contains(where:{ key($0.source).range(of:"(?<![\\p{L}\\p{N}_])"+NSRegularExpression.escapedPattern(for:trigger)+"(?![\\p{L}\\p{N}_])",options:.regularExpression) != nil }) else { continue }
+                    context.contains(where:{ key(($0.speaker ?? "")+" "+$0.source).range(of:"(?<![\\p{L}\\p{N}_])"+NSRegularExpression.escapedPattern(for:trigger)+"(?![\\p{L}\\p{N}_])",options:.regularExpression) != nil }) else { continue }
             }
             return parts[1]
         }

@@ -58,6 +58,7 @@ final class FramePipeline {
         latest = (buffer,ProcessInfo.processInfo.systemUptime,TVHub.now())
     }
     private var metricsDropped: UInt64 = 0
+    private func isActive() -> Bool { slotLock.lock(); defer { slotLock.unlock() }; return active }
     func start(roi: SourceBox, mode: PerformanceMode, preservingState: Bool = false) {
         queue.async { [self] in
             guard roi.isValid else { return }
@@ -128,6 +129,7 @@ final class FramePipeline {
                 captureRequested = false
                 do {
                     let paragraphs = try autoreleasepool { try ocr.document(buffer) }
+                    guard isActive() else { return }
                     metrics.documentOCRMilliseconds = (ProcessInfo.processInfo.systemUptime-now)*1000
                     guard paragraphs.reduce(0,{ $0+$1.count }) <= 16000 else {
                         finishReading(message:"النص طويل جدًا؛ اعرض المستند على أجزاء أصغر ثم أعد القراءة"); return
@@ -143,6 +145,7 @@ final class FramePipeline {
         guard signature.shouldRecognize(buffer,roi:roi,now:now,hasText:tracker.current != nil) else { return }
         do {
             let (text,box) = try autoreleasepool { try ocr.recognize(buffer,roi:roi) }
+            guard isActive() else { return }
             let content = DialogueContent.parse(text,knownNames:advanced.speakerNames,separateLabel:ocr.separateSpeakerLabel,confidence:ocr.confidence)
             metrics.recognitions &+= 1
             metrics.actualOCRRate = Double(metrics.recognitions)/max(0.001,ProcessInfo.processInfo.systemUptime-startedAt)
@@ -165,7 +168,7 @@ final class FramePipeline {
         } catch { DispatchQueue.main.async { self.onError?(error.localizedDescription) } }
     }
     private func submit() {
-        guard !reading, !translating, let job = pending else { return }
+        guard isActive(), !reading, !translating, let job = pending else { return }
         pending = nil; translating = true
         let epoch = runID
         memory.prune(now:ProcessInfo.processInfo.systemUptime)
@@ -174,7 +177,7 @@ final class FramePipeline {
             guard let self else { return }
             self.queue.async {
                 self.translating = false
-                if epoch == self.runID && self.tracker.accepts(job) {
+                if self.isActive() && epoch == self.runID && self.tracker.accepts(job) {
                     switch result {
                     case .success(let text):
                         if self.stability.shouldPublish(job) {
@@ -184,7 +187,7 @@ final class FramePipeline {
                             self.memory.observe(job,now:ProcessInfo.processInfo.systemUptime)
                             self.publish(TVProtocol.subtitle(job,arabic:text,now:TVHub.now()))
                         }
-                    case .failure(let error): DispatchQueue.main.async { self.onError?(error.localizedDescription) }
+                    case .failure(let error): if !(error is CancellationError) { DispatchQueue.main.async { self.onError?(error.localizedDescription) } }
                     }
                 }
                 self.submit()
@@ -212,7 +215,7 @@ final class FramePipeline {
         }
     }
     private func translateDocument(_ chunks: [String], index: Int, translated: [String], epoch: UUID) {
-        guard reading, runID == epoch else { return }
+        guard isActive(), reading, runID == epoch else { return }
         guard index < chunks.count else {
             let pages = DocumentText.pages(translated)
             guard !pages.isEmpty else { finishReading(message:"النص المترجم طويل جدًا؛ اقرأ المستند على أجزاء"); return }
@@ -224,7 +227,7 @@ final class FramePipeline {
         translator.translate(chunks[index]) { [weak self] result,latency in
             guard let self else { return }
             self.queue.async {
-                guard self.reading, self.runID == epoch else { return }
+                guard self.isActive(), self.reading, self.runID == epoch else { return }
                 self.metrics.documentTranslationMilliseconds += latency; self.metrics.documentCompleted = index+1
                 if index+1 == chunks.count || ProcessInfo.processInfo.systemUptime-self.lastMetrics >= 0.25 { self.reportDocumentMetrics() }
                 switch result {
@@ -235,6 +238,7 @@ final class FramePipeline {
         }
     }
     private func reportDocumentMetrics() {
+        metrics.contextEntries = memory.entries.count
         let resident = ResourceMonitor.residentBytes()
         let extra = resident > documentResident ? Double(resident-documentResident)/1048576 : 0
         metrics.documentExtraMegabytes = max(metrics.documentExtraMegabytes,extra)

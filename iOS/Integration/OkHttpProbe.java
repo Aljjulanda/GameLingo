@@ -1,5 +1,6 @@
 import okhttp3.*;
 import org.json.JSONObject;
+import org.json.JSONArray;
 import java.io.*;
 import java.security.*;
 import java.security.cert.*;
@@ -49,6 +50,7 @@ public final class OkHttpProbe {
                 JSONObject auth = new JSONObject().put("v",1);
                 if (mode.equals("hello") || mode.equals("bad-token")) auth.put("type","hello").put("token",input.getString("token"));
                 else auth.put("type","pair").put("pin",input.optString("pin")).put("padding",new String(new char[10000]).replace('\0','x'));
+                if (mode.equals("document")) auth.put("features",new JSONArray().put("document_v1"));
                 ws.send(auth.toString());
             }
             public void onMessage(WebSocket ws,String text) { events.add(new JSONObject(text)); }
@@ -67,7 +69,7 @@ public final class OkHttpProbe {
                 require(events.isEmpty(),"unauthenticated peer received data");
                 result.put("authentication_rejected",true);
             } else {
-                if (mode.equals("pair")) {
+                if (mode.equals("pair") || mode.equals("document")) {
                     JSONObject paired = next(); require(paired.getString("type").equals("paired"),"expected paired");
                     String token = paired.getString("token"); require(token.length() >=32 && token.length()<=128,"token size");
                     result.put("token",token);
@@ -76,6 +78,14 @@ public final class OkHttpProbe {
                 JSONObject settings = next(); require(settings.getString("type").equals("settings_sync"),"expected settings");
                 require(settings.getInt("v")==1 && settings.getString("session").equals(connected.getString("session")),"session mismatch");
                 result.put("session",connected.getString("session"));
+                if (mode.equals("document")) {
+                    JSONObject document = next();
+                    require(document.getString("type").equals("document_show"),"expected document");
+                    require(document.getString("session").equals(connected.getString("session")),"document session mismatch");
+                    require(document.getLong("seq")>settings.getLong("seq"),"document sequence mismatch");
+                    require(document.getInt("page")==1 && document.getInt("pages")==2,"document pages mismatch");
+                    result.put("document",true);
+                }
                 socket.send(new JSONObject().put("v",1).put("type","settings_ack").put("revision",settings.getJSONObject("settings").getLong("revision"))
                     .put("width_px",1920).put("height_px",1080).toString());
                 socket.send("{\"v\":1,\"type\":\"heartbeat\"}");

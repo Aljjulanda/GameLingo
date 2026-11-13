@@ -76,4 +76,13 @@ final class AdvancedDialogueTests: XCTestCase {
         XCTAssertNil(Terminology.resolve("It is raining cats and dogs.",rules:rules,context:memory.entries))
         XCTAssertEqual(Terminology.resolve("Wait!",rules:rules,context:[]),"انتظر!")
     }
+    func testWeakOCRDoesNotContaminateContextAndConfirmedSpeakersCanScopeRules() {
+        var memory = DialogueMemory()
+        var weak = job("weak","At the river"); weak.confidence = 0.2
+        memory.observe(weak,now:0); XCTAssertTrue(memory.entries.isEmpty)
+        var speaker = job("speaker","We should leave"); speaker.speaker = "Lara"
+        memory.observe(speaker,now:1)
+        XCTAssertEqual(Terminology.resolve("Wait!",rules:"Lara | Wait! = انتظري!",context:memory.entries),"انتظري!")
+        XCTAssertNil(DialogueContent.parse("Lara: Go.",knownNames:"Lara",confidence:0.2).speaker)
+    }
 }
