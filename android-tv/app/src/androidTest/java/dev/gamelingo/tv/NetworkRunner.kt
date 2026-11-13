@@ -19,6 +19,7 @@ class NetworkRunner : Instrumentation() {
     override fun onCreate(arguments: Bundle?) { super.onCreate(arguments); inputs = arguments ?: Bundle(); start() }
     override fun onStart() {
         val output = Bundle()
+        var resultCode = Activity.RESULT_CANCELED
         var receiver: Receiver? = null
         val prefs = targetContext.getSharedPreferences("network_test_fixture",Context.MODE_PRIVATE)
         val isolated = object : ContextWrapper(targetContext) {
@@ -57,14 +58,15 @@ class NetworkRunner : Instrumentation() {
             val lines = prefs.getString("connection_diagnostics","") ?: ""
             check(!lines.contains(code) && !lines.contains(Pairing.decrypt(encrypted))) { "Secret in diagnostics" }
             output.putString("result","PASS: physical Android LAN TLS/pinning, pairing, encrypted token, source/revision replacement, settings, ping/pong and saved-token reconnect")
-            finish(Activity.RESULT_OK,output)
+            resultCode = Activity.RESULT_OK
         } catch (_: Throwable) {
             // Only fixed states, not arguments or throwable contents.
             output.putString("error","Network fixture failed; inspect sanitized connection stages")
             output.putString("stages",prefs.getString("connection_diagnostics",""))
-            finish(Activity.RESULT_CANCELED,output)
         } finally {
             runOnMainSync { receiver?.stop(); prefs.edit().clear().commit() }
         }
+        // finish() terminates the instrumented process. Clean fixtures before it.
+        finish(resultCode,output)
     }
 }
