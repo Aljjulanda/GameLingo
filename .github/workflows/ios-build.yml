@@ -60,6 +60,15 @@ jobs:
           plutil -lint iOS/GameLingo/Resources/Info.plist
           plutil -lint iOS/GameLingo/Resources/PrivacyInfo.xcprivacy
           plutil -lint iOS/GameLingo.xcodeproj/project.pbxproj
+      - name: Archive and package unsigned IPA
+        run: bash iOS/Scripts/build-unsigned.sh
+      - name: Upload unsigned IPA
+        uses: actions/upload-artifact@v7
+        with:
+          name: GameLingo-unsigned-IPA
+          path: iOS/build/GameLingo-unsigned.ipa
+          if-no-files-found: error
+          retention-days: 14
       - name: Core and Apple integration tests
         env:
           SKIP_CORE_TESTS: '1'
@@ -74,15 +83,6 @@ jobs:
             iOS/.build/lib
             iOS/.build/include
           key: ${{ steps.native-cache.outputs.cache-primary-key }}
-      - name: Archive and package unsigned IPA
-        run: bash iOS/Scripts/build-unsigned.sh
-      - name: Upload unsigned IPA
-        uses: actions/upload-artifact@v7
-        with:
-          name: GameLingo-unsigned-IPA
-          path: iOS/build/GameLingo-unsigned.ipa
-          if-no-files-found: error
-          retention-days: 14
       - name: Upload build logs and test results
         if: always()
         uses: actions/upload-artifact@v7
