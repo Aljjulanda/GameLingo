@@ -9,9 +9,8 @@ final class AppModel: ObservableObject {
         didSet {
             do { try settings.save() } catch { errorMessage = error.localizedDescription }
             pipeline.configure(mode:settings.mode,thermal:ProcessInfo.processInfo.thermalState.rawValue,lowPower:ProcessInfo.processInfo.isLowPowerModeEnabled)
-            pipeline.configureAdvanced(settings.advanced)
-            hub.configureSpeakers(show:settings.advanced.showSpeakers,color:settings.advanced.speakerColor)
-            if oldValue.display != settings.display { scheduleStyle() }
+            if oldValue.advanced != settings.advanced { pipeline.configureAdvanced(settings.advanced) }
+            if oldValue.display != settings.display || oldValue.advanced.showSpeakers != settings.advanced.showSpeakers || oldValue.advanced.speakerColor != settings.advanced.speakerColor { scheduleStyle() }
         }
     }
     @Published var consoles: [ConsoleCredentials] = []
@@ -31,6 +30,9 @@ final class AppModel: ObservableObject {
     @Published var readingPages: [String] = []
     @Published var readingPage = 0
     @Published var readingStatus = "القراءة مغلقة"
+    @Published var cpuPercent = 0.0
+    @Published var residentMegabytes = 0.0
+    @Published var batteryUsed: Double?
     @Published var networkStatus = "جارٍ فحص الشبكة"
     @Published var modelStatus = "لم يُحمّل النموذج"
     @Published var pairingCode = ""
@@ -63,6 +65,8 @@ final class AppModel: ObservableObject {
     private var hubStarting = false
     private var readingTicket: UUID?
     private var displayedIDs = Set<String>()
+    private var resources = ResourceMonitor()
+    private var initialBattery: Float = -1
 
     init() {
         do {
@@ -71,6 +75,12 @@ final class AppModel: ObservableObject {
                 for console in consoles { try console.validate() }
             }
         } catch { errorMessage = error.localizedDescription; consoles = [] }
+        policy.network = false
+        if SessionIntentStore.load(), consoles.contains(where:{ $0.id == settings.selectedConsoleID }) {
+            policy.start(); running = true; policy.experimentalAudio = settings.advanced.backgroundAudio
+            sessionStatus = "الجلسة السابقة مطلوبة؛ بانتظار النموذج والشبكة"
+            UIDevice.current.isBatteryMonitoringEnabled = true
+        }
         remote.onDiscovery = { [weak self] item in
             guard let self else { return }
             self.discovered.removeAll { $0.host == item.host }; self.discovered.append(item)
@@ -88,6 +98,9 @@ final class AppModel: ObservableObject {
             guard let self else { return }
             if connected && !self.policy.wanted { return }
             self.streamConnected = connected
+            if !connected && self.policy.wanted {
+                self.sessionStatus = !self.policy.canExecute ? "بانتظار السماح بالتنفيذ" : !self.policy.network ? "بانتظار الشبكة" : "جارٍ استرداد بث PS5"
+            }
             if connected { self.recoveryAttempts = 0; self.sessionStatus = "البث متصل؛ الترجمة نشطة" }
         }
         audio.onChange = { [weak self] active,interrupted,text in
@@ -167,10 +180,16 @@ final class AppModel: ObservableObject {
         if !addresses.contains(settings.localIP), let first = addresses.first { settings.localIP = first }
     }
     func sampleSystem() {
+        let usage = resources.sample(); cpuPercent = usage.cpu; residentMegabytes = Double(usage.residentBytes)/1048576
+        let battery = UIDevice.current.batteryLevel
+        if running && battery >= 0 {
+            if initialBattery < 0 { initialBattery = battery }
+            batteryUsed = max(0,Double(initialBattery-battery)*100)
+        }
         thermal = ProcessInfo.processInfo.thermalState
         availableMemory = UInt64(os_proc_available_memory())
         pipeline.configure(mode:settings.mode,thermal:thermal.rawValue,lowPower:ProcessInfo.processInfo.isLowPowerModeEnabled)
-        if thermal == .critical && running { stop(); errorMessage = "أُوقفت الجلسة بسبب الحالة الحرارية الحرجة" }
+        if thermal == .critical && running { stop(reason:"أُوقفت الجلسة بسبب الحرارة"); errorMessage = "أُوقفت الجلسة بسبب الحالة الحرارية الحرجة" }
     }
     func connectTV() {
         refreshAddresses(); pairingCode = ""
@@ -196,6 +215,7 @@ final class AppModel: ObservableObject {
         guard settings.roi.isValid else { errorMessage = "اضبط منطقة الحوار داخل حدود صورة البث أولًا"; return }
         do {
             policy.start(); policy.experimentalAudio = settings.advanced.backgroundAudio
+            SessionIntentStore.save(true); initialBattery = -1; batteryUsed = nil; UIDevice.current.isBatteryMonitoringEnabled = true
             displayedIDs.removeAll(); backgroundDeliveries = 0
             sessionStatus = "جارٍ بدء الجلسة"; recoveryAttempts = 0
             if policy.experimentalAudio { audio.start() }
@@ -204,12 +224,13 @@ final class AppModel: ObservableObject {
             if !tvListening && !hubStarting { connectTV() }
             UIApplication.shared.isIdleTimerDisabled = true
             applyDim()
-        } catch { policy.stop(); audio.stop(); errorMessage = error.localizedDescription }
+        } catch { policy.stop(); SessionIntentStore.save(false); audio.stop(); errorMessage = error.localizedDescription }
     }
-    func stop() {
+    func stop(reason: String = "أوقفها المستخدم") {
         closeReading()
         policy.stop(); recoveryTask?.cancel(); recoveryTask = nil; endExecutionGrace(); audio.stop()
-        pipelineActive = false; sessionStatus = "أوقفها المستخدم"
+        SessionIntentStore.save(false); UIDevice.current.isBatteryMonitoringEnabled = false
+        pipelineActive = false; sessionStatus = reason
         running = false; pairing = false; loginRequired = false; remote.stop(); pipeline.stop()
         UIApplication.shared.isIdleTimerDisabled = tvListening
         if let brightness = originalBrightness { UIScreen.main.brightness = brightness; originalBrightness = nil }
@@ -254,6 +275,7 @@ final class AppModel: ObservableObject {
         executionTask = UIApplication.shared.beginBackgroundTask(withName:"GameLingo recovery") { [weak self] in
             Task { @MainActor [weak self] in self?.suspendForExecution() }
         }
+        guard executionTask != .invalid else { suspendForExecution(); return }
         executionDeadline = Task { [weak self] in
             try? await Task.sleep(nanoseconds:20_000_000_000)
             guard !Task.isCancelled else { return }; self?.suspendForExecution()
@@ -282,8 +304,11 @@ final class AppModel: ObservableObject {
     }
     private func recoverSession() {
         guard policy.wanted else { return }
+        guard modelReady else { sessionStatus = "بانتظار جاهزية نموذج الترجمة"; return }
+        guard ProcessInfo.processInfo.thermalState != .critical else { sessionStatus = "بانتظار انخفاض الحرارة"; return }
         guard policy.network else { sessionStatus = "بانتظار الشبكة"; return }
-        audio.recover()
+        if policy.experimentalAudio && !audio.wanted { audio.start() }
+        else { audio.recover(foreground:policy.foreground) }
         guard policy.canRecover else { sessionStatus = "بانتظار السماح بالتنفيذ"; return }
         if !pipelineActive { pipeline.start(roi:settings.roi,mode:settings.mode,preservingState:true); pipelineActive = true }
         if let console = consoles.first(where:{ $0.id == settings.selectedConsoleID }) { remote.recover(console) }
@@ -304,7 +329,7 @@ final class AppModel: ObservableObject {
         translator.load { [weak self] result in
             guard let self else { return }; self.modelBusy = false
             switch result {
-            case .success: self.modelReady = true; self.modelStatus = "English → Arabic جاهز دون إنترنت"
+            case .success: self.modelReady = true; self.modelStatus = "English → Arabic جاهز دون إنترنت"; self.recoverSession()
             case .failure(let error): self.modelStatus = "النموذج غير جاهز"; self.errorMessage = error.localizedDescription
             }
         }
@@ -354,7 +379,8 @@ final class AppModel: ObservableObject {
         styleTask?.cancel()
         styleTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds:120_000_000)
-            guard !Task.isCancelled, let self else { return }; self.hub.configure(self.settings.display)
+            guard !Task.isCancelled, let self else { return }
+            self.hub.configure(self.settings.display,showSpeakers:self.settings.advanced.showSpeakers,speakerColor:self.settings.advanced.speakerColor)
         }
     }
     func move(x: Double,y: Double,step: Double) {

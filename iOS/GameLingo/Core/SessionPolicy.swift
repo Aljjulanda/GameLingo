@@ -30,8 +30,24 @@ struct AdvancedSettings: Codable, Equatable {
     var speakerNames = ""
     /// Exact whole-sentence translations, one English = Arabic pair per line.
     var terminology = ""
+    var movementStep = 5.0
+    private enum CodingKeys: String, CodingKey { case backgroundAudio,contextEnabled,contextCapacity,showSpeakers,speakerColor,speakerNames,terminology,movementStep }
+    init() {}
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy:CodingKeys.self)
+        backgroundAudio = try values.decodeIfPresent(Bool.self,forKey:.backgroundAudio) ?? false
+        contextEnabled = try values.decodeIfPresent(Bool.self,forKey:.contextEnabled) ?? true
+        contextCapacity = try values.decodeIfPresent(Int.self,forKey:.contextCapacity) ?? 5
+        showSpeakers = try values.decodeIfPresent(Bool.self,forKey:.showSpeakers) ?? true
+        speakerColor = try values.decodeIfPresent(String.self,forKey:.speakerColor) ?? "#A6C7D8"
+        speakerNames = try values.decodeIfPresent(String.self,forKey:.speakerNames) ?? ""
+        terminology = try values.decodeIfPresent(String.self,forKey:.terminology) ?? ""
+        movementStep = try values.decodeIfPresent(Double.self,forKey:.movementStep) ?? 5
+        validate()
+    }
     mutating func validate() {
         contextCapacity = max(1,min(20,contextCapacity))
+        movementStep = movementStep.isFinite ? max(1,min(1000,movementStep.rounded())) : 5
         speakerNames = String(speakerNames.prefix(2000)); terminology = String(terminology.prefix(8000))
         if speakerColor.range(of:"^#[0-9A-Fa-f]{6}$",options:.regularExpression) == nil { speakerColor = "#A6C7D8" }
     }

@@ -90,7 +90,7 @@ final class TVHub {
         default: return nil
         }
     }
-    func start(host: String, settings: TVSettings) throws {
+    func start(host: String, settings: TVSettings, bindAttempt: Int = 0) throws {
         guard (LAN.isPrivateIPv4(host) && Self.localAddresses().contains(host)) || (testingLoopback && host == "127.0.0.1") else { throw LingoError.invalid("اختر عنوان Wi-Fi الحالي لهذا iPhone") }
         queue.async { [self] in
           do {
@@ -143,7 +143,7 @@ final class TVHub {
                         DispatchQueue.main.async { self.onPairing?(host,"\(identity.fingerprint.prefix(12))-\(pin)") }
                         self.queue.asyncAfter(deadline:.now()+20) { [weak self] in
                             guard let self, self.generation == epoch, !self.receivedConnection else { return }
-                            self.diagnostic("tcp.not_observed", "لم يصل اتصال إلى التطبيق بعد؛ تحقق من بقاء التطبيق مفتوحًا وعنوان Wi-Fi ومسار الشبكة")
+                            self.diagnostic("tcp.not_observed", "لم يُرصد اتصال بالخادم؛ تحقق من عنوان Wi-Fi ومسار الشبكة وتوفر التنفيذ")
                         }
                     case .waiting(let error):
                         if self.bonjourEnabled, case .dns = error {
@@ -152,6 +152,7 @@ final class TVHub {
                             try? self.start(host:host,settings:self.settings)
                         } else { self.diagnostic("listen.waiting", "الخادم ينتظر الشبكة · \(Self.safeError(error))", show:true) }
                     case .failed(let error):
+                        if self.retryBusyPort(error,host:host,settings:self.settings,attempt:bindAttempt) { return }
                         self.stopNow(preserveIdentity:true)
                         self.diagnostic("listen.failed", "تعذر ربط خادم التلفزيون · \(Self.safeError(error))", show:true)
                     default: break
@@ -162,6 +163,19 @@ final class TVHub {
             } catch { diagnostic("listen.failed", "تعذر إنشاء المستمع · \((error as NSError).domain) / \((error as NSError).code)", show:true) }
           } catch { diagnostic("identity.failed", "تعذر إعداد هوية TLS · \((error as NSError).domain) / \((error as NSError).code)", show:true) }
         }
+    }
+    private func retryBusyPort(_ error: NWError, host: String, settings: TVSettings, attempt: Int) -> Bool {
+        guard case .posix(let code) = error, code == .EADDRINUSE, attempt < 3 else { return false }
+        // Cancellation releases a Network.framework socket asynchronously. A
+        // cached TLS identity makes a restart fast enough to expose this race.
+        stopNow(preserveIdentity:true)
+        let epoch = generation
+        diagnostic("bind.releasing", "بانتظار تحرير منفذ المستمع السابق")
+        queue.asyncAfter(deadline:.now()+0.25*Double(attempt+1)) { [weak self] in
+            guard let self, self.generation == epoch else { return }
+            try? self.start(host:host,settings:settings,bindAttempt:attempt+1)
+        }
+        return true
     }
     private func accept(_ connection: NWConnection, epoch: Int) {
         guard epoch == generation else { connection.cancel(); return }
@@ -295,8 +309,13 @@ final class TVHub {
     }
     static func now() -> Int64 { Int64(Date().timeIntervalSince1970*1000) }
     func publish(_ message: [String:Any]) { queue.async { [self] in if authenticated { enqueue(message) } } }
-    func configure(_ value: TVSettings, kind: String = "settings_sync") {
-        queue.async { [self] in settings = value; if authenticated { enqueue(TVProtocol.envelope(kind,fields:["settings":settingsWire])) } }
+    func configure(_ value: TVSettings, kind: String = "settings_sync", showSpeakers: Bool? = nil, speakerColor: String? = nil) {
+        queue.async { [self] in
+            settings = value
+            if let showSpeakers { self.showSpeakers = showSpeakers }
+            if let speakerColor, speakerColor.range(of:"^#[0-9A-Fa-f]{6}$",options:.regularExpression) != nil { self.speakerColor = speakerColor }
+            if authenticated { enqueue(TVProtocol.envelope(kind,fields:["settings":settingsWire])) }
+        }
     }
     func configureSpeakers(show: Bool, color: String) {
         queue.async { [self] in
@@ -342,7 +361,7 @@ final class TVHub {
             stopNow(preserveIdentity:true); diagnostic("network.changed", "تغير عنوان Wi-Fi؛ جارٍ انتظار استعادة المستمع", show:true)
         }
     }
-    func stop() { queue.async { [self] in stopNow(); diagnostic("server.stopped", "أُوقف الخادم؛ يلزم بقاء GameLingo في المقدمة", show:true) } }
+    func stop() { queue.async { [self] in stopNow(); diagnostic("server.stopped", "أُوقف خادم التلفزيون", show:true) } }
     private func stopNow(preserveIdentity: Bool = false) {
         generation += 1; if let client { disconnect(client) }
         listener?.cancel(); listener = nil; heartbeat?.cancel(); heartbeat = nil

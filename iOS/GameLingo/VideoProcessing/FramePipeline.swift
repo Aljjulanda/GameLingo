@@ -7,6 +7,8 @@ struct PipelineMetrics {
     var frames: UInt64 = 0, dropped: UInt64 = 0
     var recognitions: UInt64 = 0
     var queueDepth = 0
+    var contextEntries = 0
+    var translationP95 = 0.0, ocrP95 = 0.0
 }
 
 final class FramePipeline {
@@ -40,6 +42,8 @@ final class FramePipeline {
     private var lastTextChange = 0.0
     private var startedAt = 0.0
     private var metrics = PipelineMetrics()
+    private var translationSamples = LatencySamples(), ocrSamples = LatencySamples()
+    private var lastContextPrune = 0.0
     init(translator: OfflineTranslator, publish: @escaping ([String:Any]) -> Void) { self.translator = translator; self.publish = publish }
 
     /// Decode callback retains one buffer; it never allocates one OCR task per received frame.
@@ -55,6 +59,7 @@ final class FramePipeline {
             guard roi.isValid else { return }
             reset(preservingState:preservingState); self.roi = roi; self.mode = mode; runID = UUID(); lastSample = 0; lastTextChange = 0
             metrics = PipelineMetrics()
+            translationSamples = LatencySamples(); ocrSamples = LatencySamples()
             startedAt = ProcessInfo.processInfo.systemUptime
             slotLock.lock(); active = true; metricsDropped = 0; slotLock.unlock()
             let timer = DispatchSource.makeTimerSource(queue:queue)
@@ -104,6 +109,7 @@ final class FramePipeline {
     }
     private func sample() {
         let now = ProcessInfo.processInfo.systemUptime
+        if now-lastContextPrune >= 5 { memory.prune(now:now); lastContextPrune = now }
         let rate = mode.samplingRate(thermal:thermal,lowPower:lowPower)
         metrics.samplingRate = rate
         guard rate > 0 else { return }
@@ -135,6 +141,8 @@ final class FramePipeline {
             metrics.recognitions &+= 1
             metrics.actualOCRRate = Double(metrics.recognitions)/max(0.001,ProcessInfo.processInfo.systemUptime-startedAt)
             metrics.ocrMilliseconds = (ProcessInfo.processInfo.systemUptime-now)*1000
+            ocrSamples.record(metrics.ocrMilliseconds); metrics.ocrP95 = ocrSamples.p95
+            metrics.contextEntries = memory.entries.count
             switch tracker.observe(text:content.text,box:box,now:now,frameMilliseconds:stamp,speaker:content.speaker,confidence:ocr.confidence) {
             case .unchanged: break
             case .gone(let id):
@@ -165,6 +173,7 @@ final class FramePipeline {
                     case .success(let text):
                         if self.stability.shouldPublish(job) {
                             self.metrics.translationMilliseconds = latency
+                            self.translationSamples.record(latency); self.metrics.translationP95 = self.translationSamples.p95
                             self.stability.didPublish(job)
                             self.memory.observe(job,now:ProcessInfo.processInfo.systemUptime)
                             self.publish(TVProtocol.subtitle(job,arabic:text,now:TVHub.now()))

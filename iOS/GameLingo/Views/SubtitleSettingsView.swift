@@ -49,8 +49,11 @@ struct SubtitleSettingsView: View {
                     Toggle("إطار الخلفية",isOn:flag("border")); colorRow("لون إطار الخلفية","border_color")
                 }
                 Section("الموضع بالبكسل") {
-                    Picker("خطوة التحريك",selection:$step) { Text("1 px").tag(1.0); Text("5 px").tag(5.0); Text("10 px").tag(10.0) }.pickerStyle(.segmented)
-                    HStack { Text("خطوة مخصصة px"); TextField("px",value:$step,format:.number).keyboardType(.decimalPad).multilineTextAlignment(.trailing) }
+                    Picker("خطوة التحريك",selection:$step) {
+                        Text("1 px").tag(1.0); Text("5 px").tag(5.0); Text("10 px").tag(10.0)
+                        if ![1.0,5.0,10.0].contains(step) { Text("\(Int(step)) px").tag(step) }
+                    }.pickerStyle(.segmented)
+                    PreciseNumberControl(title:"خطوة مخصصة px",value:$step,range:1...1000,defaultValue:5,integer:true)
                     VStack {
                         Button { move(0,-1) } label: { Label("أعلى",systemImage:"arrow.up") }
                         HStack {
@@ -68,6 +71,8 @@ struct SubtitleSettingsView: View {
                     Text("الجملة الأحدث ثابتة عند الموضع المختار، والسابقة تتكدس فوقها. تصحيح OCR لا يعيد مؤقت الجملة. التلفزيون يدير الاختفاء تلقائيًا.").font(.footnote).foregroundColor(.secondary)
                 }
             }.navigationTitle("إعدادات الترجمة")
+                .onAppear { step = model.settings.advanced.movementStep }
+                .onChange(of:step) { model.settings.advanced.movementStep = $0 }
                 .fileImporter(isPresented:$importing,allowedContentTypes:[.json]) { result in
                     do {
                         let url = try result.get(), access = url.startAccessingSecurityScopedResource()
@@ -83,12 +88,7 @@ struct SubtitleSettingsView: View {
     private func numberRows(_ labels: [String:String]) -> some View {
         ForEach(labels.keys.sorted(),id:\.self) { key in
             if let bounds = DisplaySchema.shared.bounds[key] {
-                HStack {
-                    Text(labels[key]!)
-                    Spacer()
-                    TextField("",value:Binding(get:{ model.settings.display.number(key) },set:{ model.settings.display.set(key,.number($0)) }),format:.number)
-                        .keyboardType(bounds[0] < 0 ? .numbersAndPunctuation : .decimalPad).multilineTextAlignment(.trailing).frame(maxWidth:100)
-                }
+                PreciseNumberControl(title:labels[key]!,value:Binding(get:{ model.settings.display.number(key) },set:{ model.settings.display.set(key,.number($0)) }),range:bounds[0]...bounds[1],step:key.contains("seconds") || key=="disappearance_grace" ? 0.1 : key=="font_weight" ? 100 : 1,defaultValue:TVSettings().number(key),integer:["max_entries","x","y"].contains(key))
             }
         }
     }

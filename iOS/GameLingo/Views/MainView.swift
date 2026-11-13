@@ -32,7 +32,7 @@ struct ConnectionView: View {
                         Label(model.running ? "إيقاف الترجمة" : "بدء الترجمة",systemImage:model.running ? "stop.fill" : "play.fill")
                     }
                         .disabled(!model.running && (!model.modelReady || model.pairing))
-                    Text("اترك التطبيق مفتوحًا. شغّل اللعبة واليد بحسابك المعتاد، واستخدم حسابًا ثانيًا لبث Remote Play.").font(.footnote).foregroundColor(.secondary)
+                    Text("التشغيل الافتراضي في المقدمة؛ تجربة الخلفية من تبويب الترجمة. شغّل اللعبة واليد بحسابك المعتاد، واستخدم حسابًا ثانيًا لبث Remote Play.").font(.footnote).foregroundColor(.secondary)
                     Toggle("تعتيم الشاشة أثناء الجلسة",isOn:$model.settings.dimScreen)
                 }
                 Section("أجهزة PS5 المحفوظة") {
@@ -66,7 +66,7 @@ struct ConnectionView: View {
                 }
                 Section("اتصال TCL") {
                     Text(model.tvStatus)
-                    Text("أبقِ GameLingo في المقدمة أثناء اتصال TCL؛ مغادرة التطبيق توقف الخادم. تُمنع مهلة قفل الشاشة أثناء الاستماع.").font(.footnote).foregroundColor(.secondary)
+                    Text("تُمنع مهلة القفل أثناء الاستماع. العمل خارج التطبيق يتطلب تفعيل تجربة الخلفية، ويظل خاضعًا لسماح iOS.").font(.footnote).foregroundColor(.secondary)
                     if !model.addresses.isEmpty {
                         Picker("عنوان iPhone",selection:$model.settings.localIP) { ForEach(model.addresses,id:\.self) { Text($0).tag($0) } }
                     }
@@ -103,6 +103,17 @@ struct TranslationView: View {
                     Text(model.audioStatus).font(.footnote)
                     Text("اختياري وتجريبي. لا يشغّل صوت PS5 ولا يعرض الفيديو. قد يعلّق iOS التطبيق أو يمنع الاستئناف أثناء القفل. نجاح التجربة يُقاس بوصول جمل جديدة إلى TCL؛ ظهور جلسة صوت لا يثبت ذلك.").font(.footnote).foregroundColor(.secondary)
                 }
+                Section("ذاكرة السياق والمصطلحات") {
+                    Toggle("ذاكرة سياق مؤقتة",isOn:$model.settings.advanced.contextEnabled)
+                    PreciseNumberControl(title:"عدد الجمل السابقة",value:Binding(get:{ Double(model.settings.advanced.contextCapacity) },set:{ model.settings.advanced.contextCapacity = Int($0) }),range:1...20,defaultValue:5,integer:true)
+                    Text("المحرك: Argos المحلي السريع. زيادة الذاكرة لا تضمن تحسن الترجمة؛ تؤثر الذاكرة عند مطابقة قاعدة سياق تضيفها أدناه.").font(.footnote).foregroundColor(.secondary)
+                    TextField("أسماء موثوقة إضافية، مفصولة بفواصل",text:Binding(get:{ model.settings.advanced.speakerNames },set:{ model.settings.advanced.speakerNames = String($0.prefix(2000)) }),axis:.vertical)
+                        .textInputAutocapitalization(.never).autocorrectionDisabled().environment(\.layoutDirection,.leftToRight)
+                    Text("يمكن ترك القائمة فارغة؛ تُكتشف التسميات الواضحة تلقائيًا، وتساعد القائمة مع أسماء خاصة أو غير واضحة.").font(.footnote)
+                    TextEditor(text:Binding(get:{ model.settings.advanced.terminology },set:{ model.settings.advanced.terminology = String($0.prefix(8000)) }))
+                        .frame(minHeight:110).textInputAutocapitalization(.never).autocorrectionDisabled().environment(\.layoutDirection,.leftToRight)
+                    Text("قواعد اختيارية، سطر لكل قاعدة:\nWait! = انتظر!\nriver | Go to the bank. = اذهب إلى ضفة النهر.\nالجزء قبل | شرط وجود كلمة في السياق السابق. تُطابق القاعدة الجملة الحالية كاملة. لا تُحفظ محادثاتك على القرص.").font(.footnote).foregroundColor(.secondary)
+                }
                 Section("النموذج المحلي") {
                     Text(model.modelStatus)
                     if model.modelBusy { ProgressView() }
@@ -113,7 +124,7 @@ struct TranslationView: View {
                     Text("تُجرى الترجمة على iPhone بعد تثبيت النموذج. لا توجد خدمة ترجمة سحابية أو سجل حوار. الحزمة هي نموذج Windows نفسه؛ راجع نسبته وشروطه قبل إعادة توزيعه.").font(.footnote).foregroundColor(.secondary)
                 }
                 Section("قراءة الحوار") {
-                    Text(model.running ? "OCR والترجمة يعملان عند وصول إطارات PS5" : "OCR متوقف")
+                    Text(model.running ? model.sessionStatus : "OCR متوقف")
                     Picker("وضع الأداء",selection:$model.settings.mode) { ForEach(PerformanceMode.allCases,id:\.self) { Text($0.title).tag($0) } }
                     Text("منطقة القراءة كنسبة من الصورة؛ الأصل أعلى اليسار. أوقف الجلسة قبل تعديلها.").font(.footnote)
                     roiControl("X",keyPath:\.x); roiControl("Y",keyPath:\.y)
@@ -148,10 +159,9 @@ struct TranslationView: View {
         }.navigationViewStyle(.stack)
     }
     private func roiControl(_ title: String,keyPath: WritableKeyPath<SourceBox,Double>) -> some View {
-        VStack(alignment:.leading) {
-            Text("\(title): \(model.settings.roi[keyPath:keyPath],specifier:"%.2f")")
-            Slider(value:Binding(get:{ model.settings.roi[keyPath:keyPath] },set:{ model.settings.roi[keyPath:keyPath] = $0 }),in:0...1,step:0.01).disabled(model.running)
-        }
+        let maximum = keyPath == \SourceBox.x ? 1-model.settings.roi.w : keyPath == \SourceBox.y ? 1-model.settings.roi.h : keyPath == \SourceBox.w ? 1-model.settings.roi.x : 1-model.settings.roi.y
+        let minimum = keyPath == \SourceBox.w || keyPath == \SourceBox.h ? 0.01 : 0.0
+        return PreciseNumberControl(title:title,value:Binding(get:{ model.settings.roi[keyPath:keyPath] },set:{ model.settings.roi[keyPath:keyPath] = $0 }),range:minimum...max(minimum,maximum),step:0.01,defaultValue:SourceBox.dialogue[keyPath:keyPath]).disabled(model.running)
     }
 }
 
@@ -166,6 +176,11 @@ struct PerformanceView: View {
                 Section("القياسات الفعلية") {
                     metric("زمن OCR",model.metrics.ocrMilliseconds,suffix:"ms")
                     metric("زمن الترجمة",model.metrics.translationMilliseconds,suffix:"ms")
+                    metric("الترجمة p95 · آخر 120 قياسًا",model.metrics.translationP95,suffix:"ms")
+                    metric("OCR p95 · آخر 120 قياسًا",model.metrics.ocrP95,suffix:"ms")
+                    LabeledContent("جمل السياق في الذاكرة",value:String(model.metrics.contextEntries))
+                    LabeledContent("تأكيدات رسم جمل جديدة بالخلفية",value:String(model.backgroundDeliveries))
+                    LabeledContent("محاولات استرداد الجلسة",value:String(model.recoveryAttempts))
                     metric("معالجة الإطار حتى OCR",model.metrics.frameMilliseconds,suffix:"ms")
                     metric("حد أخذ العينات الحالي",model.metrics.samplingRate,suffix:"/s")
                     metric("متوسط OCR الفعلي منذ بدء الجلسة",model.metrics.actualOCRRate,suffix:"/s")
@@ -174,12 +189,16 @@ struct PerformanceView: View {
                     LabeledContent("مهام الترجمة النشطة والمعلقة",value:String(model.metrics.queueDepth))
                 }
                 Section("النظام") {
+                    metric("CPU · 100% تعني نواة واحدة",model.cpuPercent,suffix:"%")
+                    metric("ذاكرة العملية RSS",model.residentMegabytes,suffix:"MB")
+                    if let used = model.batteryUsed { metric("انخفاض نسبة البطارية منذ البدء",used,suffix:"%") }
+                    Text(model.audioStatus).font(.footnote)
                     LabeledContent("الشبكة",value:model.networkStatus)
                     LabeledContent("الحالة الحرارية",value:thermalTitle)
                     LabeledContent("الذاكرة المتاحة للعملية",value:String(format:"%.0f MB",Double(model.availableMemory)/1048576))
                     LabeledContent("وضع الأداء",value:model.settings.mode.title)
                     Text("تصفّر القياسات حتى وصول إطارات حقيقية. تُخفّض العينات عند الحرارة أو وضع الطاقة المنخفضة، وتتوقف الجلسة عند الحرارة الحرجة.").font(.footnote).foregroundColor(.secondary)
-                    Text("يجب أن يبقى التطبيق في المقدمة. قفل iPhone أو مغادرة التطبيق يوقف الجلسة؛ التعتيم لا يحوّلها إلى تشغيل في الخلفية.").font(.footnote).foregroundColor(.secondary)
+                    Text("تجربة الصوت الصامت اختيارية ولا تضمن استمرار التنفيذ. تأكيد الرسم يصل من تطبيق TV المتوافق، ولا يغني عن التحقق من ظهور حوار جديد فعليًا أثناء القفل. قياسات البطارية تقريبية وليست اختبار طاقة مخبريًا.").font(.footnote).foregroundColor(.secondary)
                 }
             }.navigationTitle("الأداء")
         }.navigationViewStyle(.stack)

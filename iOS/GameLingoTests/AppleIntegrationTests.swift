@@ -94,7 +94,7 @@ final class AppleIntegrationTests: XCTestCase {
         defer { hub.stop() }
         let host = try XCTUnwrap(TVHub.localAddresses().first,"LAN interface required for this integration test")
         var diagnostics: [String] = []
-        hub.onDiagnostics = { diagnostics = $0 }
+        hub.onDiagnostics = { diagnostics = $0; if let last = $0.last { print("LAN fixture: " + last) } }
         func start() async throws -> String {
             let ready = expectation(description:"LAN listener bound to 38443")
             var code = ""
