@@ -31,7 +31,7 @@ enum DialogueText {
         let a = words(before), b = words(after)
         return a.count >= 2 && b.count > a.count && Array(b.prefix(a.count)) == a
     }
-    private static func similarity(_ a: String, _ b: String) -> Double {
+    static func similarity(_ a: String, _ b: String) -> Double {
         let x = Array(a), y = Array(b)
         guard !x.isEmpty || !y.isEmpty else { return 1 }
         var row = Array(repeating: 0, count: y.count+1)
@@ -48,7 +48,12 @@ enum DialogueText {
     static func same(_ before: String, _ after: String) -> Bool {
         let a = words(before), b = words(after)
         guard !a.isEmpty && !b.isEmpty else { return false }
+        func names(_ text: String) -> [String] {
+            matches(text,"[A-Za-z]+").dropFirst().filter { $0.count >= 3 && $0.first?.isUppercase == true && $0.dropFirst().allSatisfy(\.isLowercase) }
+        }
+        guard names(before) == names(after) else { return false }
         if a == b || a.joined() == b.joined() { return true }
+        guard semanticMarkers(before) == semanticMarkers(after) else { return false }
         guard matches(before, "[+-]?\\d+(?:[.,]\\d+)*") == matches(after, "[+-]?\\d+(?:[.,]\\d+)*") else { return false }
         if prefix(before, after) || prefix(after, before) { return true }
         let short = a.count < b.count ? a : b, long = a.count < b.count ? b : a
@@ -63,12 +68,20 @@ enum DialogueText {
         guard a.count == b.count else { return false }
         let changed = zip(a,b).filter { pair in pair.0 != pair.1 }
         guard changed.count == 1, let (x,y) = changed.first else { return false }
-        return min(x.count,y.count) >= 5 && x.first == y.first && x.last == y.last && similarity(x,y) >= 0.8 && similarity(a.joined(),b.joined()) >= 0.9
+        return min(x.count,y.count) >= 4 && similarity(x,y) >= 0.8 && similarity(a.joined(),b.joined()) >= 0.88
+    }
+    static func semanticMarkers(_ text: String) -> [String] {
+        let plain = text.lowercased().replacingOccurrences(of:"['’`]",with:"",options:.regularExpression)
+        let protected: Set<String> = ["no","not","never","dont","cannot","cant","wont","without","isnt","wasnt","didnt","shouldnt","wouldnt","couldnt","he","she","they","we","you","i","left","right","north","south","east","west"]
+        return matches(plain,"[+-]?\\d+(?:[.,]\\d+)*|[a-z]+").filter { protected.contains($0) || $0.contains(where:\.isNumber) }
     }
 }
 
 struct DialogueJob: Equatable {
     let id: String, text: String, generation: UInt64, correction: Bool, box: SourceBox, frameMilliseconds: Int64
+    var speaker: String? = nil
+    var confidence: Double = 1
+    var meaningfulCorrection = false
 }
 
 enum Observation {
@@ -86,8 +99,9 @@ struct DialogueTracker {
     private var lastSeen: TimeInterval = 0
     private var empty = 0
     private var suppressContinuingCurrent = false
+    private var firstSeen: TimeInterval = 0
     mutating func markInterrupted() { suppressContinuingCurrent = current != nil }
-    mutating func observe(text raw: String, box: SourceBox, now: TimeInterval, frameMilliseconds: Int64) -> Observation {
+    mutating func observe(text raw: String, box: SourceBox, now: TimeInterval, frameMilliseconds: Int64, speaker: String? = nil, confidence: Double = 1) -> Observation {
         let text = String(DialogueText.normalized(raw).prefix(1800))
         guard !text.isEmpty else {
             empty += 1
@@ -96,22 +110,27 @@ struct DialogueTracker {
             return .gone(old.id)
         }
         empty = 0
-        if let old = current, DialogueText.words(text) == DialogueText.words(old.text), (now-lastSeen <= 1.5 || suppressContinuingCurrent), box.isAdjacent(to: old.box) {
+        if let old = current, (speaker == nil || speaker == old.speaker), DialogueText.words(text) == DialogueText.words(old.text), (now-lastSeen <= 1.5 || suppressContinuingCurrent), box.isAdjacent(to: old.box) {
             lastSeen = now
             return .unchanged
         }
         let old = current
         suppressContinuingCurrent = false
-        let correction = old.map { now-lastSeen <= 1.5 && box.isAdjacent(to: $0.box) && DialogueText.same($0.text,text) } ?? false
-        if !correction { serial &+= 1 }
+        let adjacent = old.map { now-lastSeen <= 1.5 && box.isAdjacent(to:$0.box) && (speaker == nil || $0.speaker == nil || speaker == $0.speaker) } ?? false
+        let equivalent = old.map { DialogueText.same($0.text,text) } ?? false
+        // A high-overlap semantic correction during initial OCR acquisition can
+        // repair the same event. Later changes remain fresh dialogue events.
+        let important = old.map { !equivalent && adjacent && now-firstSeen <= 0.8 && confidence >= 0.5 && DialogueText.similarity($0.text.lowercased(),text.lowercased()) >= 0.72 } ?? false
+        let correction = adjacent && (equivalent || important)
+        if !correction { serial &+= 1; firstSeen = now }
         generation &+= 1
-        let job = DialogueJob(id: correction ? old!.id : "\(namespace)-\(serial)", text: text, generation: generation, correction: correction, box: box, frameMilliseconds: frameMilliseconds)
+        let job = DialogueJob(id: correction ? old!.id : "\(namespace)-\(serial)", text: text, generation: generation, correction: correction, box: box, frameMilliseconds: frameMilliseconds,speaker:speaker ?? (correction ? old?.speaker : nil),confidence:confidence,meaningfulCorrection:correction && !equivalent)
         current = job; lastSeen = now
         return .dialogue(job, previousID: correction ? nil : old?.id)
     }
     func accepts(_ result: DialogueJob) -> Bool {
         guard let current, current.id == result.id else { return false }
-        return current.generation == result.generation || DialogueText.prefix(result.text,current.text)
+        return current.generation == result.generation || (DialogueText.semanticMarkers(result.text) == DialogueText.semanticMarkers(current.text) && DialogueText.prefix(result.text,current.text))
     }
     mutating func reset() { current = nil; empty = 0; suppressContinuingCurrent = false; generation &+= 1 }
 }

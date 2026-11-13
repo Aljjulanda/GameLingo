@@ -32,6 +32,8 @@ def main():
         'android-tv/app/build.gradle',
         'android-tv/app/src/main/java/dev/gamelingo/tv/Receiver.kt',
         'android-tv/app/src/main/java/dev/gamelingo/tv/MainActivity.kt',
+        'android-tv/app/src/main/java/dev/gamelingo/tv/SubtitleState.kt',
+        'android-tv/app/src/main/java/dev/gamelingo/tv/SubtitleCanvas.kt',
     }
     for name, digest in manifest.items():
         if name in approved_tv_changes:

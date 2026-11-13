@@ -2,7 +2,7 @@ package dev.gamelingo.tv
 
 data class SourceBox(val x:Double,val y:Double,val w:Double,val h:Double)
 data class SubtitleEntry(val id: String, var text: String, val shownAt: Long, var until: Long,
-    var source:String="",var box:SourceBox?=null)
+    var source:String="",var box:SourceBox?=null,var speaker:String="")
 
 class SubtitleState {
     val entries = mutableListOf<SubtitleEntry>()
@@ -31,6 +31,9 @@ class SubtitleState {
     private fun sameSource(entry:SubtitleEntry,source:String,box:SourceBox?):Boolean {
         val a=sourceWords(entry.source);val b=sourceWords(source)
         if(a.isEmpty() || b.isEmpty())return false // Never deduplicate on Arabic alone.
+        fun names(text:String)=Regex("[A-Za-z]+").findAll(text).drop(1).map {it.value}.filter {Regex("[A-Z][a-z]{2,}").matches(it)}.toList()
+        if(names(entry.source)!=names(source))return false
+        if(semanticMarkers(entry.source)!=semanticMarkers(source))return false
         if(entry.box!=null && box!=null) {
             val p=entry.box!!
             if(kotlin.math.abs(p.x+p.w/2-box.x-box.w/2)>.2 || kotlin.math.abs(p.y-box.y)>.12)return false
@@ -48,23 +51,35 @@ class SubtitleState {
         for(word in long)if(at<short.size && word==short[at])at++
         return at==short.size
     }
+    private fun semanticMarkers(text:String):List<String> {
+        val protected=setOf("no","not","never","dont","cannot","cant","wont","without","isnt","wasnt","didnt","shouldnt","wouldnt","couldnt","he","she","they","we","you","i","left","right","north","south","east","west")
+        return sourceWords(text).filter {it in protected || it.any(Char::isDigit)}
+    }
+    private fun extension(before:String,after:String):Boolean {
+        val a=sourceWords(before);val b=sourceWords(after)
+        return a.size>=2 && b.size>a.size && b.take(a.size)==a
+    }
     fun duration(text: String, adaptive: Boolean, speed: Double, minimum: Long, maximum: Long, fixed: Long): Long {
         val chars = text.count { !it.isWhitespace() }
         return if (adaptive) (chars / speed.coerceAtLeast(1.0) * 1000).toLong().coerceIn(minimum, maximum.coerceAtLeast(minimum))
             else fixed.coerceIn(minimum, maximum.coerceAtLeast(minimum))
     }
-    fun show(id: String, text: String, now: Long, duration: Long, capacity: Int,source:String="",box:SourceBox?=null) {
+    fun show(id: String, text: String, now: Long, duration: Long, capacity: Int,source:String="",box:SourceBox?=null,
+        speaker:String="",freshEvent:Boolean=false,meaningfulCorrection:Boolean=false) {
         expire(now)
         val old = entries.firstOrNull { it.id == (aliases[id] ?: id) }
         if (old != null) {
-            old.text = text // Corrections and duplicates retain their original visible-time clock.
+            // Cosmetic OCR/Arabic paraphrases do not rewrite a visible card.
+            // Old senders without source metadata retain their explicit updates.
+            if(meaningfulCorrection || old.source.isEmpty() || source.isEmpty() || semanticMarkers(old.source)!=semanticMarkers(source) || extension(old.source,source) || !sameSource(old,source,box)) old.text = text
+            if(speaker.isNotEmpty()) old.speaker=speaker
             if(source.isNotEmpty()) {old.source=source;old.box=box}
             return
         }
         // Event IDs, not translated text, identify dialogue. Distinct source
         // events may legitimately repeat or translate to identical Arabic.
         if (id in seen) return
-        val matching=entries.lastOrNull {it.id !in visuallySuperseded && arabicKey(it.text)==arabicKey(text) && sameSource(it,source,box)}
+        val matching=if(freshEvent) null else entries.lastOrNull {it.id !in visuallySuperseded && it.speaker==speaker && now-it.shownAt<=3500 && sameSource(it,source,box)}
         remember(id)
         if(matching!=null) {
             coalesced++
@@ -73,14 +88,14 @@ class SubtitleState {
                 // its equivalent sentence is still visible. Alias it, without
                 // extending the original local lifetime or adding another box.
                 aliases[id]=matching.id;if(aliases.size>128)aliases.remove(aliases.keys.first())
-                matching.text=text;matching.source=source;matching.box=box
+                matching.source=source;matching.box=box
                 return
             }
             // A genuinely repeated line after intervening dialogue becomes the
             // newest entry with its own clock; remove its older visual copy.
             entries.remove(matching)
         }
-        entries.add(SubtitleEntry(id, text, now, now + duration,source,box))
+        entries.add(SubtitleEntry(id, text, now, now + duration,source,box,speaker))
         while (entries.size > capacity.coerceIn(1,3)) entries.removeAt(0)
     }
     fun expire(now: Long) { entries.removeAll { it.until <= now } }
@@ -89,7 +104,7 @@ class SubtitleState {
         val keys=mutableSetOf<String>()
         for(entry in entries.asReversed()) {
             if(entry.id in visuallySuperseded)continue
-            val key=java.text.Normalizer.normalize(entry.text,java.text.Normalizer.Form.NFKC)
+            val key=entry.speaker+"/"+semanticMarkers(entry.source).joinToString(" ")+"/"+java.text.Normalizer.normalize(entry.text,java.text.Normalizer.Form.NFKC)
                 .trim().trimEnd('.','!','?','؟','،','؛','…').replace(Regex("\\s+")," ")
             if(!keys.add(key)) {visuallySuperseded.add(entry.id);visualCompactions++}
         }

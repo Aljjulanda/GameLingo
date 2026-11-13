@@ -6,6 +6,7 @@ import ImageIO
 struct OCRLine {
     var text: String
     var box: SourceBox
+    var confidence: Double = 1
 }
 
 final class VisionDialogueOCR {
@@ -16,6 +17,7 @@ final class VisionDialogueOCR {
         return request
     }()
     private var previousSignature: [String] = []
+    private(set) var confidence: Double = 0
     func setBackground(_ background: Bool) { request.usesCPUOnly = background }
     func recognize(_ buffer: CVPixelBuffer, roi: SourceBox) throws -> (String,SourceBox) {
         guard roi.isValid else { throw LingoError.invalid("منطقة الحوار غير صالحة") }
@@ -30,13 +32,14 @@ final class VisionDialogueOCR {
             let box = SourceBox(x:roi.x+Double(b.minX)*roi.w,
                                 y:roi.y+Double(1-b.maxY)*roi.h,
                                 w:Double(b.width)*roi.w,h:Double(b.height)*roi.h)
-            return OCRLine(text:candidate.string,box:box)
+            return OCRLine(text:candidate.string,box:box,confidence:Double(candidate.confidence))
         }
         let selected = select(lines,roi:roi)
+        confidence = selected.map(\.confidence).min() ?? 0
         guard !selected.isEmpty else { return ("",roi) }
         let x = selected.map(\.box.x).min()!, y = selected.map(\.box.y).min()!
         let right = selected.map { $0.box.x+$0.box.w }.max()!, bottom = selected.map { $0.box.y+$0.box.h }.max()!
-        return (String(selected.map(\.text).joined(separator:" ").prefix(1800)),SourceBox(x:x,y:y,w:right-x,h:bottom-y))
+        return (String(selected.map(\.text).joined(separator:"\n").prefix(1800)),SourceBox(x:x,y:y,w:right-x,h:bottom-y))
     }
     /// Port the desktop's structural gate; this is not semantic game/menu classification.
     func select(_ lines: [OCRLine], roi: SourceBox) -> [OCRLine] {

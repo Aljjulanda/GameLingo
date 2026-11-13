@@ -15,7 +15,7 @@ class SubtitleCanvas(context: Context, private val report: (String)->Unit) : Vie
     var measuredBoxes: List<Pair<Float,Float>> = emptyList(); private set
     var measuredAnchor: Pair<Float,Float> = Pair(0f,0f); private set
     var measuredContext: RectF? = null; private set
-    private data class Queued(val id:String,val text:String,val duration:Long,val receivedAt:Long,val source:String,val box:SourceBox?)
+    private data class Queued(val id:String,val text:String,val duration:Long,val receivedAt:Long,val source:String,val box:SourceBox?,val speaker:String,val fresh:Boolean,val meaningful:Boolean)
     private val pending=java.util.ArrayDeque<Queued>()
     var style = JSONObject()
     private val ink = TextPaint(Paint.ANTI_ALIAS_FLAG)
@@ -75,7 +75,8 @@ class SubtitleCanvas(context: Context, private val report: (String)->Unit) : Vie
                 val duration=state.duration(text,b("adaptive",true),n("reading_speed",13.0).toDouble(),
                     (n("min_seconds",4.0)*1000).toLong(),(n("max_seconds",8.0)*1000).toLong(),(n("fixed_seconds",5.0)*1000).toLong()).coerceAtMost((n("hard_seconds",8.0)*1000).toLong())
                 val box=if(listOf("x","y","w","h").all {message.has(it)}) SourceBox(message.optDouble("x"),message.optDouble("y"),message.optDouble("w"),message.optDouble("h")) else null
-                pending.add(Queued(message.getString("id"),text,duration,now,message.optString("source",""),box))
+                val speaker=message.optJSONObject("speaker")?.optString("name","")?.take(40) ?: ""
+                pending.add(Queued(message.getString("id"),text,duration,now,message.optString("source",""),box,speaker,message.optBoolean("event_fresh",false),message.optBoolean("meaningful_correction",false)))
                 while(pending.size>3) pending.removeFirst()
                 removeCallbacks(tick); post(tick)
             }
@@ -92,7 +93,7 @@ class SubtitleCanvas(context: Context, private val report: (String)->Unit) : Vie
             val entry=pending.removeFirst()
             if(now-entry.receivedAt>(n("hard_seconds",8.0)*1000).toLong()) continue
             val merges=state.coalesced
-            state.show(entry.id,entry.text,now,entry.duration,n("max_entries",3.0).toInt(),entry.source,entry.box)
+            state.show(entry.id,entry.text,now,entry.duration,n("max_entries",3.0).toInt(),entry.source,entry.box,entry.speaker,entry.fresh,entry.meaningful)
             if(state.coalesced>merges) android.util.Log.i("GameLingoDedup","coalesced="+state.coalesced+" incoming="+entry.id+" active="+state.entries.size)
             android.util.Log.i("GameLingoEntries","visible=" + state.entries.map {it.id} + " newestUntil=" + state.entries.lastOrNull()?.until)
         }

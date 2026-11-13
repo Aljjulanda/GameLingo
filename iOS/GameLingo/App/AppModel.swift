@@ -9,6 +9,7 @@ final class AppModel: ObservableObject {
         didSet {
             do { try settings.save() } catch { errorMessage = error.localizedDescription }
             pipeline.configure(mode:settings.mode,thermal:ProcessInfo.processInfo.thermalState.rawValue,lowPower:ProcessInfo.processInfo.isLowPowerModeEnabled)
+            pipeline.configureAdvanced(settings.advanced)
             if oldValue.display != settings.display { scheduleStyle() }
         }
     }
@@ -112,6 +113,7 @@ final class AppModel: ObservableObject {
         pipeline.onMetrics = { [weak self] in self?.metrics = $0 }
         pipeline.onError = { [weak self] in self?.errorMessage = $0 }
         let pipeline = self.pipeline
+        pipeline.configureAdvanced(settings.advanced)
         remote.onFrame = { [weak pipeline] in pipeline?.offer($0) }
         monitor.pathUpdateHandler = { [weak self] path in
             let available = path.status == .satisfied

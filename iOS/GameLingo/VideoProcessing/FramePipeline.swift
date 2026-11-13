@@ -26,6 +26,9 @@ final class FramePipeline {
     private var ocr = VisionDialogueOCR()
     private var signature = FrameSignature()
     private var tracker = DialogueTracker()
+    private var advanced = AdvancedSettings()
+    private var memory = DialogueMemory()
+    private var stability = PublicationStability()
     private var pending: DialogueJob?
     private var translating = false
     private var lastSample = 0.0
@@ -59,6 +62,12 @@ final class FramePipeline {
         queue.async { [self] in self.mode = mode; self.thermal = thermal; self.lowPower = lowPower }
     }
     func setBackground(_ value: Bool) { queue.async { [self] in ocr.setBackground(value) } }
+    func configureAdvanced(_ value: AdvancedSettings) {
+        queue.async { [self] in
+            advanced = value; memory.enabled = value.contextEnabled; memory.capacity = value.contextCapacity
+            memory.prune(now:ProcessInfo.processInfo.systemUptime)
+        }
+    }
     func interrupt() { translator.cancel(); queue.async { [self] in
         runID = UUID(); tracker.markInterrupted(); pending = nil; publish(TVProtocol.envelope("subtitle_clear"))
         slotLock.lock(); latest = nil; slotLock.unlock()
@@ -77,6 +86,7 @@ final class FramePipeline {
     }
     private func reset() {
         timer?.cancel(); timer = nil; runID = UUID(); tracker.reset(); pending = nil; ocr = VisionDialogueOCR(); signature = FrameSignature()
+        memory.clear(); stability.clear()
         // An already running inference still owns the single worker until its callback.
     }
     private func sample() {
@@ -93,15 +103,17 @@ final class FramePipeline {
         guard signature.shouldRecognize(buffer,roi:roi,now:now,hasText:tracker.current != nil) else { return }
         do {
             let (text,box) = try autoreleasepool { try ocr.recognize(buffer,roi:roi) }
+            let content = DialogueContent.parse(text,knownNames:advanced.speakerNames)
             metrics.recognitions &+= 1
             metrics.actualOCRRate = Double(metrics.recognitions)/max(0.001,ProcessInfo.processInfo.systemUptime-startedAt)
             metrics.ocrMilliseconds = (ProcessInfo.processInfo.systemUptime-now)*1000
-            switch tracker.observe(text:text,box:box,now:now,frameMilliseconds:stamp) {
+            switch tracker.observe(text:content.text,box:box,now:now,frameMilliseconds:stamp,speaker:content.speaker,confidence:ocr.confidence) {
             case .unchanged: break
             case .gone(let id):
                 translator.cancel(); pending = nil; publish(TVProtocol.envelope("subtitle_source_gone",fields:["id":id])); lastTextChange = now
             case .dialogue(let job,let previous):
                 if let previous { publish(TVProtocol.envelope("subtitle_source_gone",fields:["id":previous])) }
+                guard stability.shouldPublish(job) else { memory.observe(job,now:now); break }
                 if !job.correction { translator.cancel() }
                 pending = job; lastTextChange = now; submit()
             }
@@ -114,18 +126,28 @@ final class FramePipeline {
         guard !translating, let job = pending else { return }
         pending = nil; translating = true
         let epoch = runID
-        translator.translate(job.text) { [weak self] result,latency in
+        memory.prune(now:ProcessInfo.processInfo.systemUptime)
+        let override = Terminology.resolve(job.text,rules:advanced.terminology,context:memory.entries.filter { $0.id != job.id })
+        let completion: (Result<String,Error>,Double) -> Void = { [weak self] result,latency in
             guard let self else { return }
             self.queue.async {
                 self.translating = false
                 if epoch == self.runID && self.tracker.accepts(job) {
                     switch result {
-                    case .success(let text): self.metrics.translationMilliseconds = latency; self.publish(TVProtocol.subtitle(job,arabic:text,now:TVHub.now()))
+                    case .success(let text):
+                        if self.stability.shouldPublish(job) {
+                            self.metrics.translationMilliseconds = latency
+                            self.stability.didPublish(job)
+                            self.memory.observe(job,now:ProcessInfo.processInfo.systemUptime)
+                            self.publish(TVProtocol.subtitle(job,arabic:text,now:TVHub.now()))
+                        }
                     case .failure(let error): DispatchQueue.main.async { self.onError?(error.localizedDescription) }
                     }
                 }
                 self.submit()
             }
         }
+        if let override { completion(.success(override),0) }
+        else { translator.translate(job.text,completion:completion) }
     }
 }
