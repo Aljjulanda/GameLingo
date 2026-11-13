@@ -9,7 +9,12 @@ fi
 ARCH="$(uname -m)"
 bash Scripts/build-native.sh iphonesimulator "$ARCH" 2>&1 | tee build/logs/native-simulator.log
 python3 Scripts/fetch-test-model.py
-DESTINATION="${IOS_TEST_DESTINATION:-platform=iOS Simulator,name=iPhone 16,OS=18.5}"
+if [[ -n "${IOS_TEST_DESTINATION:-}" ]]; then
+  DESTINATION="$IOS_TEST_DESTINATION"
+else
+  python3 Scripts/prepare-simulator.py
+  DESTINATION="$(cat build/simulator-destination.txt)"
+fi
 xcodebuild test -project GameLingo.xcodeproj -scheme GameLingo -configuration Debug \
   -destination "$DESTINATION" -derivedDataPath build/DerivedData \
   -resultBundlePath build/GameLingoTests.xcresult \

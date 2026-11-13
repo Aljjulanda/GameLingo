@@ -25,7 +25,6 @@ jobs:
     timeout-minutes: 90
     env:
       DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
-      IOS_TEST_DESTINATION: platform=iOS Simulator,name=iPhone 16,OS=18.5,arch=x86_64
     steps:
       - uses: actions/checkout@v6
         with:
