@@ -62,7 +62,8 @@ final class FramePipeline {
         runID = UUID(); tracker.reset(); pending = nil; publish(TVProtocol.envelope("subtitle_clear"))
         slotLock.lock(); latest = nil; slotLock.unlock()
     } }
-    func tvDisconnected() { translator.cancel(); queue.async { [self] in
+    /// Called from the hub queue; inference never synchronously waits on that queue.
+    func tvDisconnected() { translator.cancel(); queue.sync { [self] in
         // Keep the observed dialogue identity so reconnecting does not retranslate/replay it.
         // Invalidate all in-flight publications and discard pending work.
         runID = UUID(); pending = nil

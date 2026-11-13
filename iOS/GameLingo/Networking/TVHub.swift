@@ -102,7 +102,8 @@ final class TVHub {
         guard client === connection else { return }
         client = nil; authenticated = false; outbound.removeAll(); sending = false
         heartbeat?.cancel(); heartbeat = nil; connection.cancel(); status("التلفزيون غير متصل؛ لا تُعاد الجمل السابقة")
-        DispatchQueue.main.async { self.onDisconnected?() }
+        // Invalidate pending inference before this queue can authenticate a replacement TV.
+        onDisconnected?()
     }
     private func receive(_ connection: NWConnection) {
         connection.receiveMessage { [weak self,weak connection] data,context,_,error in

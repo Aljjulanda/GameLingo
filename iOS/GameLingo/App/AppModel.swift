@@ -69,7 +69,8 @@ final class AppModel: ObservableObject {
         }
         hub.onStatus = { [weak self] in self?.tvStatus = $0 }
         hub.onPairing = { [weak self] _,code in self?.pairingCode = code }
-        hub.onDisconnected = { [weak self] in self?.pipeline.tvDisconnected() }
+        let processor = self.pipeline
+        hub.onDisconnected = { [weak processor] in processor?.tvDisconnected() }
         // Connection resets only the TV. Previously visible dialogue is deliberately not replayed.
         pipeline.onMetrics = { [weak self] in self?.metrics = $0 }
         pipeline.onError = { [weak self] in self?.errorMessage = $0 }

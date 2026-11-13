@@ -47,6 +47,11 @@ jobs:
         run: |
           python3 iOS/Scripts/validate-source.py
           python3 iOS/Scripts/test-build-tools.py
+      - name: Test portable Swift dialogue and protocol logic
+        working-directory: iOS
+        run: |
+          mkdir -p build/logs
+          swift test --parallel 2>&1 | tee build/logs/core-tests.log
       - name: Prepare pinned dependencies and native iPhone libraries
         run: bash iOS/Scripts/prepare.sh 2>&1 | tee prepare.log
       - name: Validate Apple project
@@ -55,6 +60,8 @@ jobs:
           plutil -lint iOS/GameLingo/Resources/PrivacyInfo.xcprivacy
           plutil -lint iOS/GameLingo.xcodeproj/project.pbxproj
       - name: Core and Apple integration tests
+        env:
+          SKIP_CORE_TESTS: '1'
         run: bash iOS/Scripts/test.sh
       - name: Save compiled native dependencies
         if: always() && steps.native-cache.outputs.cache-hit != 'true' && hashFiles('iOS/.build/native/iphoneos-arm64/prefix/lib/libcrypto.a') != ''

@@ -19,8 +19,9 @@ class PackagingTests(unittest.TestCase):
         prefix = 'Payload/GameLingo.app/'
         items = {
             prefix + 'Info.plist': plistlib.dumps({'CFBundleExecutable': 'GameLingo', 'CFBundleIdentifier': 'dev.gamelingo.ios', 'CFBundlePackageType': 'APPL'}),
-            prefix + 'GameLingo': executable or struct.pack('<IIIIIIII', 0xfeedfacf, 0x0100000C, 0, 2, 0, 0, 0, 0),
+            prefix + 'GameLingo': executable or (struct.pack('<IIIIIIII', 0xfeedfacf, 0x0100000C, 0, 2, 1, 24, 0, 0) + struct.pack('<IIIIII', 0x32, 24, 2, 0x00100000, 0x00120000, 0)),
             prefix + 'tv-display-schema.json': b'{}', prefix + 'ThirdPartyNotices.txt': b'Synthetic test only',
+            prefix + 'PrivacyInfo.xcprivacy': b'<plist/>',
         }
         items.update(extra or {})
         with zipfile.ZipFile(path, 'w') as archive:
@@ -48,6 +49,15 @@ class PackagingTests(unittest.TestCase):
                 self.package(path, executable=binary)
                 with self.assertRaises(ValueError):
                     validator.validate(path)
+
+    def test_rejects_arm64_simulator_platform_and_bundled_test_model(self):
+        simulator = struct.pack('<IIIIIIII', 0xfeedfacf, 0x0100000C, 0, 2, 1, 24, 0, 0) + struct.pack('<IIIIII', 0x32, 24, 7, 0x00100000, 0x00120000, 0)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = pathlib.Path(tmp) / 'fixture.zip'
+            self.package(path, executable=simulator)
+            with self.assertRaises(ValueError): validator.validate(path)
+            self.package(path, extra={'Payload/GameLingo.app/en_ar/model/model.bin': b'test-only'})
+            with self.assertRaises(ValueError): validator.validate(path)
 
 
 if __name__ == '__main__':
