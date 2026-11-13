@@ -9,13 +9,17 @@ fi
 ARCH="$(uname -m)"
 bash Scripts/build-native.sh iphonesimulator "$ARCH" 2>&1 | tee build/logs/native-simulator.log
 python3 Scripts/fetch-test-model.py
+xcodebuild build-for-testing -project GameLingo.xcodeproj -scheme GameLingo -configuration Debug \
+  -destination 'generic/platform=iOS Simulator' -derivedDataPath build/DerivedData \
+  CODE_SIGN_ENTITLEMENTS='' \
+  2>&1 | tee build/logs/apple-test-build.log
 if [[ -n "${IOS_TEST_DESTINATION:-}" ]]; then
   DESTINATION="$IOS_TEST_DESTINATION"
 else
   python3 Scripts/prepare-simulator.py
   DESTINATION="$(cat build/simulator-destination.txt)"
 fi
-xcodebuild test -project GameLingo.xcodeproj -scheme GameLingo -configuration Debug \
+xcodebuild test-without-building -project GameLingo.xcodeproj -scheme GameLingo -configuration Debug \
   -destination "$DESTINATION" -derivedDataPath build/DerivedData \
   -resultBundlePath build/GameLingoTests.xcresult \
   CODE_SIGN_ENTITLEMENTS='' \
