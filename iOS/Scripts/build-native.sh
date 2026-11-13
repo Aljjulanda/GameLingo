@@ -44,6 +44,7 @@ fi
 test -f "$PREFIX/lib/libcrypto.a"
 test -f "$PREFIX/include/openssl/ssl.h"
 COMMON=(-G Ninja -DCMAKE_SYSTEM_NAME=iOS -DCMAKE_OSX_SYSROOT="$SDKROOT" -DCMAKE_OSX_ARCHITECTURES="$ARCH"
+  -DCMAKE_MAKE_PROGRAM="$(command -v ninja)" -DGIT_EXECUTABLE="$(command -v git)"
   -DCMAKE_SYSTEM_PROCESSOR="$ARCH" -DCMAKE_OSX_DEPLOYMENT_TARGET=16.0 -DCMAKE_BUILD_TYPE=Release
   -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DBUILD_SHARED_LIBS=OFF)
 cmake -S "$SOURCES/pylux" -B "$WORK/chiaki" "${COMMON[@]}" \
@@ -54,6 +55,7 @@ cmake -S "$SOURCES/pylux" -B "$WORK/chiaki" "${COMMON[@]}" \
   -DOPENSSL_INCLUDE_DIR="$PREFIX/include" -DOPENSSL_CRYPTO_LIBRARY="$PREFIX/lib/libcrypto.a" \
   -DOPENSSL_SSL_LIBRARY="$PREFIX/lib/libssl.a" \
   -DPYTHON_EXECUTABLE="$(command -v python3)" -DGAMELINGO_BRIDGE="$ROOT/Native/GLRemotePlay.c" \
+  -DPROTOBUF_PROTOC_EXECUTABLE="$(command -v protoc)" -DProtobuf_PROTOC_EXECUTABLE="$(command -v protoc)" \
   -DCURL_USE_SECTRANSP=ON -DCURL_USE_OPENSSL=OFF -DCURL_USE_LIBPSL=OFF \
   -DCURL_USE_LIBSSH2=OFF -DCURL_ZLIB=OFF -DCURL_BROTLI=OFF -DCURL_ZSTD=OFF
 cmake --build "$WORK/chiaki" --target chiaki-lib -j3
