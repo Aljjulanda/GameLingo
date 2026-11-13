@@ -3,6 +3,7 @@ name: GameLingo iOS unsigned IPA
 on:
   workflow_dispatch:
   push:
+    branches: ['main', 'codex/**']
     paths: ['iOS/**', '.github/workflows/ios-build.yml']
   pull_request:
     paths: ['iOS/**', '.github/workflows/ios-build.yml']

@@ -2,7 +2,9 @@
 #include <ctranslate2/translator.h>
 #include <sentencepiece_processor.h>
 #include <atomic>
+#include <algorithm>
 #include <memory>
+#include <stdexcept>
 
 @implementation GLTranslation {
     std::unique_ptr<ctranslate2::Translator> _translator;
