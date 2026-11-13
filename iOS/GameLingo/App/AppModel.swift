@@ -159,7 +159,9 @@ final class AppModel: ObservableObject {
         downloadTask = Task { [weak self] in
             guard let self else { return }
             do {
-                let (location,response) = try await URLSession.shared.download(from:OfflineTranslator.modelURL)
+                var request = URLRequest(url:OfflineTranslator.modelURL)
+                request.setValue("GameLingo/1.0",forHTTPHeaderField:"User-Agent")
+                let (location,response) = try await URLSession.shared.download(for:request)
                 guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw LingoError.invalid("فشل تنزيل النموذج") }
                 self.installModel(location,temporary:true)
             } catch { self.modelBusy = false; self.errorMessage = error.localizedDescription; self.modelStatus = "فشل التنزيل" }
