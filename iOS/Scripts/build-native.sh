@@ -57,7 +57,8 @@ cmake -S "$SOURCES/pylux" -B "$WORK/chiaki" "${COMMON[@]}" \
   -DPYTHON_EXECUTABLE="$(command -v python3)" -DGAMELINGO_BRIDGE="$ROOT/Native/GLRemotePlay.c" \
   -DPROTOBUF_PROTOC_EXECUTABLE="$(command -v protoc)" -DProtobuf_PROTOC_EXECUTABLE="$(command -v protoc)" \
   -DCURL_USE_SECTRANSP=ON -DCURL_USE_OPENSSL=OFF -DCURL_USE_LIBPSL=OFF \
-  -DCURL_USE_LIBSSH2=OFF -DCURL_ZLIB=OFF -DCURL_BROTLI=OFF -DCURL_ZSTD=OFF
+  -DCURL_USE_LIBSSH2=OFF -DCURL_ZLIB=OFF -DCURL_BROTLI=OFF -DCURL_ZSTD=OFF \
+  -DUSE_LIBIDN2=OFF -DUSE_NGHTTP2=OFF
 cmake --build "$WORK/chiaki" --target chiaki-lib -j3
 if [[ "$ARCH" == arm64 ]]; then RUY=ON; else RUY=OFF; fi
 cmake -S "$SOURCES/ctranslate2" -B "$WORK/ct2" "${COMMON[@]}" \

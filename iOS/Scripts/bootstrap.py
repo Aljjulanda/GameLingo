@@ -63,6 +63,10 @@ def patch_pylux(path):
     third_party = third_party.replace('GIT_SHALLOW TRUE', 'GIT_SHALLOW FALSE')
     third_party = replace_exact(third_party, '\t# Configure opus build options before fetching', '\tif(CHIAKI_LIB_ENABLE_OPUS)\n\t# Configure opus build options before fetching')
     third_party = replace_exact(third_party, '\tadd_library(Opus::opus ALIAS opus)', '\tadd_library(Opus::opus ALIAS opus)\n\tendif()')
+    # macOS pkg-config results must never become dependencies of an iOS binary.
+    third_party = replace_exact(third_party, '\t\tif (PKG_CONFIG_FOUND)', '\t\tif (NOT IOS AND PKG_CONFIG_FOUND)')
+    third_party = replace_exact(third_party, '\t\tif (PkgLibIdn2_FOUND)',
+                                '\t\tif (NOT IOS AND PkgLibIdn2_FOUND AND TARGET PkgConfig::PkgLibIdn2)')
     (path / 'third-party/CMakeLists.txt').write_text(third_party, encoding='utf-8', newline='\n')
     for name in ('audioreceiver.c', 'audiosender.c'):
         source = subprocess.check_output(['git', 'show', f'HEAD:lib/src/{name}'], cwd=path, text=True)
