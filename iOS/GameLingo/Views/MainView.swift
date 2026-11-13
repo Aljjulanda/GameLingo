@@ -19,7 +19,10 @@ struct MainView: View {
 
 struct ConnectionView: View {
     @EnvironmentObject var model: AppModel
-    @State private var host = "", account = "", pin = "", loginPIN = ""
+    @State private var host = ""
+    @State private var account = ""
+    @State private var pin = ""
+    @State private var loginPIN = ""
     var body: some View {
         NavigationView {
             Form {
