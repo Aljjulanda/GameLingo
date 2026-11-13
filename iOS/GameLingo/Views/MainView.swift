@@ -96,6 +96,13 @@ struct TranslationView: View {
         NavigationView {
             Form {
                 Section("اللغات") { LabeledContent("المصدر",value:"English"); LabeledContent("الهدف",value:"العربية") }
+                Section("تشغيل الجلسة والخلفية") {
+                    Toggle("تجربة الصوت الصامت في الخلفية",isOn:$model.settings.advanced.backgroundAudio)
+                        .onChange(of:model.settings.advanced.backgroundAudio) { _ in model.updateBackgroundExperiment() }
+                    Text(model.sessionStatus)
+                    Text(model.audioStatus).font(.footnote)
+                    Text("اختياري وتجريبي. لا يشغّل صوت PS5 ولا يعرض الفيديو. قد يعلّق iOS التطبيق أو يمنع الاستئناف أثناء القفل. نجاح التجربة يُقاس بوصول جمل جديدة إلى TCL؛ ظهور جلسة صوت لا يثبت ذلك.").font(.footnote).foregroundColor(.secondary)
+                }
                 Section("النموذج المحلي") {
                     Text(model.modelStatus)
                     if model.modelBusy { ProgressView() }
