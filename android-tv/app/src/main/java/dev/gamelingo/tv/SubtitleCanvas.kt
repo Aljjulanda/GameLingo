@@ -103,7 +103,9 @@ class SubtitleCanvas(context: Context, private val report: (String)->Unit) : Vie
         val compactions=state.visualCompactions
         val renderEntries=state.visibleEntries()
         if(state.visualCompactions>compactions) android.util.Log.i("GameLingoDedup","visual_compactions="+state.visualCompactions+" visible="+renderEntries.size+" active_events="+state.entries.size)
-        val texts=if(previewUntil>now) listOf("جملة سابقة للمعاينة",sample) else renderEntries.map { it.text }
+        val texts:List<CharSequence> = if(previewUntil>now) listOf("جملة سابقة للمعاينة",sample) else renderEntries.map {
+            SpeakerText.inline(it.text,it.speaker,b("show_speakers",true),color("speaker_color","#A6C7D8"))
+        }
         drawContext(canvas,now)
         if(texts.isEmpty()) return
         val density=resources.displayMetrics.density

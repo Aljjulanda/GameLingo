@@ -6,12 +6,13 @@ android {
     namespace 'dev.gamelingo.tv'
     compileSdk 34
     defaultConfig {
-        applicationId 'dev.gamelingo.tv'
+        applicationId project.hasProperty('labBuild') ? 'dev.gamelingo.tv.lab' : 'dev.gamelingo.tv'
+        manifestPlaceholders = [appLabel: project.hasProperty('labBuild') ? 'GameLingo TV Lab' : 'GameLingo TV']
         minSdk 26
         targetSdk 32
         versionCode 7
         versionName '0.5.2'
-        testInstrumentationRunner project.hasProperty('tvNetworkTest') ? 'dev.gamelingo.tv.NetworkRunner' : 'dev.gamelingo.tv.CanvasRunner'
+        testInstrumentationRunner project.hasProperty('advancedCanvasTest') ? 'dev.gamelingo.tv.AdvancedCanvasRunner' : project.hasProperty('tvNetworkTest') ? 'dev.gamelingo.tv.NetworkRunner' : 'dev.gamelingo.tv.CanvasRunner'
     }
     compileOptions { sourceCompatibility JavaVersion.VERSION_1_8; targetCompatibility JavaVersion.VERSION_1_8 }
     kotlinOptions { jvmTarget = '1.8' }

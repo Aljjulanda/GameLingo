@@ -21,6 +21,9 @@ struct SubtitleSettingsView: View {
                     Text("تُحفظ الإعدادات على iPhone وتُرسل تلقائيًا إلى التلفزيون المتصل. يمكن استيراد ملف settings.json السابق لنقل مظهرك الحالي.").font(.footnote).foregroundColor(.secondary)
                 }
                 Section("الخط والنص") {
+                    Toggle("إظهار أسماء المتحدثين",isOn:$model.settings.advanced.showSpeakers)
+                    ColorPicker("لون اسم المتحدث",selection:Binding(get:{ Color(hex:model.settings.advanced.speakerColor) },set:{ model.settings.advanced.speakerColor = $0.hexRGB }),supportsOpacity:false)
+                    Button("استعادة لون المتحدث الافتراضي") { model.settings.advanced.speakerColor = "#A6C7D8" }
                     Picker("عائلة الخط",selection:string("font_family")) {
                         Text("افتراضي Android").tag("sans-serif")
                         Text("Serif").tag("serif")

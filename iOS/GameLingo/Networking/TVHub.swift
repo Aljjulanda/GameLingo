@@ -31,6 +31,12 @@ final class TVHub {
     private var receivedConnection = false
     private var listeningHost = ""
     private var tokenDigest: Data?
+    private var showSpeakers = true
+    private var speakerColor = "#A6C7D8"
+    private var settingsWire: [String:Any] {
+        var value = settings.wire; value["show_speakers"] = showSpeakers; value["speaker_color"] = speakerColor
+        return value
+    }
     private let testingLoopback: Bool
     init(testingLoopback: Bool = false) { self.testingLoopback = testingLoopback }
 
@@ -247,7 +253,7 @@ final class TVHub {
         stage = "connected"
         diagnostic("auth.ok", "اكتملت المصادقة؛ التلفزيون متصل")
         enqueue(TVProtocol.envelope("connection_status",fields:["state":"connected","session":sequence.session,"time_ms":Self.now()]),stamp:false)
-        enqueue(TVProtocol.envelope("settings_sync",fields:["settings":settings.wire]))
+        enqueue(TVProtocol.envelope("settings_sync",fields:["settings":settingsWire]))
         // Never keep or replay a subtitle across reconnection.
         let timer = DispatchSource.makeTimerSource(queue:queue)
         timer.schedule(deadline:.now()+6,repeating:6)
@@ -273,7 +279,15 @@ final class TVHub {
     static func now() -> Int64 { Int64(Date().timeIntervalSince1970*1000) }
     func publish(_ message: [String:Any]) { queue.async { [self] in if authenticated { enqueue(message) } } }
     func configure(_ value: TVSettings, kind: String = "settings_sync") {
-        queue.async { [self] in settings = value; if authenticated { enqueue(TVProtocol.envelope(kind,fields:["settings":value.wire])) } }
+        queue.async { [self] in settings = value; if authenticated { enqueue(TVProtocol.envelope(kind,fields:["settings":settingsWire])) } }
+    }
+    func configureSpeakers(show: Bool, color: String) {
+        queue.async { [self] in
+            guard color.range(of:"^#[0-9A-Fa-f]{6}$",options:.regularExpression) != nil,
+                  show != showSpeakers || color != speakerColor else { return }
+            showSpeakers = show; speakerColor = color
+            if authenticated { enqueue(TVProtocol.envelope("settings_sync",fields:["settings":settingsWire])) }
+        }
     }
     private func enqueue(_ message: [String:Any], stamp: Bool = true) {
         guard let client else { return }

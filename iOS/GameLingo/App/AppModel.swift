@@ -10,6 +10,7 @@ final class AppModel: ObservableObject {
             do { try settings.save() } catch { errorMessage = error.localizedDescription }
             pipeline.configure(mode:settings.mode,thermal:ProcessInfo.processInfo.thermalState.rawValue,lowPower:ProcessInfo.processInfo.isLowPowerModeEnabled)
             pipeline.configureAdvanced(settings.advanced)
+            hub.configureSpeakers(show:settings.advanced.showSpeakers,color:settings.advanced.speakerColor)
             if oldValue.display != settings.display { scheduleStyle() }
         }
     }
@@ -116,6 +117,7 @@ final class AppModel: ObservableObject {
         pipeline.onError = { [weak self] in self?.errorMessage = $0 }
         let pipeline = self.pipeline
         pipeline.configureAdvanced(settings.advanced)
+        hub.configureSpeakers(show:settings.advanced.showSpeakers,color:settings.advanced.speakerColor)
         remote.onFrame = { [weak pipeline] in pipeline?.offer($0) }
         monitor.pathUpdateHandler = { [weak self] path in
             let available = path.status == .satisfied

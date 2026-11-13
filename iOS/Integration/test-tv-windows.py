@@ -19,6 +19,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--adb',required=True)
 parser.add_argument('--tv',required=True,help='authorized adb serial')
 parser.add_argument('--host',required=True,help='this computer LAN IPv4')
+parser.add_argument('--package',default='dev.gamelingo.tv',help='application ID; use the lab variant for isolated tests')
 args = parser.parse_args()
 events = []
 with tempfile.TemporaryDirectory(prefix='tv-fixture-',dir=ROOT / 'iOS/.build') as folder:
@@ -30,7 +31,7 @@ with tempfile.TemporaryDirectory(prefix='tv-fixture-',dir=ROOT / 'iOS/.build') a
         code = hub.fingerprint[:12] + '-' + hub.pin
         process = subprocess.run([args.adb,'-s',args.tv,'shell','am','instrument','-w',
             '-e','host',args.host,'-e','code',code,
-            'dev.gamelingo.tv.test/dev.gamelingo.tv.NetworkRunner'],capture_output=True,timeout=60)
+            args.package+'.test/dev.gamelingo.tv.NetworkRunner'],capture_output=True,timeout=60)
         text = process.stdout.decode(errors='replace').replace(code,'[redacted]')
         print(text)
         assert process.returncode == 0 and 'PASS:' in text, 'Physical Android receiver fixture failed'
