@@ -118,6 +118,7 @@ struct BoundedLRU<Key: Hashable, Value> {
     private(set) var values: [Key: Value] = [:]
     private var order: [Key] = []
     let capacity: Int
+    init(capacity: Int) { self.capacity = max(1,capacity) }
     mutating func get(_ key: Key) -> Value? {
         guard let value = values[key] else { return nil }
         order.removeAll { $0 == key }; order.append(key)
