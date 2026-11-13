@@ -35,6 +35,7 @@ def main():
         'android-tv/app/src/main/java/dev/gamelingo/tv/SubtitleState.kt',
         'android-tv/app/src/main/java/dev/gamelingo/tv/SubtitleCanvas.kt',
         'android-tv/app/src/main/AndroidManifest.xml',
+        'android-tv/app/src/main/java/dev/gamelingo/tv/OverlayService.kt',
     }
     for name, digest in manifest.items():
         if name in approved_tv_changes:

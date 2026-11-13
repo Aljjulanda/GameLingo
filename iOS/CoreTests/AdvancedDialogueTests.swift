@@ -40,6 +40,14 @@ final class AdvancedDialogueTests: XCTestCase {
         guard case .dialogue(let b,_) = tracker.observe(text:"We will not go",box:.dialogue,now:0.5,frameMilliseconds:500,speaker:"John") else { return XCTFail() }
         XCTAssertNotEqual(a.id,b.id)
     }
+    func testClearLabelsAcrossGamesAndAmbiguousWords() {
+        XCTAssertEqual(DialogueContent.parse("Lara: We should leave.",knownNames:"").speaker,"Lara")
+        XCTAssertEqual(DialogueContent.parse("Master Chief: Move now.",knownNames:"").speaker,"Master Chief")
+        XCTAssertEqual(DialogueContent.parse("SAMUEL\nWe should leave.",knownNames:"",separateLabel:true).speaker,"SAMUEL")
+        XCTAssertNil(DialogueContent.parse("PLEASE\nWe should leave.",knownNames:"",separateLabel:true).speaker)
+        XCTAssertNil(DialogueContent.parse("Lara: We should leave.",knownNames:"",confidence:0.2).speaker)
+        XCTAssertNil(DialogueContent.parse("We should leave: soon.",knownNames:"").speaker)
+    }
     func testLateMeaningChangeIsNewDialogue() {
         var tracker = DialogueTracker()
         guard case .dialogue(let a,_) = tracker.observe(text:"We will go",box:.dialogue,now:0,frameMilliseconds:0) else { return XCTFail() }

@@ -12,6 +12,7 @@ struct PipelineMetrics {
 final class FramePipeline {
     var onMetrics: ((PipelineMetrics) -> Void)?
     var onError: ((String) -> Void)?
+    var onReading: ((UUID,Bool,[String],String) -> Void)?
     private let translator: OfflineTranslator
     private let publish: ([String:Any]) -> Void
     private let queue = DispatchQueue(label:"dev.gamelingo.ocr",qos:.userInitiated)
@@ -30,6 +31,8 @@ final class FramePipeline {
     private var memory = DialogueMemory()
     private var stability = PublicationStability()
     private var isBackground = false
+    private var reading = false, captureRequested = false
+    private var readingTicket = UUID()
     private var pending: DialogueJob?
     private var translating = false
     private var lastSample = 0.0
@@ -70,11 +73,13 @@ final class FramePipeline {
         }
     }
     func interrupt() { translator.cancel(); queue.async { [self] in
+        finishReading()
         runID = UUID(); tracker.markInterrupted(); pending = nil; publish(TVProtocol.envelope("subtitle_clear"))
         slotLock.lock(); latest = nil; slotLock.unlock()
     } }
     /// Called from the hub queue; inference never synchronously waits on that queue.
     func tvDisconnected() { translator.cancel(); queue.sync { [self] in
+        finishReading(message:"انقطع اتصال التلفزيون أثناء القراءة")
         // Keep the observed dialogue identity so reconnecting does not retranslate/replay it.
         // Invalidate all in-flight publications and discard pending work.
         runID = UUID(); pending = nil
@@ -91,6 +96,7 @@ final class FramePipeline {
         queue.async { [self] in reset(preservingState:true); publish(TVProtocol.envelope("subtitle_clear")) }
     }
     private func reset(preservingState: Bool = false) {
+        finishReading()
         timer?.cancel(); timer = nil; runID = UUID(); pending = nil; ocr = VisionDialogueOCR(); ocr.setBackground(isBackground); signature = FrameSignature()
         if preservingState { tracker.markInterrupted(); memory.prune(now:ProcessInfo.processInfo.systemUptime) }
         else { tracker.reset(); memory.clear(); stability.clear() }
@@ -107,10 +113,25 @@ final class FramePipeline {
         guard let (buffer,received,stamp) = frame else { return }
         guard now-received < 1 else { return }
         lastSample = now; metrics.frames &+= 1; metrics.dropped = dropped
+        if reading {
+            if captureRequested {
+                captureRequested = false
+                do {
+                    let paragraphs = try autoreleasepool { try ocr.document(buffer) }
+                    guard paragraphs.reduce(0,{ $0+$1.count }) <= 16000 else {
+                        finishReading(message:"النص طويل جدًا؛ اعرض المستند على أجزاء أصغر ثم أعد القراءة"); return
+                    }
+                    let chunks = DocumentText.chunks(paragraphs)
+                    guard !chunks.isEmpty else { finishReading(message:"لم يُعثر على نص إنجليزي واضح"); return }
+                    translateDocument(chunks,index:0,translated:[],epoch:runID)
+                } catch { finishReading(message:"تعذرت قراءة النص من الإطار") }
+            }
+            return
+        }
         guard signature.shouldRecognize(buffer,roi:roi,now:now,hasText:tracker.current != nil) else { return }
         do {
             let (text,box) = try autoreleasepool { try ocr.recognize(buffer,roi:roi) }
-            let content = DialogueContent.parse(text,knownNames:advanced.speakerNames)
+            let content = DialogueContent.parse(text,knownNames:advanced.speakerNames,separateLabel:ocr.separateSpeakerLabel,confidence:ocr.confidence)
             metrics.recognitions &+= 1
             metrics.actualOCRRate = Double(metrics.recognitions)/max(0.001,ProcessInfo.processInfo.systemUptime-startedAt)
             metrics.ocrMilliseconds = (ProcessInfo.processInfo.systemUptime-now)*1000
@@ -130,7 +151,7 @@ final class FramePipeline {
         } catch { DispatchQueue.main.async { self.onError?(error.localizedDescription) } }
     }
     private func submit() {
-        guard !translating, let job = pending else { return }
+        guard !reading, !translating, let job = pending else { return }
         pending = nil; translating = true
         let epoch = runID
         memory.prune(now:ProcessInfo.processInfo.systemUptime)
@@ -156,5 +177,48 @@ final class FramePipeline {
         }
         if let override { completion(.success(override),0) }
         else { translator.translate(job.text,completion:completion) }
+    }
+    func requestReading(ticket: UUID) {
+        translator.cancel()
+        queue.async { [self] in
+            runID = UUID(); pending = nil; tracker.markInterrupted(); reading = true; captureRequested = true; readingTicket = ticket
+            slotLock.lock(); latest = nil; slotLock.unlock() // Require a newly decoded frame.
+            publish(TVProtocol.envelope("subtitle_clear"))
+            DispatchQueue.main.async { self.onReading?(ticket,true,[],"بانتظار إطار جديد لقراءة النص…") }
+            let epoch = runID
+            queue.asyncAfter(deadline:.now()+6) { [weak self] in
+                guard let self, self.runID == epoch, self.captureRequested else { return }
+                self.finishReading(message:"لم يصل إطار PS5 جديد؛ تحقق من البث")
+            }
+        }
+    }
+    private func translateDocument(_ chunks: [String], index: Int, translated: [String], epoch: UUID) {
+        guard reading, runID == epoch else { return }
+        guard index < chunks.count else {
+            let pages = DocumentText.pages(translated)
+            let ticket = readingTicket
+            DispatchQueue.main.async { self.onReading?(ticket,true,pages,"القراءة جاهزة · \(pages.count) صفحات") }
+            return
+        }
+        translator.translate(chunks[index]) { [weak self] result,_ in
+            guard let self else { return }
+            self.queue.async {
+                guard self.reading, self.runID == epoch else { return }
+                switch result {
+                case .success(let text): self.translateDocument(chunks,index:index+1,translated:translated+[text],epoch:epoch)
+                case .failure: self.finishReading(message:"تعذرت ترجمة المستند؛ أعد المحاولة")
+                }
+            }
+        }
+    }
+    func closeReading() {
+        translator.cancel(); queue.async { [self] in runID = UUID(); finishReading() }
+    }
+    private func finishReading(message: String = "القراءة مغلقة") {
+        guard reading else { return }
+        reading = false; captureRequested = false
+        let ticket = readingTicket
+        publish(TVProtocol.envelope("document_hide"))
+        DispatchQueue.main.async { self.onReading?(ticket,false,[],message) }
     }
 }

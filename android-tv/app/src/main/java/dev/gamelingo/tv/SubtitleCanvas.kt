@@ -11,6 +11,10 @@ import android.view.View
 import org.json.JSONObject
 
 class SubtitleCanvas(context: Context, private val report: (String)->Unit) : View(context) {
+    var onRendered: ((String)->Unit)? = null
+    private val acknowledged=java.util.LinkedHashSet<String>()
+    private var document:JSONObject?=null
+    var measuredDocument:RectF?=null;private set
     val state = SubtitleState()
     var measuredBoxes: List<Pair<Float,Float>> = emptyList(); private set
     var measuredAnchor: Pair<Float,Float> = Pair(0f,0f); private set
@@ -46,9 +50,15 @@ class SubtitleCanvas(context: Context, private val report: (String)->Unit) : Vie
     }
     fun message(message: JSONObject?) {
         val now=SystemClock.elapsedRealtime()
-        if (message==null) { state.clear(); pending.clear(); previewUntil=0;contextLabel=null;contextUntil=0; invalidate(); return }
+        if (message==null) { state.clear(); pending.clear(); previewUntil=0;contextLabel=null;contextUntil=0;document=null; invalidate(); return }
         if(message.has("settings")) style=message.getJSONObject("settings")
         when(message.optString("type")) {
+            "document_show" -> {
+                if(message.optString("translated").length !in 1..2400) return
+                document=message;state.clear();pending.clear();previewUntil=0;contextLabel=null;contextUntil=0
+                removeCallbacks(tick);invalidate()
+            }
+            "document_hide" -> { document=null;invalidate() }
             "context_clear" -> { contextLabel=null;contextUntil=0;invalidate() }
             "context_show" -> {
                 if(message.optString("translated").length !in 1..200) return
@@ -80,13 +90,15 @@ class SubtitleCanvas(context: Context, private val report: (String)->Unit) : Vie
                 while(pending.size>3) pending.removeFirst()
                 removeCallbacks(tick); post(tick)
             }
-            "subtitle_clear", "subtitle_hide" -> { state.clear();pending.clear();contextLabel=null;contextUntil=0; invalidate() }
+            "subtitle_clear", "subtitle_hide" -> { state.clear();pending.clear();contextLabel=null;contextUntil=0;document=null; invalidate() }
         }
     }
     override fun onDetachedFromWindow() { removeCallbacks(tick); super.onDetachedFromWindow() }
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         val now=SystemClock.elapsedRealtime()
+        measuredDocument=null
+        if(document!=null) { drawDocument(canvas);return }
         state.expire(now)
         val hadPending=pending.isNotEmpty()
         while(pending.isNotEmpty()) {
@@ -164,8 +176,37 @@ class SubtitleCanvas(context: Context, private val report: (String)->Unit) : Vie
             if(b("shadow",true)) ink.setShadowLayer(n("shadow_blur",2.0),n("shadow_x",0.0),n("shadow_y",2.0),color("shadow_color","#000000",n("shadow_opacity",80.0)*alpha))
             if(b("outline",true)) { ink.style=Paint.Style.STROKE;ink.strokeWidth=n("outline_width",2.0);ink.color=color("outline_color","#000000",100*alpha);layout.draw(canvas) }
             ink.style=Paint.Style.FILL;ink.color=color("text_color","#FFFFFF",n("text_opacity",100.0)*alpha);layout.draw(canvas);canvas.restore()
+            if(previewUntil<=now && acknowledged.add(renderEntries[i].id)) {
+                if(acknowledged.size>128) acknowledged.remove(acknowledged.first())
+                onRendered?.invoke(renderEntries[i].id)
+            }
             top-=gap;used+=h+gap;drawn++
         }
+    }
+    private fun drawDocument(canvas: Canvas) {
+        val message=document ?: return
+        val text=message.optString("translated")
+        val panel=RectF(width*.07f,height*.07f,width*.93f,height*.93f)
+        measuredDocument=panel
+        val paint=TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            color=Color.WHITE
+            textSize=minOf(n("font_size",25.0).coerceIn(24f,32f)*resources.displayMetrics.density,height/28f)
+            typeface=Typeface.create(style.optString("font_family","sans-serif"),Typeface.NORMAL)
+        }
+        val padding=24f
+        val contentWidth=(panel.width()-2*padding).toInt().coerceAtLeast(40)
+        fun layout()=StaticLayout.Builder.obtain(text,0,text.length,paint,contentWidth)
+            .setTextDirection(TextDirectionHeuristics.RTL).setAlignment(Layout.Alignment.ALIGN_NORMAL)
+            .setIncludePad(false).setLineSpacing(5f,1f).build()
+        var body=layout()
+        while(body.height>panel.height()-112 && paint.textSize>16) {paint.textSize-=2;body=layout()}
+        canvas.drawRoundRect(panel,14f,14f,Paint(Paint.ANTI_ALIAS_FLAG).apply {color=0xf0102024.toInt()})
+        val heading=TextPaint(Paint.ANTI_ALIAS_FLAG).apply {color=Color.rgb(166,199,216);textSize=24f;typeface=Typeface.DEFAULT_BOLD}
+        canvas.drawText("Smart Reading",panel.left+padding,panel.top+36,heading)
+        canvas.save();canvas.clipRect(panel.left+padding,panel.top+58,panel.right-padding,panel.bottom-42)
+        canvas.translate(panel.left+padding,panel.top+58);body.draw(canvas);canvas.restore()
+        val footer="${message.optInt("page",1)} / ${message.optInt("pages",1)}"
+        canvas.drawText(footer,panel.centerX()-heading.measureText(footer)/2,panel.bottom-16,heading)
     }
     private fun drawContext(canvas: Canvas, now: Long) {
         measuredContext=null

@@ -25,6 +25,12 @@ final class AppModel: ObservableObject {
     @Published var streamConnected = false
     @Published var recoveryAttempts = 0
     @Published var backgroundDeliveries: UInt64 = 0
+    @Published var tvConnected = false
+    @Published var tvDocuments = false
+    @Published var readingActive = false
+    @Published var readingPages: [String] = []
+    @Published var readingPage = 0
+    @Published var readingStatus = "القراءة مغلقة"
     @Published var networkStatus = "جارٍ فحص الشبكة"
     @Published var modelStatus = "لم يُحمّل النموذج"
     @Published var pairingCode = ""
@@ -55,6 +61,8 @@ final class AppModel: ObservableObject {
     private var executionDeadline: Task<Void,Never>?
     private var pipelineActive = false
     private var hubStarting = false
+    private var readingTicket: UUID?
+    private var displayedIDs = Set<String>()
 
     init() {
         do {
@@ -111,7 +119,23 @@ final class AppModel: ObservableObject {
             UIApplication.shared.isIdleTimerDisabled = listening || self.running
         }
         let processor = self.pipeline
-        hub.onDisconnected = { [weak processor] in processor?.tvDisconnected() }
+        hub.onDisconnected = { [weak self,weak processor] in
+            processor?.tvDisconnected()
+            DispatchQueue.main.async { self?.tvConnected = false; self?.tvDocuments = false }
+        }
+        hub.onConnected = { [weak self] in self?.tvConnected = true }
+        hub.onCapabilities = { [weak self] in self?.tvDocuments = $0.contains("document_v1") }
+        hub.onDisplayAck = { [weak self] id in
+            guard let self, self.policy.wanted, !self.displayedIDs.contains(id) else { return }
+            if self.displayedIDs.count >= 128 { self.displayedIDs.removeAll() }
+            self.displayedIDs.insert(id)
+            if !self.policy.foreground { self.backgroundDeliveries &+= 1 }
+        }
+        pipeline.onReading = { [weak self] ticket,active,pages,status in
+            guard let self, self.readingTicket == ticket else { return }
+            self.readingActive = active; self.readingPages = pages; self.readingStatus = status; self.readingPage = 0
+            if !pages.isEmpty { self.showReadingPage() }
+        }
         // Connection resets only the TV. Previously visible dialogue is deliberately not replayed.
         pipeline.onMetrics = { [weak self] in self?.metrics = $0 }
         pipeline.onError = { [weak self] in self?.errorMessage = $0 }
@@ -172,6 +196,7 @@ final class AppModel: ObservableObject {
         guard settings.roi.isValid else { errorMessage = "اضبط منطقة الحوار داخل حدود صورة البث أولًا"; return }
         do {
             policy.start(); policy.experimentalAudio = settings.advanced.backgroundAudio
+            displayedIDs.removeAll(); backgroundDeliveries = 0
             sessionStatus = "جارٍ بدء الجلسة"; recoveryAttempts = 0
             if policy.experimentalAudio { audio.start() }
             try remote.connect(console)
@@ -182,11 +207,29 @@ final class AppModel: ObservableObject {
         } catch { policy.stop(); audio.stop(); errorMessage = error.localizedDescription }
     }
     func stop() {
+        closeReading()
         policy.stop(); recoveryTask?.cancel(); recoveryTask = nil; endExecutionGrace(); audio.stop()
         pipelineActive = false; sessionStatus = "أوقفها المستخدم"
         running = false; pairing = false; loginRequired = false; remote.stop(); pipeline.stop()
         UIApplication.shared.isIdleTimerDisabled = tvListening
         if let brightness = originalBrightness { UIScreen.main.brightness = brightness; originalBrightness = nil }
+    }
+    func smartRead() {
+        guard running, modelReady, streamConnected, tvConnected, tvDocuments else { return }
+        let ticket = UUID(); readingTicket = ticket; readingActive = true; readingPages = []; readingPage = 0
+        readingStatus = "جارٍ طلب إطار جديد…"; pipeline.requestReading(ticket:ticket)
+    }
+    func closeReading() {
+        readingTicket = nil; readingActive = false; readingPages.removeAll(); readingPage = 0; readingStatus = "القراءة مغلقة"
+        pipeline.closeReading()
+    }
+    func moveReadingPage(_ delta: Int) {
+        guard !readingPages.isEmpty else { return }
+        readingPage = max(0,min(readingPages.count-1,readingPage+delta)); showReadingPage()
+    }
+    private func showReadingPage() {
+        guard readingActive, tvConnected, readingPages.indices.contains(readingPage) else { return }
+        hub.publish(TVProtocol.envelope("document_show",fields:["translated":readingPages[readingPage],"page":readingPage+1,"pages":readingPages.count]))
     }
     func background() {
         lifecycle += 1; policy.foreground = false

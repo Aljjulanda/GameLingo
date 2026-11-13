@@ -12,6 +12,8 @@ final class TVHub {
     var onDisconnected: (() -> Void)?
     var onDiagnostics: (([String]) -> Void)?
     var onListening: ((Bool) -> Void)?
+    var onCapabilities: (([String]) -> Void)?
+    var onDisplayAck: ((String) -> Void)?
     private let queue = DispatchQueue(label:"dev.gamelingo.tv")
     private var listener: NWListener?
     private var client: NWConnection?
@@ -33,6 +35,7 @@ final class TVHub {
     private var tokenDigest: Data?
     private var showSpeakers = true
     private var speakerColor = "#A6C7D8"
+    private var pendingDisplay = Set<String>()
     private var settingsWire: [String:Any] {
         var value = settings.wire; value["show_speakers"] = showSpeakers; value["speaker_color"] = speakerColor
         return value
@@ -185,7 +188,7 @@ final class TVHub {
     }
     private func disconnect(_ connection: NWConnection, reason: String? = nil) {
         guard client === connection else { return }
-        client = nil; authenticated = false; outbound.removeAll(); sending = false
+        client = nil; authenticated = false; outbound.removeAll(); sending = false; pendingDisplay.removeAll()
         heartbeat?.cancel(); heartbeat = nil; connection.cancel()
         diagnostic("connection.closed", reason ?? "التلفزيون غير متصل؛ لا تُعاد الجمل السابقة", show:true)
         // Invalidate pending inference before this queue can authenticate a replacement TV.
@@ -213,6 +216,10 @@ final class TVHub {
                 if !self.authenticated { try self.authenticate(message) }
                 else {
                     switch message["type"] as? String {
+                    case "subtitle_ack":
+                        if let id = message["id"] as? String, self.pendingDisplay.remove(id) != nil {
+                            DispatchQueue.main.async { self.onDisplayAck?(id) }
+                        }
                     case "heartbeat": self.enqueue(TVProtocol.envelope("heartbeat",fields:["time_ms":Self.now()]))
                     case "settings_ack":
                         if let width = message["width_px"] as? Int, let height = message["height_px"] as? Int {
@@ -250,9 +257,11 @@ final class TVHub {
         default: throw LingoError.invalid("رسالة اقتران غير صالحة")
         }
         authenticated = true
+        let capabilities = (message["features"] as? [String] ?? []).prefix(8).filter { ["document_v1","speaker_v1","display_ack"].contains($0) }
+        DispatchQueue.main.async { self.onCapabilities?(capabilities) }
         stage = "connected"
         diagnostic("auth.ok", "اكتملت المصادقة؛ التلفزيون متصل")
-        enqueue(TVProtocol.envelope("connection_status",fields:["state":"connected","session":sequence.session,"time_ms":Self.now()]),stamp:false)
+        enqueue(TVProtocol.envelope("connection_status",fields:["state":"connected","session":sequence.session,"time_ms":Self.now(),"capabilities":["subtitle_ack","document_v1","speaker_v1"]]),stamp:false)
         enqueue(TVProtocol.envelope("settings_sync",fields:["settings":settingsWire]))
         // Never keep or replay a subtitle across reconnection.
         let timer = DispatchSource.makeTimerSource(queue:queue)
@@ -295,6 +304,10 @@ final class TVHub {
             let data = try TVProtocol.encode(stamp ? sequence.stamp(message) : message)
             // A slow TV must not create an unbounded queue or receive stale subtitles.
             guard outbound.count < 8 else { disconnect(client); return }
+            if ["subtitle_show","subtitle_update"].contains(message["type"] as? String ?? ""), let id = message["id"] as? String {
+                if pendingDisplay.count >= 128 { pendingDisplay.removeAll() }
+                pendingDisplay.insert(id)
+            }
             outbound.append(data); sendNext()
         } catch { disconnect(client) }
     }

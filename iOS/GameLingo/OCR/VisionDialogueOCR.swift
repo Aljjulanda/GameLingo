@@ -18,7 +18,22 @@ final class VisionDialogueOCR {
     }()
     private var previousSignature: [String] = []
     private(set) var confidence: Double = 0
+    private(set) var separateSpeakerLabel = false
     func setBackground(_ background: Bool) { request.usesCPUOnly = background }
+    func document(_ buffer: CVPixelBuffer) throws -> [String] {
+        let document = VNRecognizeTextRequest()
+        document.recognitionLanguages = ["en-US"]; document.recognitionLevel = .accurate
+        document.usesLanguageCorrection = true; document.minimumTextHeight = 0.008
+        document.usesCPUOnly = request.usesCPUOnly
+        try VNImageRequestHandler(cvPixelBuffer:buffer,orientation:.up,options:[:]).perform([document])
+        guard (document.results?.count ?? 0) <= 150 else { throw LingoError.invalid("قسّم المستند إلى صفحات أصغر") }
+        let lines = (document.results ?? []).compactMap { observation -> DocumentLine? in
+            guard let candidate = observation.topCandidates(1).first else { return nil }
+            let b = observation.boundingBox
+            return DocumentLine(text:candidate.string,box:SourceBox(x:Double(b.minX),y:Double(1-b.maxY),w:Double(b.width),h:Double(b.height)),confidence:Double(candidate.confidence))
+        }
+        return DocumentText.paragraphs(lines)
+    }
     func recognize(_ buffer: CVPixelBuffer, roi: SourceBox) throws -> (String,SourceBox) {
         guard roi.isValid else { throw LingoError.invalid("منطقة الحوار غير صالحة") }
         // Vision's ROI is lower-left origin. The shared TV protocol uses top-left origin.
@@ -36,6 +51,8 @@ final class VisionDialogueOCR {
         }
         let selected = select(lines,roi:roi)
         confidence = selected.map(\.confidence).min() ?? 0
+        let ordered = selected.sorted { $0.box.y < $1.box.y }
+        separateSpeakerLabel = ordered.count >= 2 && ordered[0].box.w < ordered[1].box.w*0.5 && ordered[0].box.h <= ordered[1].box.h*1.1
         guard !selected.isEmpty else { return ("",roi) }
         let x = selected.map(\.box.x).min()!, y = selected.map(\.box.y).min()!
         let right = selected.map { $0.box.x+$0.box.w }.max()!, bottom = selected.map { $0.box.y+$0.box.h }.max()!

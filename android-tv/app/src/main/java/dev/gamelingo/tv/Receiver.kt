@@ -10,6 +10,7 @@ import android.util.Base64
 import android.util.Log
 import okhttp3.*
 import org.json.JSONObject
+import org.json.JSONArray
 import java.security.KeyStore
 import java.security.MessageDigest
 import java.security.SecureRandom
@@ -71,6 +72,10 @@ class Receiver(context: Context, private val render: (JSONObject?) -> Unit, priv
     private var stage = "TCP"
     private var settingsRevision = -1L
     private var lastFailure = ""
+    private var displayAcknowledgement = false
+    fun acknowledge(id: String) {
+        if (displayAcknowledgement && session.isNotEmpty()) socket?.send(JSONObject().put("v",1).put("type","subtitle_ack").put("id",id).toString())
+    }
     private fun diagnostic(code: String, text: String, show: Boolean = true) {
         val line = "${System.currentTimeMillis()} [$code] $text"
         val old = prefs.getString("connection_diagnostics", "") ?: ""
@@ -133,7 +138,7 @@ class Receiver(context: Context, private val render: (JSONObject?) -> Unit, priv
                 try {
                     val auth = if (pin.isNotEmpty()) JSONObject().put("type","pair").put("pin",pin)
                         else JSONObject().put("type","hello").put("token", Pairing.decrypt(prefs.getString("token","")!!))
-                    ws.send(auth.put("v",1).toString())
+                    ws.send(auth.put("v",1).put("features",JSONArray(listOf("document_v1","speaker_v1","display_ack"))).toString())
                 } catch (_: Exception) { stop(); status("أعد الاقتران من إعدادات GameLingo") }
             }
             override fun onMessage(ws: WebSocket, text: String) = onMain {
@@ -152,6 +157,7 @@ class Receiver(context: Context, private val render: (JSONObject?) -> Unit, priv
                         "connection_status" -> {
                             session = m.getString("session"); sequence = 0; attempts = 0
                             settingsRevision = -1L; stage = "متصل"
+                            displayAcknowledgement = m.optJSONArray("capabilities")?.let { a -> (0 until a.length()).any { a.optString(it)=="subtitle_ack" } } ?: false
                             lastFailure = ""
                             serverTime = m.getLong("time_ms"); syncTime = SystemClock.elapsedRealtime()
                             render(null); diagnostic("auth.ok", "متصل · في انتظار الترجمة")
@@ -190,6 +196,15 @@ class Receiver(context: Context, private val render: (JSONObject?) -> Unit, priv
                             render(m)
                         }
                         "heartbeat" -> { serverTime = m.getLong("time_ms"); syncTime = SystemClock.elapsedRealtime() }
+                        "document_show", "document_hide" -> {
+                            if(session.isEmpty() || m.optString("session")!=session || m.getLong("seq")<=sequence) return@onMain
+                            sequence=m.getLong("seq")
+                            if(m.getString("type")=="document_show") {
+                                require(m.getString("translated").length in 1..2400)
+                                require(m.getInt("page") in 1..64 && m.getInt("pages") in 1..64 && m.getInt("page")<=m.getInt("pages"))
+                            }
+                            render(m)
+                        }
                         "error" -> { render(null); diagnostic("server.error", "رفض المصدر الطلب") }
                     }
                 } catch (_: Exception) { diagnostic("protocol.invalid", "رسالة بروتوكول غير صالحة"); ws.close(1002,"Invalid message") }
@@ -212,6 +227,7 @@ class Receiver(context: Context, private val render: (JSONObject?) -> Unit, priv
         client?.dispatcher?.executorService?.shutdown()
         client?.connectionPool?.evictAll(); client = null
         session = ""; sequence = 0; render(null)
+        displayAcknowledgement = false
     }
     private fun retry(reason: String) {
         lastFailure = reason

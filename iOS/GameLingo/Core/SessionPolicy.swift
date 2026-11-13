@@ -27,7 +27,7 @@ struct AdvancedSettings: Codable, Equatable {
     var showSpeakers = true
     var speakerColor = "#A6C7D8"
     /// Explicit, user-supplied name dictionary. No automatic name guessing.
-    var speakerNames = "Arthur,John"
+    var speakerNames = ""
     /// Exact whole-sentence translations, one English = Arabic pair per line.
     var terminology = ""
     mutating func validate() {

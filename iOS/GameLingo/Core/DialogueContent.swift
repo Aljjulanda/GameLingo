@@ -3,21 +3,27 @@ import Foundation
 struct DialogueContent {
     let text: String
     let speaker: String?
-    static func parse(_ text: String, knownNames: String) -> DialogueContent {
+    static func parse(_ text: String, knownNames: String, separateLabel: Bool = false, confidence: Double = 1) -> DialogueContent {
         let names = Set(knownNames.split(separator:",").map { $0.trimmingCharacters(in:.whitespacesAndNewlines).lowercased() }.filter { !$0.isEmpty })
         let lines = text.components(separatedBy:.newlines).filter { !$0.trimmingCharacters(in:.whitespaces).isEmpty }
         guard let first = lines.first else { return DialogueContent(text:"",speaker:nil) }
+        let ordinary: Set<String> = ["warning","note","objective","mission","quest","hint","tip","chapter","attention","remember","listen","look","yes","no","hello","inventory","options","settings","item","message","journal","letter","press","hold","system","dialogue","go","run","wait","stop","help","come","follow","leave","hey","okay","sure","please","thanks","we","you","they","he","she","it","the","i"]
+        func clearName(_ label: String) -> Bool {
+            let words = label.split(separator:" ")
+            return confidence >= 0.65 && !ordinary.contains(label.lowercased()) && (1...3).contains(words.count) &&
+                words.allSatisfy { word in !ordinary.contains(word.lowercased()) && word.count >= 2 && word.first?.isUppercase == true && word.allSatisfy { $0.isLetter || "'-".contains($0) } }
+        }
         if let colon = first.firstIndex(of:":") {
             let label = first[..<colon].trimmingCharacters(in:.whitespaces)
-            if label.count <= 40 && names.contains(label.lowercased()) {
+            if label.count <= 40 && (names.contains(label.lowercased()) || clearName(label)) {
                 let rest = String(first[first.index(after:colon)...])
                 return DialogueContent(text:DialogueText.normalized(([rest]+Array(lines.dropFirst())).joined(separator:" ")),speaker:label)
             }
         }
-        if lines.count > 1 && names.contains(first.trimmingCharacters(in:.whitespaces).lowercased()) {
+        if lines.count > 1 && (names.contains(first.trimmingCharacters(in:.whitespaces).lowercased()) || (separateLabel && clearName(first) && DialogueText.words(lines.dropFirst().joined(separator:" ")).count >= 2)) {
             return DialogueContent(text:DialogueText.normalized(lines.dropFirst().joined(separator:" ")),speaker:first.trimmingCharacters(in:.whitespaces))
         }
-        // Unknown labels are left intact. Geometry/uppercase alone is not a name dictionary.
+        // An ordinary word, uncertain OCR or uppercase alone is not a speaker.
         return DialogueContent(text:DialogueText.normalized(text),speaker:nil)
     }
 }

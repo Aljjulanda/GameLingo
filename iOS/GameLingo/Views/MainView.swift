@@ -121,6 +121,25 @@ struct TranslationView: View {
                     Text(model.settings.roi.isValid ? "منطقة صالحة" : "المنطقة تتجاوز حدود الصورة").foregroundColor(model.settings.roi.isValid ? .secondary : .red)
                     Button("استعادة منطقة الحوار الافتراضية") { model.settings.roi = .dialogue }.disabled(model.running)
                 }
+                Section("Smart Reading · القراءة عند الطلب") {
+                    Button("قراءة النص الظاهر في اللعبة") { model.smartRead() }
+                        .disabled(!model.running || !model.streamConnected || !model.tvConnected || !model.tvDocuments || model.readingActive)
+                    Text(model.readingStatus)
+                    if model.tvConnected && !model.tvDocuments { Text("تحتاج هذه الميزة تحديث تطبيق التلفزيون.").font(.footnote) }
+                    if model.readingActive {
+                        if model.readingPages.isEmpty { ProgressView() }
+                        else {
+                            Text("الصفحة \(model.readingPage+1) من \(model.readingPages.count)")
+                            HStack {
+                                Button("السابقة") { model.moveReadingPage(-1) }.disabled(model.readingPage == 0)
+                                Spacer()
+                                Button("التالية") { model.moveReadingPage(1) }.disabled(model.readingPage+1 >= model.readingPages.count)
+                            }
+                        }
+                        Button("إغلاق القراءة والعودة للحوار") { model.closeReading() }
+                    }
+                    Text("يتوقف نشر الحوار مؤقتًا وتُقرأ صفحة اللعبة الظاهرة من إطار جديد فقط. لا توجد صورة مجمدة أو أرشيف مستندات. للمستند متعدد صفحات اللعبة، اعرض الصفحة المطلوبة ثم أعد القراءة.").font(.footnote).foregroundColor(.secondary)
+                }
                 Section { NavigationLink("المصادر والتراخيص") { LegalView() } }
             }.navigationTitle("الترجمة")
                 .fileImporter(isPresented:$importing,allowedContentTypes:[.data],allowsMultipleSelection:false) { result in

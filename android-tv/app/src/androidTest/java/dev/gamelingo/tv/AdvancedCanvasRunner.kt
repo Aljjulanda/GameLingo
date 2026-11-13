@@ -53,8 +53,17 @@ class AdvancedCanvasRunner : Instrumentation() {
                 check(view!!.measuredBoxes.single().first<=1152)
                 check(view!!.measuredBoxes.single().second>120)
                 check(view!!.measuredAnchor==anchor) {"Wrapping shifted the chosen anchor"}
+                view!!.message(JSONObject().put("type","document_show").put("translated","لن نغادر قبل أن تجمع 11 قطعة نقدية. ".repeat(12)).put("page",1).put("pages",2))
+                view!!.draw(Canvas(bitmap!!))
+                check(view!!.measuredDocument!!.width()>1500 && view!!.state.entries.isEmpty())
+                view!!.message(JSONObject().put("type","document_show").put("translated","هذه الصفحة الثانية.").put("page",2).put("pages",2))
+                view!!.draw(Canvas(bitmap!!));check(view!!.measuredDocument!=null)
+                view!!.message(JSONObject().put("type","document_hide"));view!!.draw(Canvas(bitmap!!))
+                check(view!!.measuredDocument==null)
+                view!!.message(caption("after-reading","Follow me","اتبعني","Arthur"));view!!.draw(Canvas(bitmap!!))
+                check(view!!.state.entries.single().id=="after-reading")
             }
-            result.putString("result","PASS: inline isolated speaker spans, configurable color, Arabic RTL, short/long wrapping, stable card/clock and anchor")
+            result.putString("result","PASS: inline speaker/color/RTL/wrap, stable card/clock/anchor, document pages and return to dialogue")
             code=Activity.RESULT_OK
         } catch(t:Throwable) { result.putString("error",t.message ?: "Advanced Canvas fixture failed") }
         finally {runOnMainSync {view?.let {wm.removeViewImmediate(it)};bitmap?.recycle();prefs.edit().clear().commit()} }

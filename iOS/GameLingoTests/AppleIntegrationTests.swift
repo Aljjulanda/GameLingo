@@ -9,6 +9,52 @@ import Network
 @testable import GameLingo
 
 final class AppleIntegrationTests: XCTestCase {
+    func testManualSmartReadingUsesFreshFrameAndReturnsToDialogue() async throws {
+        let folder = try XCTUnwrap(Bundle(for:Self.self).url(forResource:"en_ar",withExtension:nil))
+        let translator = OfflineTranslator(folder:folder)
+        let loaded = expectation(description:"existing offline model loaded")
+        translator.load { result in if case .failure = result { XCTFail("Model load failed") }; loaded.fulfill() }
+        await fulfillment(of:[loaded],timeout:20)
+        let pipeline = FramePipeline(translator:translator,publish:{ _ in })
+        defer { pipeline.stop() }
+        let waiting = expectation(description:"manual request waits for a fresh decoded frame")
+        let ready = expectation(description:"coherent document translated into pages")
+        let closed = expectation(description:"document closes")
+        let ticket = UUID()
+        var translatedPages: [String] = []
+        pipeline.onReading = { observed,active,pages,_ in
+            XCTAssertEqual(observed,ticket)
+            if active && pages.isEmpty { waiting.fulfill() }
+            else if active { translatedPages = pages; ready.fulfill() }
+            else { closed.fulfill() }
+        }
+        pipeline.start(roi:.dialogue,mode:.balanced)
+        pipeline.requestReading(ticket:ticket)
+        await fulfillment(of:[waiting],timeout:5)
+        let image = UIGraphicsImageRenderer(size:CGSize(width:1280,height:720)).image { context in
+            UIColor.black.setFill(); context.fill(CGRect(x:0,y:0,width:1280,height:720))
+            for (row,line) in ["Dear John,","We will not leave the camp.","Bring 11 coins before leaving."].enumerated() {
+                (line as NSString).draw(at:CGPoint(x:140,y:CGFloat(100+row*70)),withAttributes:[.font:UIFont.systemFont(ofSize:36),.foregroundColor:UIColor.white])
+            }
+        }
+        var buffer: CVPixelBuffer?
+        XCTAssertEqual(CVPixelBufferCreate(kCFAllocatorDefault,1280,720,kCVPixelFormatType_32BGRA,[kCVPixelBufferCGImageCompatibilityKey:true,kCVPixelBufferCGBitmapContextCompatibilityKey:true] as CFDictionary,&buffer),kCVReturnSuccess)
+        let pixels = try XCTUnwrap(buffer)
+        CVPixelBufferLockBaseAddress(pixels,[])
+        let bitmap = try XCTUnwrap(CGContext(data:CVPixelBufferGetBaseAddress(pixels),width:1280,height:720,bitsPerComponent:8,bytesPerRow:CVPixelBufferGetBytesPerRow(pixels),space:CGColorSpaceCreateDeviceRGB(),bitmapInfo:CGImageAlphaInfo.premultipliedFirst.rawValue|CGBitmapInfo.byteOrder32Little.rawValue))
+        bitmap.translateBy(x:0,y:720); bitmap.scaleBy(x:1,y:-1)
+        UIGraphicsPushContext(bitmap); image.draw(in:CGRect(x:0,y:0,width:1280,height:720)); UIGraphicsPopContext(); bitmap.flush()
+        CVPixelBufferUnlockBaseAddress(pixels,[])
+        let source = try VisionDialogueOCR().document(pixels).joined(separator:" ")
+        XCTAssertTrue(source.contains("11")); XCTAssertTrue(source.lowercased().contains("not leave"))
+        pipeline.offer(pixels)
+        await fulfillment(of:[ready],timeout:30)
+        XCTAssertFalse(translatedPages.isEmpty)
+        XCTAssertTrue(translatedPages.joined().range(of:"[\\u0600-\\u06FF]",options:.regularExpression) != nil)
+        pipeline.closeReading()
+        await fulfillment(of:[closed],timeout:5)
+        pipeline.onReading = { _,active,pages,_ in XCTAssertFalse(active); XCTAssertTrue(pages.isEmpty) }
+    }
     @MainActor
     func testBackgroundStopsTVAndExplicitForegroundRestart() async throws {
         let model = AppModel()
