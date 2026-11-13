@@ -29,6 +29,8 @@ jobs:
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
+      - name: Reproduce LAN listener binding and endpoint representation
+        run: swift iOS/Scripts/probe-lan.swift
       - name: Install native build dependencies
         run: brew install cmake ninja protobuf
       - name: Restore native dependency build cache
