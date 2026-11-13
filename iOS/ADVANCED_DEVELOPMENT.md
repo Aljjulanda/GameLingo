@@ -1,5 +1,7 @@
 # Advanced development: baseline and background experiment
 
+See [ADVANCED_PREVIEW.md](ADVANCED_PREVIEW.md) for the complete implementation, evidence matrix, build provenance, delivery limits and physical acceptance procedure. This page records the initial baseline/background investigation; its early description of native recovery predates the later frame-starvation experiment.
+
 ## Recovery and architecture
 
 The user confirmed physical iPhone, PS5 and TCL translation works on the 0.1.1 / TV 0.5.2 baseline (`ce6d3995f20b2250f5567348c7b7c6834785e172`). Low battery use and no noticeable heat are user observations, not benchmark numbers. The protected recovery tag is `stable/real-device-0.1.1`; development is isolated on `codex/advanced-ios`. A local Git recovery bundle is in the ignored delivery directory.

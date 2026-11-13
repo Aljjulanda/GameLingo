@@ -43,7 +43,7 @@ public final class OkHttpProbe {
         CountDownLatch closed = new CountDownLatch(1);
         JSONObject result = new JSONObject();
         final boolean[] opened = {false};
-        WebSocket socket = client.newWebSocket(new Request.Builder().url("wss://"+host+":38443/").build(),new WebSocketListener() {
+        WebSocket socket = client.newWebSocket(new Request.Builder().url("wss://"+host+":"+input.optInt("port",38443)+"/").build(),new WebSocketListener() {
             public void onOpen(WebSocket ws, Response response) {
                 opened[0] = true;
                 result.put("tls",response.handshake().tlsVersion().javaName());
@@ -51,6 +51,7 @@ public final class OkHttpProbe {
                 if (mode.equals("hello") || mode.equals("bad-token")) auth.put("type","hello").put("token",input.getString("token"));
                 else auth.put("type","pair").put("pin",input.optString("pin")).put("padding",new String(new char[10000]).replace('\0','x'));
                 if (mode.equals("document")) auth.put("features",new JSONArray().put("document_v1"));
+                else if (input.has("features")) auth.put("features",input.getJSONArray("features"));
                 ws.send(auth.toString());
             }
             public void onMessage(WebSocket ws,String text) { events.add(new JSONObject(text)); }

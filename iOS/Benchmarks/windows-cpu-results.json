@@ -1,0 +1,211 @@
+{
+  "environment": "Windows x64 CPU, two inference threads; NOT iPhone hardware",
+  "argos_runtime": "4.9.0",
+  "qwen_revision": "9217f5db79a29953eb74d5343926648285ec7e67",
+  "qwen_sha256": "74a4da8c9fdbcd15bd1f6d01d621410d31c6fc00986f5eb687824e7b93d7a9db",
+  "llama_release": "b12367",
+  "argos_load_seconds": 0.42795159999514,
+  "qwen_load_seconds": 1.5644491000130074,
+  "results": [
+    {
+      "engine": "Argos-CTranslate2",
+      "capacity": 0,
+      "case": "bank",
+      "source": "Wait near the bank.",
+      "reference": "انتظر بالقرب من ضفة النهر.",
+      "translation": "انتظر قرب البنك",
+      "milliseconds": 47.564099993905984,
+      "rss_bytes": 147525632
+    },
+    {
+      "engine": "Argos-CTranslate2",
+      "capacity": 0,
+      "case": "negation",
+      "source": "We will not go to the camp.",
+      "reference": "لن نذهب إلى المعسكر.",
+      "translation": "لن نذهب إلى المخيم",
+      "milliseconds": 47.04930000298191,
+      "rss_bytes": 147787776
+    },
+    {
+      "engine": "Argos-CTranslate2",
+      "capacity": 0,
+      "case": "number",
+      "source": "Collect 11 coins before leaving.",
+      "reference": "اجمع 11 قطعة نقدية قبل المغادرة.",
+      "translation": "جمع 11 قطعة عمل قبل المغادرة",
+      "milliseconds": 43.43570000492036,
+      "rss_bytes": 147832832
+    },
+    {
+      "engine": "Argos-CTranslate2",
+      "capacity": 0,
+      "case": "idiom",
+      "source": "It is raining cats and dogs.",
+      "reference": "إنها تمطر بغزارة.",
+      "translation": "إنها تمطر القطط والكلاب",
+      "milliseconds": 51.3102999975672,
+      "rss_bytes": 148045824
+    },
+    {
+      "engine": "Qwen2.5-0.5B-Q4_K_M-CPU",
+      "capacity": 1,
+      "case": "bank",
+      "source": "Wait near the bank.",
+      "reference": "انتظر بالقرب من ضفة النهر.",
+      "translation": "الجانب الأمامي هو المكان المقابل.",
+      "milliseconds": 1206.7380999942543,
+      "rss_bytes": 523112448
+    },
+    {
+      "engine": "Qwen2.5-0.5B-Q4_K_M-CPU",
+      "capacity": 1,
+      "case": "negation",
+      "source": "We will not go to the camp.",
+      "reference": "لن نذهب إلى المعسكر.",
+      "translation": "نحن نحتج إلى المكان.",
+      "milliseconds": 585.1034999941476,
+      "rss_bytes": 523448320
+    },
+    {
+      "engine": "Qwen2.5-0.5B-Q4_K_M-CPU",
+      "capacity": 1,
+      "case": "number",
+      "source": "Collect 11 coins before leaving.",
+      "reference": "اجمع 11 قطعة نقدية قبل المغادرة.",
+      "translation": "الجانب المحيط بالرمال هو المكان المذكور.",
+      "milliseconds": 784.5696000003954,
+      "rss_bytes": 523534336
+    },
+    {
+      "engine": "Qwen2.5-0.5B-Q4_K_M-CPU",
+      "capacity": 1,
+      "case": "idiom",
+      "source": "It is raining cats and dogs.",
+      "reference": "إنها تمطر بغزارة.",
+      "translation": "هذا المحيط هو المكان المعاصر.",
+      "milliseconds": 738.0249999987427,
+      "rss_bytes": 523587584
+    },
+    {
+      "engine": "Qwen2.5-0.5B-Q4_K_M-CPU",
+      "capacity": 5,
+      "case": "bank",
+      "source": "Wait near the bank.",
+      "reference": "انتظر بالقرب من ضفة النهر.",
+      "translation": "أنتظر بجانب المصب.",
+      "milliseconds": 944.6504999941681,
+      "rss_bytes": 523677696
+    },
+    {
+      "engine": "Qwen2.5-0.5B-Q4_K_M-CPU",
+      "capacity": 5,
+      "case": "negation",
+      "source": "We will not go to the camp.",
+      "reference": "لن نذهب إلى المعسكر.",
+      "translation": "نحن لن نذهب إلى المكان.",
+      "milliseconds": 499.1105999943102,
+      "rss_bytes": 523689984
+    },
+    {
+      "engine": "Qwen2.5-0.5B-Q4_K_M-CPU",
+      "capacity": 5,
+      "case": "number",
+      "source": "Collect 11 coins before leaving.",
+      "reference": "اجمع 11 قطعة نقدية قبل المغادرة.",
+      "translation": "أنا أحبك، أحبك، أحبك، أحبك، أحبك، أحبك، أحبك، أحبك، أحبك، أحبك.",
+      "milliseconds": 1872.8559000010137,
+      "rss_bytes": 523730944
+    },
+    {
+      "engine": "Qwen2.5-0.5B-Q4_K_M-CPU",
+      "capacity": 5,
+      "case": "idiom",
+      "source": "It is raining cats and dogs.",
+      "reference": "إنها تمطر بغزارة.",
+      "translation": "هناك ريل يملأ بالسماء.",
+      "milliseconds": 621.9742000102997,
+      "rss_bytes": 523763712
+    },
+    {
+      "engine": "Qwen2.5-0.5B-Q4_K_M-CPU",
+      "capacity": 10,
+      "case": "bank",
+      "source": "Wait near the bank.",
+      "reference": "انتظر بالقرب من ضفة النهر.",
+      "translation": "أنتظر بجانب الممر.",
+      "milliseconds": 956.5399999992223,
+      "rss_bytes": 523780096
+    },
+    {
+      "engine": "Qwen2.5-0.5B-Q4_K_M-CPU",
+      "capacity": 10,
+      "case": "negation",
+      "source": "We will not go to the camp.",
+      "reference": "لن نذهب إلى المعسكر.",
+      "translation": "نحن لن نذهب إلى المكان.",
+      "milliseconds": 505.0889999984065,
+      "rss_bytes": 523788288
+    },
+    {
+      "engine": "Qwen2.5-0.5B-Q4_K_M-CPU",
+      "capacity": 10,
+      "case": "number",
+      "source": "Collect 11 coins before leaving.",
+      "reference": "اجمع 11 قطعة نقدية قبل المغادرة.",
+      "translation": "أنا أحبك، أحبك، أحبك، أحبك، أحبك، أحبك، أحبك، أحبك، أحبك، أحبك.",
+      "milliseconds": 2249.3691999989096,
+      "rss_bytes": 523808768
+    },
+    {
+      "engine": "Qwen2.5-0.5B-Q4_K_M-CPU",
+      "capacity": 10,
+      "case": "idiom",
+      "source": "It is raining cats and dogs.",
+      "reference": "إنها تمطر بغزارة.",
+      "translation": "هناك ريل يملأ بالسماء.",
+      "milliseconds": 629.3914000125369,
+      "rss_bytes": 523808768
+    },
+    {
+      "engine": "Qwen2.5-0.5B-Q4_K_M-CPU",
+      "capacity": 20,
+      "case": "bank",
+      "source": "Wait near the bank.",
+      "reference": "انتظر بالقرب من ضفة النهر.",
+      "translation": "الجوار هو على الرباط.",
+      "milliseconds": 1567.1027000062168,
+      "rss_bytes": 524443648
+    },
+    {
+      "engine": "Qwen2.5-0.5B-Q4_K_M-CPU",
+      "capacity": 20,
+      "case": "negation",
+      "source": "We will not go to the camp.",
+      "reference": "لن نذهب إلى المعسكر.",
+      "translation": "نحن لن نذهب إلى المكان.",
+      "milliseconds": 538.6289000016404,
+      "rss_bytes": 524636160
+    },
+    {
+      "engine": "Qwen2.5-0.5B-Q4_K_M-CPU",
+      "capacity": 20,
+      "case": "number",
+      "source": "Collect 11 coins before leaving.",
+      "reference": "اجمع 11 قطعة نقدية قبل المغادرة.",
+      "translation": "أنا أحب أن أأخذ 11 ريشة من الماء قبل أن أخرج.",
+      "milliseconds": 1033.0114999960642,
+      "rss_bytes": 524668928
+    },
+    {
+      "engine": "Qwen2.5-0.5B-Q4_K_M-CPU",
+      "capacity": 20,
+      "case": "idiom",
+      "source": "It is raining cats and dogs.",
+      "reference": "إنها تمطر بغزارة.",
+      "translation": "هناك ريل يملأ بالسماء.",
+      "milliseconds": 626.7916000069818,
+      "rss_bytes": 524668928
+    }
+  ]
+}
