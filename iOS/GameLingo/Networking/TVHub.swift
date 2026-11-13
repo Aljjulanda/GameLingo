@@ -62,7 +62,9 @@ final class TVHub {
             parameters.requiredLocalEndpoint = .hostPort(host:NWEndpoint.Host(host),port:NWEndpoint.Port(rawValue:TVProtocol.port)!)
             parameters.allowLocalEndpointReuse = true
             do {
-                let listener = try NWListener(using:parameters,on:NWEndpoint.Port(rawValue:TVProtocol.port)!)
+                // requiredLocalEndpoint already fixes both address and port.
+                // Passing on: as well makes Network.framework reject the bind.
+                let listener = try NWListener(using:parameters)
                 let epoch = generation
                 listener.stateUpdateHandler = { [weak self] state in
                     guard let self, self.generation == epoch else { return }

@@ -42,9 +42,11 @@ final class AppleIntegrationTests: XCTestCase {
         defer { hub.stop() }
         let listening = expectation(description:"WSS listener ready")
         var pairingCode = ""
+        hub.onStatus = { print("WSS fixture status: " + $0) }
         hub.onPairing = { _,code in pairingCode = code; listening.fulfill() }
         try hub.start(host:"127.0.0.1",settings:TVSettings())
         await fulfillment(of:[listening],timeout:15)
+        guard !pairingCode.isEmpty else { return } // The expectation already records a failure.
         let pin = String(pairingCode.suffix(6))
         let delegate = FingerprintTrust(prefix:String(pairingCode.prefix(12)))
         let session = URLSession(configuration:.ephemeral,delegate:delegate,delegateQueue:nil)
@@ -104,6 +106,10 @@ final class AppleIntegrationTests: XCTestCase {
         let pixels = try XCTUnwrap(buffer)
         CVPixelBufferLockBaseAddress(pixels,[])
         let bitmap = try XCTUnwrap(CGContext(data:CVPixelBufferGetBaseAddress(pixels),width:1280,height:720,bitsPerComponent:8,bytesPerRow:CVPixelBufferGetBytesPerRow(pixels),space:CGColorSpaceCreateDeviceRGB(),bitmapInfo:CGImageAlphaInfo.premultipliedFirst.rawValue|CGBitmapInfo.byteOrder32Little.rawValue))
+        // Quartz bitmap coordinates are bottom-up; the production CVPixelBuffer
+        // path is top-down. Preserve the renderer image's orientation in memory.
+        bitmap.translateBy(x:0,y:720)
+        bitmap.scaleBy(x:1,y:-1)
         bitmap.draw(try XCTUnwrap(image.cgImage),in:CGRect(x:0,y:0,width:1280,height:720))
         CVPixelBufferUnlockBaseAddress(pixels,[])
         let (text,box) = try VisionDialogueOCR().recognize(pixels,roi:.dialogue)
