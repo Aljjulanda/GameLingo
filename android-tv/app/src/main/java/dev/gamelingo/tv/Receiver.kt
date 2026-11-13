@@ -73,6 +73,14 @@ class Receiver(context: Context, private val render: (JSONObject?) -> Unit, priv
     private var settingsRevision = -1L
     private var lastFailure = ""
     private var displayAcknowledgement = false
+    private var wantedConnection = false
+    private val discovery = PinnedDiscovery(context) { host,fingerprint ->
+        if(wantedConnection && pin.isEmpty() && prefix==fingerprint && session.isEmpty() && host!=address) {
+            main.removeCallbacksAndMessages(null);dispose();address=host
+            diagnostic("discovery.found","اكتُشف عنوان جديد للمصدر المقترن؛ جارٍ التحقق الآمن")
+            connect()
+        }
+    }
     fun acknowledge(id: String) {
         if (displayAcknowledgement && session.isNotEmpty()) socket?.send(JSONObject().put("v",1).put("type","subtitle_ack").put("id",id).toString())
     }
@@ -96,6 +104,7 @@ class Receiver(context: Context, private val render: (JSONObject?) -> Unit, priv
             prefix = prefs.getString("fingerprint", "") ?: ""
         } else { diagnostic("input.code", "أدخل رمز الاقتران كما يظهر على المصدر"); return }
         if (prefix.length !in listOf(12, 64)) { status("بصمة الشهادة غير صالحة"); return }
+        wantedConnection = true
         connect()
     }
 
@@ -159,6 +168,9 @@ class Receiver(context: Context, private val render: (JSONObject?) -> Unit, priv
                             settingsRevision = -1L; stage = "متصل"
                             displayAcknowledgement = m.optJSONArray("capabilities")?.let { a -> (0 until a.length()).any { a.optString(it)=="subtitle_ack" } } ?: false
                             lastFailure = ""
+                            discovery.stop()
+                            // Persist a discovered address only after TLS pinning and token authentication.
+                            if(pin.isEmpty() && observedFingerprint==prefix) prefs.edit().putString("host",address).apply()
                             serverTime = m.getLong("time_ms"); syncTime = SystemClock.elapsedRealtime()
                             render(null); diagnostic("auth.ok", "متصل · في انتظار الترجمة")
                         }
@@ -233,10 +245,11 @@ class Receiver(context: Context, private val render: (JSONObject?) -> Unit, priv
         lastFailure = reason
         main.removeCallbacksAndMessages(null)
         dispose(); diagnostic("retry", "$reason · ستتم إعادة المحاولة")
-        val delay = (1000L shl attempts.coerceAtMost(4)); attempts++
+        if(attempts>=1 && pin.isEmpty() && prefix.length==64) discovery.start(prefix)
+        val delay = listOf(2000L,4000L,8000L,15000L,30000L)[attempts.coerceIn(0,4)] + (Math.random()*500).toLong(); attempts++
         val generation = epoch
         main.postDelayed({ if (generation == epoch) connect() }, delay)
     }
-    fun stop() { main.removeCallbacksAndMessages(null); dispose(); pin = ""; attempts = 0 }
+    fun stop() { wantedConnection=false;discovery.stop();main.removeCallbacksAndMessages(null); dispose(); pin = ""; attempts = 0 }
 }
 

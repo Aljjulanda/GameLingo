@@ -36,6 +36,7 @@ final class TVHub {
     private var showSpeakers = true
     private var speakerColor = "#A6C7D8"
     private var pendingDisplay = Set<String>()
+    private var bonjourEnabled = true
     private var settingsWire: [String:Any] {
         var value = settings.wire; value["show_speakers"] = showSpeakers; value["speaker_color"] = speakerColor
         return value
@@ -93,12 +94,14 @@ final class TVHub {
         guard (LAN.isPrivateIPv4(host) && Self.localAddresses().contains(host)) || (testingLoopback && host == "127.0.0.1") else { throw LingoError.invalid("اختر عنوان Wi-Fi الحالي لهذا iPhone") }
         queue.async { [self] in
           do {
-            stopNow(); sequence = TVSequence(); self.settings = settings
+            let retainedIdentity = self.identity, retainedDigest = tokenDigest
+            stopNow(preserveIdentity:true); sequence = TVSequence(); self.settings = settings
             diagnosticLines.removeAll(); stage = "server"; receivedConnection = false; listeningHost = host
             let epoch = generation
             diagnostic("server.start", "جارٍ تشغيل خادم التلفزيون", show:true)
-            let identity = try TLSIdentity()
-            tokenDigest = try KeychainStore.read("tv.token.sha256.v1")
+            let identity: TLSIdentity
+            if let retainedIdentity { identity = retainedIdentity; tokenDigest = retainedDigest }
+            else { identity = try TLSIdentity(); tokenDigest = try KeychainStore.read("tv.token.sha256.v1") }
             let random = try KeychainStore.random(4).reduce(UInt32(0)) { ($0 << 8) | UInt32($1) }
             let pin = String(format:"%06u",random % 1_000_000)
             self.identity = identity; self.pin = pin; failures = 0; deadline = ProcessInfo.processInfo.systemUptime+300
@@ -125,7 +128,7 @@ final class TVHub {
                 let listener = try NWListener(using:parameters)
                 // The public identity hint only locates candidates. Clients must
                 // still verify their saved full certificate pin and authenticate.
-                listener.service = NWListener.Service(name:"GameLingo-\(identity.fingerprint.prefix(12))",type:"_gamelingo._tcp")
+                if bonjourEnabled && !testingLoopback { listener.service = NWListener.Service(name:"GameLingo-\(identity.fingerprint.prefix(12))",type:"_gamelingo._tcp") }
                 listener.stateUpdateHandler = { [weak self,weak listener] state in
                     guard let self, let listener, self.generation == epoch else { return }
                     switch state {
@@ -142,9 +145,14 @@ final class TVHub {
                             guard let self, self.generation == epoch, !self.receivedConnection else { return }
                             self.diagnostic("tcp.not_observed", "لم يصل اتصال إلى التطبيق بعد؛ تحقق من بقاء التطبيق مفتوحًا وعنوان Wi-Fi ومسار الشبكة")
                         }
-                    case .waiting(let error): self.diagnostic("listen.waiting", "الخادم ينتظر الشبكة · \(Self.safeError(error))", show:true)
+                    case .waiting(let error):
+                        if self.bonjourEnabled, case .dns = error {
+                            self.bonjourEnabled = false
+                            self.diagnostic("discovery.unavailable", "تعذر نشر الاكتشاف؛ جارٍ استعادة الاتصال اليدوي الآمن")
+                            try? self.start(host:host,settings:self.settings)
+                        } else { self.diagnostic("listen.waiting", "الخادم ينتظر الشبكة · \(Self.safeError(error))", show:true) }
                     case .failed(let error):
-                        self.stopNow()
+                        self.stopNow(preserveIdentity:true)
                         self.diagnostic("listen.failed", "تعذر ربط خادم التلفزيون · \(Self.safeError(error))", show:true)
                     default: break
                     }
@@ -331,13 +339,14 @@ final class TVHub {
     func validateAddress() {
         queue.async { [self] in
             guard listener != nil, !Self.localAddresses().contains(listeningHost) else { return }
-            stopNow(); diagnostic("network.changed", "تغير عنوان Wi-Fi؛ شغّل اتصال التلفزيون بالعنوان الجديد", show:true)
+            stopNow(preserveIdentity:true); diagnostic("network.changed", "تغير عنوان Wi-Fi؛ جارٍ انتظار استعادة المستمع", show:true)
         }
     }
     func stop() { queue.async { [self] in stopNow(); diagnostic("server.stopped", "أُوقف الخادم؛ يلزم بقاء GameLingo في المقدمة", show:true) } }
-    private func stopNow() {
+    private func stopNow(preserveIdentity: Bool = false) {
         generation += 1; if let client { disconnect(client) }
-        listener?.cancel(); listener = nil; heartbeat?.cancel(); heartbeat = nil; identity = nil
+        listener?.cancel(); listener = nil; heartbeat?.cancel(); heartbeat = nil
+        if !preserveIdentity { identity = nil; tokenDigest = nil }
         DispatchQueue.main.async { self.onListening?(false) }
     }
 }

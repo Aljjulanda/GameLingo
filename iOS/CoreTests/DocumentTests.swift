@@ -26,7 +26,10 @@ final class DocumentTests: XCTestCase {
         let text = Array(repeating:"لن نغادر المعسكر قبل أن تجمع 11 قطعة نقدية.",count:100).joined(separator:" ")
         let pages = DocumentText.pages([text])
         XCTAssertTrue(pages.count>1); XCTAssertTrue(pages.allSatisfy { $0.count<=600 })
-        XCTAssertEqual(DialogueText.words(pages.joined(separator:" ")),DialogueText.words(text))
+        let actual = DialogueText.words(pages.joined(separator:" ")), expected = DialogueText.words(text)
+        XCTAssertEqual(actual.count,expected.count,"Document pages must retain every source word")
+        let mismatch = zip(actual,expected).enumerated().first { $0.element.0 != $0.element.1 }
+        XCTAssertNil(mismatch?.offset,"Pagination changed a word")
     }
     func testLowConfidenceAndInvalidGeometryAreNotDocumentText() {
         XCTAssertTrue(DocumentText.paragraphs([

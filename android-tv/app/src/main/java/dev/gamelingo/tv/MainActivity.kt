@@ -70,7 +70,7 @@ class MainActivity : Activity() {
                 }.show()
         }
         val savedHost=prefs.getString("host","") ?: ""
-        if(Settings.canDrawOverlays(this) && prefs.contains("token") && Pairing.privateIp(savedHost)) {
+        if(!OverlayService.active && Settings.canDrawOverlays(this) && prefs.contains("token") && Pairing.privateIp(savedHost)) {
             startForegroundService(Intent(this,OverlayService::class.java).setAction("connect")
                 .putExtra("host",savedHost).putExtra("code",""))
         }

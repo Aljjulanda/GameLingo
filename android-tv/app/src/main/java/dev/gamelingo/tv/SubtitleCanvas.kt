@@ -191,7 +191,7 @@ class SubtitleCanvas(context: Context, private val report: (String)->Unit) : Vie
         val paint=TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
             color=Color.WHITE
             textSize=minOf(n("font_size",25.0).coerceIn(24f,32f)*resources.displayMetrics.density,height/28f)
-            typeface=Typeface.create(style.optString("font_family","sans-serif"),Typeface.NORMAL)
+            typeface=Typeface.create(this@SubtitleCanvas.style.optString("font_family","sans-serif"),Typeface.NORMAL)
         }
         val padding=24f
         val contentWidth=(panel.width()-2*padding).toInt().coerceAtLeast(40)

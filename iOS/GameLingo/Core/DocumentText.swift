@@ -6,6 +6,7 @@ struct DocumentLine {
 }
 
 enum DocumentText {
+    private static let sentenceBreak = try! NSRegularExpression(pattern:"[.!?]\\s")
     static func paragraphs(_ input: [DocumentLine]) -> [String] {
         let lines = Array(input.filter { $0.confidence >= 0.35 && $0.box.isValid && !$0.text.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty }.prefix(150))
         var columns = [lines]
@@ -38,14 +39,18 @@ enum DocumentText {
         }
         return paragraphs
     }
-    static func chunks(_ paragraphs: [String], limit: Int = 600, maximumCharacters: Int = 16000, maximumChunks: Int = 32) -> [String] {
+    static func chunks(_ paragraphs: [String], limit: Int = 600, maximumCharacters: Int = 16000, maximumChunks: Int = 192) -> [String] {
         var result: [String] = [], total = 0
         for paragraph in paragraphs {
             var remaining = paragraph.trimmingCharacters(in:.whitespacesAndNewlines)
             while !remaining.isEmpty && total < maximumCharacters && result.count < maximumChunks {
                 let bound = min(limit,maximumCharacters-total)
                 let prefix = String(remaining.prefix(bound))
-                let end = remaining.count <= bound ? prefix.endIndex : (prefix.range(of:"[.!?]\\s",options:[.regularExpression,.backwards])?.upperBound ?? prefix.lastIndex(of:" ") ?? prefix.endIndex)
+                // Backwards search is not supported consistently with regular
+                // expressions. Select the last actual match explicitly.
+                let match = sentenceBreak.matches(in:prefix,range:NSRange(prefix.startIndex...,in:prefix)).last
+                let sentenceEnd = match.flatMap { Range($0.range,in:prefix)?.upperBound }
+                let end = remaining.count <= bound ? prefix.endIndex : (sentenceEnd ?? prefix.lastIndex(of:" ") ?? prefix.endIndex)
                 let text = String(prefix[..<end]).trimmingCharacters(in:.whitespacesAndNewlines)
                 guard !text.isEmpty else { break }
                 result.append(text); total += text.count
@@ -55,13 +60,13 @@ enum DocumentText {
         return result
     }
     static func pages(_ paragraphs: [String], limit: Int = 600) -> [String] {
-        let chunks = self.chunks(paragraphs,limit:limit,maximumCharacters:57600,maximumChunks:64)
+        let chunks = self.chunks(paragraphs,limit:limit,maximumCharacters:57600,maximumChunks:192)
         var pages: [String] = [], page = ""
         for text in chunks {
             if !page.isEmpty && page.count+text.count+2 > limit { pages.append(page); page = "" }
             page += (page.isEmpty ? "" : "\n\n")+text
         }
         if !page.isEmpty { pages.append(page) }
-        return Array(pages.prefix(64))
+        return pages.count <= 64 ? pages : []
     }
 }

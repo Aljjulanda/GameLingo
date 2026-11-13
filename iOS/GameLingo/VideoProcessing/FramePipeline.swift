@@ -196,6 +196,7 @@ final class FramePipeline {
         guard reading, runID == epoch else { return }
         guard index < chunks.count else {
             let pages = DocumentText.pages(translated)
+            guard !pages.isEmpty else { finishReading(message:"النص المترجم طويل جدًا؛ اقرأ المستند على أجزاء"); return }
             let ticket = readingTicket
             DispatchQueue.main.async { self.onReading?(ticket,true,pages,"القراءة جاهزة · \(pages.count) صفحات") }
             return
