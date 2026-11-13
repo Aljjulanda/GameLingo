@@ -9,7 +9,8 @@ SOURCES="$ROOT/.build/sources"
 WORK="$ROOT/.build/native/$SDK-$ARCH"
 PREFIX="$WORK/prefix"
 SIGNATURE="$( { shasum -a 256 Scripts/build-native.sh Scripts/bootstrap.py Scripts/combine-libraries.py Native/GLRemotePlay.c Native/GLRemotePlay.h; xcodebuild -version; xcrun --sdk "$SDK" --show-sdk-version; echo "$SDK/$ARCH"; } | shasum -a 256 | awk '{print $1}')"
-if [[ -f "$WORK/validated.sha256" && "$(cat "$WORK/validated.sha256")" == "$SIGNATURE" && -f "$ROOT/.build/lib/$SDK/libGameLingoNative.a" && -f "$ROOT/.build/include/openssl/evp.h" ]]; then
+if [[ -f "$WORK/validated.sha256" && "$(cat "$WORK/validated.sha256")" == "$SIGNATURE" && -f "$ROOT/.build/lib/$SDK/libGameLingoNative.a" && -f "$ROOT/.build/include/openssl/evp.h" ]] &&
+   xcrun lipo -verify_arch "$ARCH" "$ROOT/.build/lib/$SDK/libGameLingoNative.a"; then
   echo "Reusing validated native libraries: $SDK / $ARCH"
   exit 0
 fi

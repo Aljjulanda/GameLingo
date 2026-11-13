@@ -3,6 +3,13 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 source .build/python/bin/activate
 mkdir -p build/logs
+export_attachments() {
+  if [[ -d build/GameLingoTests.xcresult ]]; then
+    xcrun xcresulttool export attachments --path build/GameLingoTests.xcresult \
+      --output-path build/logs/test-attachments || true
+  fi
+}
+trap export_attachments EXIT
 if [[ "${SKIP_CORE_TESTS:-0}" != 1 ]]; then
   swift test --parallel 2>&1 | tee build/logs/core-tests.log
 fi

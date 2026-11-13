@@ -3,6 +3,8 @@ import UIKit
 import CoreVideo
 import VideoToolbox
 import CryptoKit
+import CoreImage
+import Vision
 @testable import GameLingo
 
 final class AppleIntegrationTests: XCTestCase {
@@ -111,8 +113,26 @@ final class AppleIntegrationTests: XCTestCase {
         bitmap.translateBy(x:0,y:720)
         bitmap.scaleBy(x:1,y:-1)
         bitmap.draw(try XCTUnwrap(image.cgImage),in:CGRect(x:0,y:0,width:1280,height:720))
+        bitmap.flush()
         CVPixelBufferUnlockBaseAddress(pixels,[])
         let (text,box) = try VisionDialogueOCR().recognize(pixels,roi:.dialogue)
+        if !text.lowercased().contains("follow me") {
+            let raw = VNRecognizeTextRequest()
+            raw.recognitionLevel = .accurate; raw.recognitionLanguages = ["en-US"]
+            for region in [CGRect(x:0,y:0,width:1,height:1), CGRect(x:0.16,y:0.07,width:0.68,height:0.28)] {
+                raw.regionOfInterest = region
+                try VNImageRequestHandler(cvPixelBuffer:pixels,orientation:.up,options:[:]).perform([raw])
+                for observation in raw.results ?? [] {
+                    print("Vision fixture region=\(region) box=\(observation.boundingBox) candidates=\(observation.topCandidates(1).map { $0.string + ":" + String($0.confidence) })")
+                }
+                print("Vision fixture observation count=\(raw.results?.count ?? 0)")
+            }
+            let pixelsImage = CIImage(cvPixelBuffer:pixels)
+            if let cg = CIContext().createCGImage(pixelsImage,from:pixelsImage.extent) {
+                let attachment = XCTAttachment(image:UIImage(cgImage:cg))
+                attachment.name = "Vision-pixel-buffer"; attachment.lifetime = .keepAlways; add(attachment)
+            }
+        }
         XCTAssertTrue(text.lowercased().contains("follow me"),text)
         XCTAssertTrue(box.isValid)
     }
