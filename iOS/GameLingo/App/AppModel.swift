@@ -18,6 +18,11 @@ final class AppModel: ObservableObject {
     @Published var tvStatus = "التلفزيون غير متصل"
     @Published var tvDiagnostics: [String] = []
     @Published var tvListening = false
+    @Published var sessionStatus = "متوقفة"
+    @Published var audioStatus = "تجربة الخلفية متوقفة"
+    @Published var streamConnected = false
+    @Published var recoveryAttempts = 0
+    @Published var backgroundDeliveries: UInt64 = 0
     @Published var networkStatus = "جارٍ فحص الشبكة"
     @Published var modelStatus = "لم يُحمّل النموذج"
     @Published var pairingCode = ""
@@ -41,6 +46,13 @@ final class AppModel: ObservableObject {
     private var downloadTask: Task<Void,Never>?
     private var originalBrightness: CGFloat?
     private var lifecycle = 0
+    private var policy = SessionPolicy()
+    private let audio = BackgroundAudio()
+    private var recoveryTask: Task<Void,Never>?
+    private var executionTask: UIBackgroundTaskIdentifier = .invalid
+    private var executionDeadline: Task<Void,Never>?
+    private var pipelineActive = false
+    private var hubStarting = false
 
     init() {
         do {
@@ -57,7 +69,22 @@ final class AppModel: ObservableObject {
         remote.onState = { [weak self] in self?.remoteStatus = $0 }
         remote.onLoginPIN = { [weak self] in self?.loginRequired = true }
         remote.onInterruption = { [weak self] in self?.pipeline.interrupt() }
-        remote.onStopped = { [weak self] in self?.stop() }
+        remote.onStopped = { [weak self] in
+            guard let self, self.policy.wanted else { return }
+            self.sessionStatus = "انقطع بث PS5؛ جارٍ الاسترداد"
+            self.scheduleRecovery()
+        }
+        remote.onAvailability = { [weak self] connected in
+            guard let self else { return }; self.streamConnected = connected
+            if connected { self.recoveryAttempts = 0; self.sessionStatus = "البث متصل؛ الترجمة نشطة" }
+        }
+        audio.onChange = { [weak self] active,interrupted,text in
+            guard let self else { return }
+            self.audioStatus = text; self.policy.audioActive = active; self.policy.interrupted = interrupted
+            if active { self.endExecutionGrace() }
+            else if self.policy.wanted && !self.policy.foreground { self.beginExecutionGrace() }
+        }
+        audio.onRecovery = { [weak self] in self?.recoverSession() }
         remote.onRegistration = { [weak self] result in
             guard let self else { return }; self.pairing = false
             do {
@@ -70,12 +97,13 @@ final class AppModel: ObservableObject {
             } catch { self.errorMessage = error.localizedDescription }
         }
         hub.onStatus = { [weak self] in self?.tvStatus = $0 }
-        hub.onPairing = { [weak self] _,code in self?.pairingCode = code }
+        hub.onPairing = { [weak self] _,code in self?.pairingCode = code; self?.hubStarting = false }
         hub.onDiagnostics = { [weak self] in self?.tvDiagnostics = $0 }
         hub.onListening = { [weak self] listening in
             guard let self else { return }
             self.tvListening = listening
             if !listening { self.pairingCode = "" }
+            if !listening && self.policy.wanted { self.scheduleRecovery() }
             UIApplication.shared.isIdleTimerDisabled = listening || self.running
         }
         let processor = self.pipeline
@@ -90,9 +118,11 @@ final class AppModel: ObservableObject {
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 self.networkStatus = available ? (path.usesInterfaceType(.wifi) ? "Wi-Fi متصل" : "الشبكة متاحة") : "الشبكة غير متاحة"
+                self.policy.network = available
                 self.refreshAddresses()
                 self.hub.validateAddress()
-                if !available { self.pipeline.interrupt() }
+                if !available { self.pipeline.interrupt(); self.sessionStatus = "بانتظار Wi-Fi" }
+                else { self.recoverSession() }
             }
         }
         monitor.start(queue:DispatchQueue(label:"dev.gamelingo.path"))
@@ -114,10 +144,11 @@ final class AppModel: ObservableObject {
     }
     func connectTV() {
         refreshAddresses(); pairingCode = ""
+        hubStarting = true
         let host = settings.localIP, display = settings.display
         tvStatus = "جارٍ إعداد اتصال التلفزيون…"
         do { try hub.start(host:host,settings:display) }
-        catch { errorMessage = error.localizedDescription }
+        catch { hubStarting = false; errorMessage = error.localizedDescription }
     }
     func pair(host: String, account: String, pin: String) {
         do { try remote.pair(host:host,account:account,pin:pin); pairing = true }
@@ -134,19 +165,84 @@ final class AppModel: ObservableObject {
         guard !running, modelReady, !pairing, let console = consoles.first(where:{ $0.id == settings.selectedConsoleID }) else { errorMessage = "اختر PS5 مسجلًا وجهّز نموذج الترجمة أولًا"; return }
         guard settings.roi.isValid else { errorMessage = "اضبط منطقة الحوار داخل حدود صورة البث أولًا"; return }
         do {
+            policy.start(); policy.experimentalAudio = settings.advanced.backgroundAudio
+            sessionStatus = "جارٍ بدء الجلسة"; recoveryAttempts = 0
+            if policy.experimentalAudio { audio.start() }
             try remote.connect(console)
-            pipeline.start(roi:settings.roi,mode:settings.mode); running = true
+            pipeline.start(roi:settings.roi,mode:settings.mode); pipelineActive = true; running = true
+            if !tvListening && !hubStarting { connectTV() }
             UIApplication.shared.isIdleTimerDisabled = true
             applyDim()
-        } catch { errorMessage = error.localizedDescription }
+        } catch { policy.stop(); audio.stop(); errorMessage = error.localizedDescription }
     }
     func stop() {
+        policy.stop(); recoveryTask?.cancel(); recoveryTask = nil; endExecutionGrace(); audio.stop()
+        pipelineActive = false; sessionStatus = "أوقفها المستخدم"
         running = false; pairing = false; loginRequired = false; remote.stop(); pipeline.stop()
         UIApplication.shared.isIdleTimerDisabled = tvListening
         if let brightness = originalBrightness { UIScreen.main.brightness = brightness; originalBrightness = nil }
     }
     func background() {
-        lifecycle += 1; stop(); hub.stop(); pairingCode = ""; tvStatus = "أُوقف الاتصال عند مغادرة التطبيق؛ أعد تشغيله من تبويب الاتصال"
+        lifecycle += 1; policy.foreground = false
+        pipeline.setBackground(true)
+        if policy.wanted && policy.canExecute { sessionStatus = "تجربة الخلفية نشطة؛ راقب وصول جمل جديدة على TCL"; return }
+        if policy.wanted { beginExecutionGrace() }
+        else { hub.stop(); pairingCode = ""; tvStatus = "أُوقف الاتصال عند مغادرة التطبيق" }
+    }
+    func foreground() {
+        policy.foreground = true; endExecutionGrace()
+        pipeline.setBackground(false)
+        if policy.wanted { audio.recover(foreground:true); recoverSession() }
+    }
+    func updateBackgroundExperiment() {
+        policy.experimentalAudio = settings.advanced.backgroundAudio
+        if policy.wanted && policy.experimentalAudio { audio.start() }
+        else { audio.stop() }
+    }
+    private func beginExecutionGrace() {
+        guard policy.wanted, executionTask == .invalid else { return }
+        sessionStatus = "مهلة خلفية محدودة؛ بانتظار السماح بالتنفيذ"
+        executionTask = UIApplication.shared.beginBackgroundTask(withName:"GameLingo recovery") { [weak self] in
+            Task { @MainActor [weak self] in self?.suspendForExecution() }
+        }
+        executionDeadline = Task { [weak self] in
+            try? await Task.sleep(nanoseconds:20_000_000_000)
+            guard !Task.isCancelled else { return }; self?.suspendForExecution()
+        }
+    }
+    private func endExecutionGrace() {
+        executionDeadline?.cancel(); executionDeadline = nil
+        if executionTask != .invalid { UIApplication.shared.endBackgroundTask(executionTask); executionTask = .invalid }
+    }
+    private func suspendForExecution() {
+        endExecutionGrace()
+        guard !policy.canExecute else { return }
+        remote.stop(); pipeline.stop(); pipelineActive = false; hub.stop(); hubStarting = false
+        sessionStatus = "التنفيذ غير متاح؛ الاستئناف عند سماح iOS أو العودة للتطبيق"
+    }
+    private func scheduleRecovery() {
+        guard policy.wanted, recoveryTask == nil else { return }
+        let epoch = policy.epoch
+        let delay = SessionPolicy.retryDelay(recoveryAttempts,jitter:Double.random(in:0...1))
+        recoveryAttempts += 1
+        recoveryTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds:UInt64(delay*1_000_000_000))
+            guard !Task.isCancelled, let self, self.policy.accepts(epoch) else { return }
+            self.recoveryTask = nil; self.recoverSession()
+        }
+    }
+    private func recoverSession() {
+        guard policy.wanted else { return }
+        guard policy.network else { sessionStatus = "بانتظار الشبكة"; return }
+        audio.recover()
+        guard policy.canRecover else { sessionStatus = "بانتظار السماح بالتنفيذ"; return }
+        if !pipelineActive { pipeline.start(roi:settings.roi,mode:settings.mode); pipelineActive = true }
+        if let console = consoles.first(where:{ $0.id == settings.selectedConsoleID }) { remote.recover(console) }
+        if !tvListening {
+            // A previous bind failure must not leave the UI's in-progress flag stuck.
+            hubStarting = false; connectTV()
+        }
+        sessionStatus = streamConnected ? "الترجمة نشطة" : "جارٍ استرداد الاتصال"
     }
     func applyDim() {
         if running && settings.dimScreen {

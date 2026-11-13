@@ -85,6 +85,8 @@ struct DialogueTracker {
     private(set) var current: DialogueJob?
     private var lastSeen: TimeInterval = 0
     private var empty = 0
+    private var suppressContinuingCurrent = false
+    mutating func markInterrupted() { suppressContinuingCurrent = current != nil }
     mutating func observe(text raw: String, box: SourceBox, now: TimeInterval, frameMilliseconds: Int64) -> Observation {
         let text = String(DialogueText.normalized(raw).prefix(1800))
         guard !text.isEmpty else {
@@ -94,11 +96,12 @@ struct DialogueTracker {
             return .gone(old.id)
         }
         empty = 0
-        if let old = current, DialogueText.words(text) == DialogueText.words(old.text), now-lastSeen <= 1.5, box.isAdjacent(to: old.box) {
+        if let old = current, DialogueText.words(text) == DialogueText.words(old.text), (now-lastSeen <= 1.5 || suppressContinuingCurrent), box.isAdjacent(to: old.box) {
             lastSeen = now
             return .unchanged
         }
         let old = current
+        suppressContinuingCurrent = false
         let correction = old.map { now-lastSeen <= 1.5 && box.isAdjacent(to: $0.box) && DialogueText.same($0.text,text) } ?? false
         if !correction { serial &+= 1 }
         generation &+= 1
@@ -110,7 +113,7 @@ struct DialogueTracker {
         guard let current, current.id == result.id else { return false }
         return current.generation == result.generation || DialogueText.prefix(result.text,current.text)
     }
-    mutating func reset() { current = nil; empty = 0; generation &+= 1 }
+    mutating func reset() { current = nil; empty = 0; suppressContinuingCurrent = false; generation &+= 1 }
 }
 
 /// All access must be serialized by the owner. There is never a dialogue history.

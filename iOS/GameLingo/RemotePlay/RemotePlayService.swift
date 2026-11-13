@@ -39,6 +39,14 @@ final class RemotePlayService {
     var onFrame: ((CVPixelBuffer) -> Void)?
     var onInterruption: (() -> Void)?
     var onStopped: (() -> Void)?
+    var onAvailability: ((Bool) -> Void)?
+    /// A recovery trigger must not destroy a live or currently starting session.
+    func recover(_ console: ConsoleCredentials) {
+        control.async { [self] in
+            guard session == nil else { return }
+            wanted = console; retries = 0; sessionEpoch += 1; start(console,epoch:sessionEpoch)
+        }
+    }
 
     func discover() {
         control.async { [self] in
@@ -106,7 +114,9 @@ final class RemotePlayService {
             self.control.async {
                 guard self.sessionEpoch == epoch, self.wanted != nil else { return }
                 switch event {
-                case 1: self.retries = 0; self.state("بث PS5 متصل")
+                case 1:
+                    self.retries = 0; self.state("بث PS5 متصل")
+                    DispatchQueue.main.async { self.onAvailability?(true) }
                 case 3: DispatchQueue.main.async { self.onLoginPIN?() }; self.state("PS5 يطلب رمز تسجيل الدخول")
                 case 2:
                     self.closeSession()
@@ -144,8 +154,10 @@ final class RemotePlayService {
         if error != 0 || session == nil { closeSession(); wanted = nil; state("تعذر بدء البث (\(error))"); DispatchQueue.main.async { self.onStopped?() } }
     }
     private func closeSession() {
+        let hadSession = session != nil
         GLSessionDestroy(session); session = nil
         context?.decoder.shutdown(); context = nil
+        if hadSession { DispatchQueue.main.async { self.onAvailability?(false) } }
     }
     func loginPIN(_ pin: String) throws {
         guard pin.count == 4, pin.utf8.allSatisfy({ (48...57).contains($0) }) else { throw LingoError.invalid("رمز تسجيل الدخول يجب أن يكون 4 أرقام") }

@@ -58,8 +58,9 @@ final class FramePipeline {
     func configure(mode: PerformanceMode, thermal: Int, lowPower: Bool) {
         queue.async { [self] in self.mode = mode; self.thermal = thermal; self.lowPower = lowPower }
     }
+    func setBackground(_ value: Bool) { queue.async { [self] in ocr.setBackground(value) } }
     func interrupt() { translator.cancel(); queue.async { [self] in
-        runID = UUID(); tracker.reset(); pending = nil; publish(TVProtocol.envelope("subtitle_clear"))
+        runID = UUID(); tracker.markInterrupted(); pending = nil; publish(TVProtocol.envelope("subtitle_clear"))
         slotLock.lock(); latest = nil; slotLock.unlock()
     } }
     /// Called from the hub queue; inference never synchronously waits on that queue.
@@ -67,6 +68,7 @@ final class FramePipeline {
         // Keep the observed dialogue identity so reconnecting does not retranslate/replay it.
         // Invalidate all in-flight publications and discard pending work.
         runID = UUID(); pending = nil
+        tracker.markInterrupted()
     } }
     func stop() {
         translator.cancel()

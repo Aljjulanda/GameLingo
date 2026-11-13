@@ -30,6 +30,7 @@ final class TVHub {
     private var stage = "server"
     private var receivedConnection = false
     private var listeningHost = ""
+    private var tokenDigest: Data?
     private let testingLoopback: Bool
     init(testingLoopback: Bool = false) { self.testingLoopback = testingLoopback }
 
@@ -88,6 +89,7 @@ final class TVHub {
             let epoch = generation
             diagnostic("server.start", "جارٍ تشغيل خادم التلفزيون", show:true)
             let identity = try TLSIdentity()
+            tokenDigest = try KeychainStore.read("tv.token.sha256.v1")
             let random = try KeychainStore.random(4).reduce(UInt32(0)) { ($0 << 8) | UInt32($1) }
             let pin = String(format:"%06u",random % 1_000_000)
             self.identity = identity; self.pin = pin; failures = 0; deadline = ProcessInfo.processInfo.systemUptime+300
@@ -112,6 +114,9 @@ final class TVHub {
                 // requiredLocalEndpoint already fixes both address and port.
                 // Passing on: as well makes Network.framework reject the bind.
                 let listener = try NWListener(using:parameters)
+                // The public identity hint only locates candidates. Clients must
+                // still verify their saved full certificate pin and authenticate.
+                listener.service = NWListener.Service(name:"GameLingo-\(identity.fingerprint.prefix(12))",type:"_gamelingo._tcp")
                 listener.stateUpdateHandler = { [weak self,weak listener] state in
                     guard let self, let listener, self.generation == epoch else { return }
                     switch state {
@@ -229,12 +234,13 @@ final class TVHub {
             }
             let token = try KeychainStore.random(32).base64EncodedString()
             try KeychainStore.write(Data(SHA256.hash(data:Data(token.utf8))),account:"tv.token.sha256.v1")
+            tokenDigest = Data(SHA256.hash(data:Data(token.utf8)))
             pin = ""
             diagnostic("pair.accepted", "قُبل PIN وحُفظ رمز المصادقة بأمان")
             enqueue(TVProtocol.envelope("paired",fields:["token":token]),stamp:false)
         case "hello":
             guard let token = message["token"] as? String, (32...128).contains(token.count),
-              let digest = try KeychainStore.read("tv.token.sha256.v1"), Self.equal(Data(SHA256.hash(data:Data(token.utf8))),digest) else { throw LingoError.invalid("رُفض رمز المصادقة المحفوظ؛ يلزم اقتران جديد") }
+              let digest = tokenDigest, Self.equal(Data(SHA256.hash(data:Data(token.utf8))),digest) else { throw LingoError.invalid("رُفض رمز المصادقة المحفوظ؛ يلزم اقتران جديد") }
         default: throw LingoError.invalid("رسالة اقتران غير صالحة")
         }
         authenticated = true

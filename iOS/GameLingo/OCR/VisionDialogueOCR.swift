@@ -16,6 +16,7 @@ final class VisionDialogueOCR {
         return request
     }()
     private var previousSignature: [String] = []
+    func setBackground(_ background: Bool) { request.usesCPUOnly = background }
     func recognize(_ buffer: CVPixelBuffer, roi: SourceBox) throws -> (String,SourceBox) {
         guard roi.isValid else { throw LingoError.invalid("منطقة الحوار غير صالحة") }
         // Vision's ROI is lower-left origin. The shared TV protocol uses top-left origin.

@@ -128,6 +128,20 @@ struct AppSettings: Codable {
     var selectedConsoleID: String?
     var localIP = ""
     var dimScreen = false
+    var advanced = AdvancedSettings()
+    private enum CodingKeys: String, CodingKey { case display,roi,mode,selectedConsoleID,localIP,dimScreen,advanced }
+    init() {}
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy:CodingKeys.self)
+        display = try values.decodeIfPresent(TVSettings.self,forKey:.display) ?? TVSettings()
+        roi = try values.decodeIfPresent(SourceBox.self,forKey:.roi) ?? .dialogue
+        mode = try values.decodeIfPresent(PerformanceMode.self,forKey:.mode) ?? .balanced
+        selectedConsoleID = try values.decodeIfPresent(String.self,forKey:.selectedConsoleID)
+        localIP = try values.decodeIfPresent(String.self,forKey:.localIP) ?? ""
+        dimScreen = try values.decodeIfPresent(Bool.self,forKey:.dimScreen) ?? false
+        advanced = try values.decodeIfPresent(AdvancedSettings.self,forKey:.advanced) ?? AdvancedSettings()
+        advanced.validate()
+    }
     static func load(from defaults: UserDefaults = .standard) -> AppSettings {
         guard let data = defaults.data(forKey: "GameLingo.settings.v1"), var value = try? JSONDecoder().decode(Self.self,from: data) else { return Self() }
         if !value.roi.isValid { value.roi = .dialogue }
