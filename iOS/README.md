@@ -1,6 +1,6 @@
 # GameLingo for iPhone
 
-This is a new native iOS target inside the restored GameLingo Windows/Android TV repository. Existing platform code is preserved. The implementation has **not yet been compiled with Xcode or tested on a physical iPhone/PS5/TV**. Do not treat source validation as an end-to-end success. Read `../docs/IOS_ARCHITECTURE.md` before changing the protocol.
+This is a new native iOS target inside the restored GameLingo Windows/Android TV repository. Existing platform code is preserved. The actual iPhone app has compiled, linked and archived unsigned with Xcode 16.4 in GitHub Actions; 16 core tests and 7 Apple integration tests passed. **Physical iPhone/PS5/TV acceptance has not been performed.** Read `../docs/IOS_ARCHITECTURE.md` before changing the protocol and `VALIDATION.md` for the recorded build results. The Arabic delivery report is in [DELIVERY_AR.md](DELIVERY_AR.md).
 
 ## Implemented source
 
@@ -16,11 +16,11 @@ This is a new native iOS target inside the restored GameLingo Windows/Android TV
 
 ## Primary build: GitHub Actions
 
-The restored source has no GitHub remote. Select the intended existing GameLingo repository and push this branch there. No other repository is created by these scripts. Run `.github/workflows/ios-build.yml` with workflow_dispatch, or push an iOS change.
+The restored history and iOS implementation are hosted together in the private [Aljjulanda/GameLingo repository](https://github.com/Aljjulanda/GameLingo), created with the owner's explicit authorization after no original remote could be found. Run `.github/workflows/ios-build.yml` with workflow_dispatch, or push an iOS change to main or a codex branch.
 
-The workflow uses `macos-15-intel`, explicit Xcode 16.4, source validation, pinned-source preparation, native device/simulator compilation, Swift package core tests, Apple integration tests, an unsigned archive, ZIP/Mach-O IPA validation and artifacts. No Apple certificate, provisioning profile, team or signing secret is required for the release archive. Simulator tests use the runner's local ad-hoc signing where needed for Keychain; that identity is not packaged in the IPA.
+The workflow uses Apple Silicon `macos-15`, explicit Xcode 16.4, source validation, pinned-source preparation, native device/simulator compilation, Swift package core tests, Apple integration tests, an unsigned archive, ZIP/Mach-O IPA validation and artifacts. Intel device compilation was also exercised before changing runners to avoid a long Intel queue and slow simulator initialization. No Apple certificate, provisioning profile, team or signing secret is required for the release archive. Simulator tests use the runner's local ad-hoc signing where needed for Keychain; that identity is not packaged in the IPA.
 
-The expected artifact is `GameLingo-unsigned-IPA`, containing **GameLingo-unsigned.ipa**. Logs and `.xcresult` are uploaded separately even if the build fails. An artifact is not promised until the actual workflow passes. The workflow follows the archive → Payload → zip methodology inspected in [BaraAlSalfaOman build.yml](https://github.com/Aljjulanda/BaraAlSalfaOman/blob/main/.github/workflows/build.yml) and its [unsigned script](https://github.com/Aljjulanda/BaraAlSalfaOman/blob/main/Scripts/build-unsigned.sh).
+The artifact is `GameLingo-unsigned-IPA`, containing **GameLingo-unsigned.ipa**. The complete workflow passed in [run 43423525500](https://github.com/Aljjulanda/GameLingo/actions/runs/43423525500) at code commit `c6be805d35a0ffd5dca0cbee4cc6d90c1b23f20f`; [download the artifact](https://github.com/Aljjulanda/GameLingo/actions/runs/43423525500/artifacts/14035187638). The actual IPA was independently downloaded/validated on Windows. Device archiving/upload precedes simulator provisioning so a runner boot failure retains the built IPA; an artifact alone does not certify hardware acceptance. Logs and `.xcresult` are uploaded separately even if testing fails. The workflow follows the archive → Payload → zip methodology inspected in [BaraAlSalfaOman build.yml](https://github.com/Aljjulanda/BaraAlSalfaOman/blob/main/.github/workflows/build.yml) and its [unsigned script](https://github.com/Aljjulanda/BaraAlSalfaOman/blob/main/Scripts/build-unsigned.sh).
 
 ## Local Mac backup
 
@@ -34,7 +34,7 @@ bash Scripts/test.sh
 bash Scripts/build-unsigned.sh
 ```
 
-`prepare.sh` fetches immutable native source revisions and selected pinned submodules into ignored `.build`, applies guarded patches, compiles iPhone libraries and resolves ZIPFoundation. `test.sh` also builds native simulator libraries and downloads the exact desktop model as an XCTest-only resource. Use `IOS_TEST_DESTINATION` for a different installed simulator. Scripts fail instead of substituting stub libraries. Native compilation may reveal additional upstream iOS incompatibilities; none have been ruled out by a real Apple build yet.
+`prepare.sh` fetches immutable native source revisions and selected pinned submodules into ignored `.build`, applies guarded patches, compiles iPhone libraries and resolves ZIPFoundation. `test.sh` also builds native simulator libraries and downloads the exact desktop model as an XCTest-only resource. It builds the test target, chooses/boots an explicit iOS 18.5 simulator, and executes the tests; failure attachments are exported with the logs. Use `IOS_TEST_DESTINATION` for a different installed simulator. Scripts fail instead of substituting stub libraries. Native libraries have compiled for iPhone arm64 and both arm64/Intel simulators; the complete simulator suite passed on arm64. Other toolchains remain unverified.
 
 Open `GameLingo.xcodeproj` after preparation. Source changes can be registered deterministically with `python3 Scripts/generate-project.py`. Do not add Windows or Android sources to the iOS target.
 
@@ -61,9 +61,9 @@ Open `GameLingo.xcodeproj` after preparation. Source changes can be registered d
 
 ## Known limitations and required acceptance
 
-- No macOS runner has executed this checkout yet; no IPA has been produced here.
+- Consult `VALIDATION.md` and the linked Actions run for actual build and artifact status.
 - PS5 discovery/pairing, login PIN behavior, account/controller coexistence, reconnection and stream decoding require physical-device verification. The existing guide's second-account workflow is evidence from Windows, not iPhone validation.
-- Native CTranslate2 and Chiaki iOS builds are unverified. The original model's iOS latency, accuracy, memory, battery and thermal behavior have not been benchmarked. No comparative device measurements support a superiority claim.
+- Native CTranslate2, SentencePiece and Chiaki compile on the primary runner. The original model's physical iPhone latency, accuracy, memory, battery and thermal behavior have not been benchmarked. No comparative device measurements support a superiority claim.
 - Model redistribution terms are unresolved in its metadata; release IPA excludes weights. See `THIRD_PARTY.md`.
 - No locked-screen streaming, background mode entitlement, cloud translation, dialogue history, replay, menu translation, controller input UI, Internet Remote Play or PSN OAuth login is implemented.
 - Optional nearby-context translation is omitted; it remains absent/disabled rather than guessing source-to-TV coordinates.
