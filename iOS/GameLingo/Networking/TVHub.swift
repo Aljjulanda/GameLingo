@@ -38,6 +38,7 @@ final class TVHub {
     private var speakerColor = "#A6C7D8"
     private var pendingDisplay = Set<String>()
     private var bonjourEnabled = true
+    private var lastPong = 0.0
     private var settingsWire: [String:Any] {
         var value = settings.wire; value["show_speakers"] = showSpeakers; value["speaker_color"] = speakerColor
         return value
@@ -290,6 +291,7 @@ final class TVHub {
         default: throw LingoError.invalid("رسالة اقتران غير صالحة")
         }
         authenticated = true
+        lastPong = ProcessInfo.processInfo.systemUptime
         let capabilities = (message["features"] as? [String] ?? []).prefix(8).filter { ["document_v1","speaker_v1","display_ack"].contains($0) }
         DispatchQueue.main.async { self.onCapabilities?(capabilities) }
         stage = "connected"
@@ -299,7 +301,23 @@ final class TVHub {
         // Never keep or replay a subtitle across reconnection.
         let timer = DispatchSource.makeTimerSource(queue:queue)
         timer.schedule(deadline:.now()+6,repeating:6)
-        timer.setEventHandler { [weak self] in self?.enqueue(TVProtocol.envelope("heartbeat",fields:["time_ms":Self.now()])) }
+        timer.setEventHandler { [weak self] in
+            guard let self, let peer = self.client, self.authenticated else { return }
+            guard ProcessInfo.processInfo.systemUptime-self.lastPong <= 18 else {
+                self.disconnect(peer,reason:"انتهت مهلة استجابة التلفزيون؛ بانتظار إعادة الاتصال"); return
+            }
+            self.enqueue(TVProtocol.envelope("heartbeat",fields:["time_ms":Self.now()]))
+            let ping = NWProtocolWebSocket.Metadata(opcode:.ping)
+            ping.setPongHandler(self.queue) { [weak self,weak peer] error in
+                guard let self, let peer, self.client === peer else { return }
+                if error == nil { self.lastPong = ProcessInfo.processInfo.systemUptime }
+                else { self.disconnect(peer,reason:"تعذرت استجابة WebSocket من التلفزيون") }
+            }
+            peer.send(content:Data([0x47,0x4c]),contentContext:NWConnection.ContentContext(identifier:"liveness",metadata:[ping]),isComplete:true,completion:.contentProcessed { [weak self,weak peer] error in
+                guard let self, let peer, self.client === peer, error != nil else { return }
+                self.disconnect(peer,reason:"تعذر إرسال فحص استجابة التلفزيون")
+            })
+        }
         heartbeat = timer; timer.resume(); status("التلفزيون متصل")
         DispatchQueue.main.async { self.onConnected?() }
     }

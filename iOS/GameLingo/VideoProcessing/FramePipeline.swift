@@ -22,6 +22,11 @@ final class FramePipeline {
     private let queue = DispatchQueue(label:"dev.gamelingo.ocr",qos:.userInitiated)
     private let slotLock = NSLock()
     private var latest: (CVPixelBuffer,TimeInterval,Int64)?
+    private var lastArrival = 0.0
+    var frameAge: TimeInterval {
+        slotLock.lock(); defer { slotLock.unlock() }
+        return lastArrival > 0 ? ProcessInfo.processInfo.systemUptime-lastArrival : .infinity
+    }
     private var active = false
     private var runID = UUID()
     private var roi = SourceBox.dialogue
@@ -55,7 +60,8 @@ final class FramePipeline {
         slotLock.lock(); defer { slotLock.unlock() }
         guard active else { return }
         if latest != nil { metricsDropped &+= 1 }
-        latest = (buffer,ProcessInfo.processInfo.systemUptime,TVHub.now())
+        let received = ProcessInfo.processInfo.systemUptime
+        lastArrival = received; latest = (buffer,received,TVHub.now())
     }
     private var metricsDropped: UInt64 = 0
     private func isActive() -> Bool { slotLock.lock(); defer { slotLock.unlock() }; return active }

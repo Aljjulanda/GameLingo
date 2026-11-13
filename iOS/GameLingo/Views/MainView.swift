@@ -34,6 +34,21 @@ struct ConnectionView: View {
                         .disabled(!model.running && (!model.modelReady || model.pairing))
                     Text("التشغيل الافتراضي في المقدمة؛ تجربة الخلفية من تبويب الترجمة. شغّل اللعبة واليد بحسابك المعتاد، واستخدم حسابًا ثانيًا لبث Remote Play.").font(.footnote).foregroundColor(.secondary)
                     Toggle("تعتيم الشاشة أثناء الجلسة",isOn:$model.settings.dimScreen)
+                    if model.running {
+                        Button("Smart Reading · قراءة النص الظاهر") { model.smartRead() }
+                            .disabled(!model.streamConnected || !model.tvConnected || !model.tvDocuments || model.readingActive)
+                        if model.readingActive {
+                            Text(model.readingStatus)
+                            if !model.readingPages.isEmpty {
+                                HStack {
+                                    Button("السابقة") { model.moveReadingPage(-1) }.disabled(model.readingPage==0)
+                                    Text("\(model.readingPage+1) / \(model.readingPages.count)")
+                                    Button("التالية") { model.moveReadingPage(1) }.disabled(model.readingPage+1>=model.readingPages.count)
+                                }.buttonStyle(.bordered)
+                            }
+                            Button("إغلاق القراءة والعودة للحوار") { model.closeReading() }
+                        }
+                    }
                 }
                 Section("أجهزة PS5 المحفوظة") {
                     ForEach(model.consoles) { console in
@@ -184,6 +199,7 @@ struct PerformanceView: View {
                     LabeledContent("جمل السياق في الذاكرة",value:String(model.metrics.contextEntries))
                     LabeledContent("تأكيدات رسم جمل جديدة بالخلفية",value:String(model.backgroundDeliveries))
                     LabeledContent("محاولات استرداد الجلسة",value:String(model.recoveryAttempts))
+                    LabeledContent("إعادات اتصال PS5 الفعلية",value:String(model.totalPS5Reconnects))
                     metric("معالجة الإطار حتى OCR",model.metrics.frameMilliseconds,suffix:"ms")
                     metric("حد أخذ العينات الحالي",model.metrics.samplingRate,suffix:"/s")
                     metric("متوسط OCR الفعلي منذ بدء الجلسة",model.metrics.actualOCRRate,suffix:"/s")

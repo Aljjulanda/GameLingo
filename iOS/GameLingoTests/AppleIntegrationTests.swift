@@ -153,10 +153,10 @@ final class AppleIntegrationTests: XCTestCase {
             await fulfillment(of:[ready],timeout:15)
             return try XCTUnwrap(code.isEmpty ? nil : code)
         }
-        func probe(_ mode: String, code: String, token: String = "", abort: Bool = false) async throws -> [String:Any] {
+        func probe(_ mode: String, code: String, token: String = "", abort: Bool = false, hold: Int = 0) async throws -> [String:Any] {
             var request = URLRequest(url:URL(string:"http://127.0.0.1:39999/run")!)
             request.httpMethod = "POST"; request.timeoutInterval = 40
-            request.httpBody = try JSONSerialization.data(withJSONObject:["mode":mode,"host":host,"prefix":String(code.prefix(12)),"pin":String(code.suffix(6)),"token":token,"abort":abort])
+            request.httpBody = try JSONSerialization.data(withJSONObject:["mode":mode,"host":host,"prefix":String(code.prefix(12)),"pin":String(code.suffix(6)),"token":token,"abort":abort,"hold_seconds":hold])
             let (data,response) = try await URLSession.shared.data(for:request)
             let result = try XCTUnwrap(JSONSerialization.jsonObject(with:data) as? [String:Any])
             XCTAssertEqual((response as? HTTPURLResponse)?.statusCode,200,result["error"] as? String ?? "probe HTTP failure")
@@ -190,7 +190,7 @@ final class AppleIntegrationTests: XCTestCase {
         XCTAssertNotEqual(newToken,token)
         let stale = try await probe("bad-token",code:restartedCode,token:token)
         XCTAssertEqual(stale["authentication_rejected"] as? Bool,true)
-        let finalConnection = try await probe("hello",code:restartedCode,token:newToken)
+        let finalConnection = try await probe("hello",code:restartedCode,token:newToken,hold:20)
         XCTAssertEqual(finalConnection["heartbeat"] as? Bool,true)
         let documentCode = try await start()
         let capabilities = expectation(description:"document receiver capability authenticated")

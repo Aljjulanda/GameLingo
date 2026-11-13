@@ -23,6 +23,7 @@ final class AppModel: ObservableObject {
     @Published var audioStatus = "تجربة الخلفية متوقفة"
     @Published var streamConnected = false
     @Published var recoveryAttempts = 0
+    @Published var totalPS5Reconnects = 0
     @Published var backgroundDeliveries: UInt64 = 0
     @Published var tvConnected = false
     @Published var tvDocuments = false
@@ -69,7 +70,7 @@ final class AppModel: ObservableObject {
     private var resources = ResourceMonitor()
     private var initialBattery: Float = -1
     var performanceSnapshot: String {
-        "GameLingo 0.2.0\n\(sessionStatus)\n\(audioStatus)\nCPU: \(NumericInput.format(cpuPercent))% (100%=one core)\nRSS: \(NumericInput.format(residentMegabytes)) MB\nThermal: \(thermal.rawValue)\nTranslation p95: \(NumericInput.format(metrics.translationP95)) ms\nOCR p95: \(NumericInput.format(metrics.ocrP95)) ms\nTV background render ACKs: \(backgroundDeliveries)\nRecovery counter: \(recoveryAttempts)\nBattery percentage change: \(batteryUsed.map(NumericInput.format) ?? "unavailable")\nSmart Reading: \(NumericInput.format(metrics.documentMilliseconds)) ms, sampled extra RSS \(NumericInput.format(metrics.documentExtraMegabytes)) MB"
+        "GameLingo 0.2.0\n\(sessionStatus)\n\(audioStatus)\nCPU: \(NumericInput.format(cpuPercent))% (100%=one core)\nRSS: \(NumericInput.format(residentMegabytes)) MB\nThermal: \(thermal.rawValue)\nTranslation p95: \(NumericInput.format(metrics.translationP95)) ms\nOCR p95: \(NumericInput.format(metrics.ocrP95)) ms\nTV background render ACKs: \(backgroundDeliveries)\nRecovery backoff counter: \(recoveryAttempts)\nActual PS5 reconnects: \(totalPS5Reconnects)\nBattery percentage change: \(batteryUsed.map(NumericInput.format) ?? "unavailable")\nSmart Reading: \(NumericInput.format(metrics.documentMilliseconds)) ms, sampled extra RSS \(NumericInput.format(metrics.documentExtraMegabytes)) MB"
     }
 
     init() {
@@ -107,6 +108,7 @@ final class AppModel: ObservableObject {
             }
             if connected { self.recoveryAttempts = 0; self.sessionStatus = "البث متصل؛ الترجمة نشطة" }
         }
+        remote.onReconnectAttempt = { [weak self] in if self?.policy.wanted == true { self?.totalPS5Reconnects += 1 } }
         audio.onChange = { [weak self] active,interrupted,text in
             guard let self else { return }
             self.audioStatus = text; self.policy.audioActive = active; self.policy.interrupted = interrupted
@@ -135,7 +137,7 @@ final class AppModel: ObservableObject {
             if listening { self.hubStarting = false }
             if !listening { self.pairingCode = "" }
             if !listening && wasListening && self.policy.wanted { self.scheduleRecovery() }
-            UIApplication.shared.isIdleTimerDisabled = listening || self.running
+            UIApplication.shared.isIdleTimerDisabled = self.policy.foreground && (listening || self.running)
         }
         hub.onListenerFailure = { [weak self] in self?.hubStarting = false; self?.scheduleRecovery() }
         let processor = self.pipeline
@@ -197,6 +199,7 @@ final class AppModel: ObservableObject {
         availableMemory = UInt64(os_proc_available_memory())
         pipeline.configure(mode:settings.mode,thermal:thermal.rawValue,lowPower:ProcessInfo.processInfo.isLowPowerModeEnabled)
         if thermal == .critical && running { stop(reason:"أُوقفت الجلسة بسبب الحرارة"); errorMessage = "أُوقفت الجلسة بسبب الحالة الحرارية الحرجة" }
+        if running && policy.canRecover && streamConnected && pipeline.frameAge > 12 { scheduleRecovery() }
     }
     func connectTV(automatic: Bool = false) {
         refreshAddresses(); pairingCode = ""
@@ -228,6 +231,7 @@ final class AppModel: ObservableObject {
             policy.start(); policy.experimentalAudio = settings.advanced.backgroundAudio
             SessionIntentStore.save(true); initialBattery = -1; batteryUsed = nil; UIDevice.current.isBatteryMonitoringEnabled = true
             displayedIDs.removeAll(); backgroundDeliveries = 0
+            totalPS5Reconnects = 0
             sessionStatus = "جارٍ بدء الجلسة"; recoveryAttempts = 0
             if policy.experimentalAudio { audio.start() }
             try remote.connect(console)
@@ -243,7 +247,7 @@ final class AppModel: ObservableObject {
         SessionIntentStore.save(false); UIDevice.current.isBatteryMonitoringEnabled = false
         pipelineActive = false; sessionStatus = reason
         running = false; pairing = false; loginRequired = false; remote.stop(); pipeline.stop()
-        UIApplication.shared.isIdleTimerDisabled = tvListening
+        UIApplication.shared.isIdleTimerDisabled = policy.foreground && tvListening
         if let brightness = originalBrightness { UIScreen.main.brightness = brightness; originalBrightness = nil }
     }
     func smartRead() {
@@ -265,6 +269,7 @@ final class AppModel: ObservableObject {
     }
     func background() {
         lifecycle += 1; policy.foreground = false
+        relaxDisplay()
         pipeline.setBackground(true)
         if policy.wanted && policy.canExecute { sessionStatus = "تجربة الخلفية نشطة؛ راقب وصول جمل جديدة على TCL"; return }
         if policy.wanted { beginExecutionGrace() }
@@ -272,6 +277,8 @@ final class AppModel: ObservableObject {
     }
     func foreground() {
         policy.foreground = true; endExecutionGrace()
+        UIApplication.shared.isIdleTimerDisabled = tvListening || running
+        applyDim()
         pipeline.setBackground(false)
         if policy.wanted { audio.recover(foreground:true); recoverSession() }
     }
@@ -324,15 +331,21 @@ final class AppModel: ObservableObject {
         refreshAddresses()
         guard !addresses.isEmpty else { sessionStatus = "بانتظار عنوان Wi-Fi محلي"; scheduleRecovery(); return }
         if !pipelineActive { pipeline.start(roi:settings.roi,mode:settings.mode,preservingState:true); pipelineActive = true }
-        if let console = consoles.first(where:{ $0.id == settings.selectedConsoleID }) { remote.recover(console) }
+        if let console = consoles.first(where:{ $0.id == settings.selectedConsoleID }) {
+            remote.recover(console,stalled:streamConnected && pipeline.frameAge > 12)
+        }
         if !tvListening && !hubStarting { connectTV(automatic:true) }
         sessionStatus = streamConnected ? "الترجمة نشطة" : "جارٍ استرداد الاتصال"
     }
     func applyDim() {
-        if running && settings.dimScreen {
+        if running && settings.dimScreen && policy.foreground {
             if originalBrightness == nil { originalBrightness = UIScreen.main.brightness }
             UIScreen.main.brightness = 0.04
         } else if let brightness = originalBrightness { UIScreen.main.brightness = brightness; originalBrightness = nil }
+    }
+    func relaxDisplay() {
+        UIApplication.shared.isIdleTimerDisabled = false
+        if let brightness = originalBrightness { UIScreen.main.brightness = brightness; originalBrightness = nil }
     }
     func loadModel() {
         modelBusy = true; modelReady = false; modelStatus = "جارٍ تحميل النموذج في الذاكرة…"

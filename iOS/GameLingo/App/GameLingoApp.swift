@@ -10,6 +10,7 @@ struct GameLingoApp: App {
                 .onChange(of:phase) {
                     if $0 == .background { model.background() }
                     else if $0 == .active { model.foreground() }
+                    else { model.relaxDisplay() }
                 }
                 .onChange(of:model.settings.dimScreen) { _ in model.applyDim() }
         }

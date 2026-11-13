@@ -34,16 +34,22 @@ final class RemotePlayService {
     private var sessionEpoch = 0
     private var wanted: ConsoleCredentials?
     private var retries = 0
+    private var startedAt = 0.0
     var onState: ((String) -> Void)?
     var onLoginPIN: (() -> Void)?
     var onFrame: ((CVPixelBuffer) -> Void)?
     var onInterruption: (() -> Void)?
     var onStopped: (() -> Void)?
     var onAvailability: ((Bool) -> Void)?
-    /// A recovery trigger must not destroy a live or currently starting session.
-    func recover(_ console: ConsoleCredentials) {
+    var onReconnectAttempt: (() -> Void)?
+    /// Preserve healthy/starting sessions; restart only after confirmed frame starvation.
+    func recover(_ console: ConsoleCredentials, stalled: Bool = false) {
         control.async { [self] in
-            guard session == nil else { return }
+            if session != nil {
+                guard stalled, ProcessInfo.processInfo.systemUptime-startedAt > 12 else { return }
+                DispatchQueue.main.async { self.onInterruption?() }
+            }
+            DispatchQueue.main.async { self.onReconnectAttempt?() }
             wanted = console; retries = 0; sessionEpoch += 1; start(console,epoch:sessionEpoch)
         }
     }
@@ -108,6 +114,7 @@ final class RemotePlayService {
     }
     private func state(_ text: String) { DispatchQueue.main.async { self.onState?(text) } }
     private func start(_ console: ConsoleCredentials, epoch: Int) {
+        startedAt = ProcessInfo.processInfo.systemUptime
         closeSession(); state("جارٍ الاتصال بـ PS5…")
         let ctx = StreamContext(event: { [weak self] event,reason in
             guard let self else { return }
@@ -125,7 +132,10 @@ final class RemotePlayService {
                     guard self.retries <= 5 else { self.wanted = nil; self.state("توقف البث (\(reason))؛ أعد الاتصال يدويًا"); DispatchQueue.main.async { self.onStopped?() }; return }
                     self.state("انقطع البث (\(reason))؛ إعادة الاتصال \(self.retries)/5")
                     self.control.asyncAfter(deadline: .now()+Double(min(16,1 << self.retries))) {
-                        if self.sessionEpoch == epoch, let wanted = self.wanted { self.start(wanted,epoch:epoch) }
+                        if self.sessionEpoch == epoch, let wanted = self.wanted {
+                            DispatchQueue.main.async { self.onReconnectAttempt?() }
+                            self.start(wanted,epoch:epoch)
+                        }
                     }
                 default: break
                 }

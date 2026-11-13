@@ -33,7 +33,7 @@ internal class PinnedDiscovery(context: Context, private val found: (String,Stri
                     if(generation!=epoch || resolving || !DiscoveryCandidate.matches(fingerprint,service.serviceName)) return@post
                     resolving=true
                     @Suppress("DEPRECATION")
-                    manager.resolveService(service,object:NsdManager.ResolveListener {
+                    try { manager.resolveService(service,object:NsdManager.ResolveListener {
                         override fun onResolveFailed(info:NsdServiceInfo,error:Int) {main.post {if(generation==epoch) resolving=false}}
                         override fun onServiceResolved(info:NsdServiceInfo) {
                             main.post {
@@ -43,7 +43,7 @@ internal class PinnedDiscovery(context: Context, private val found: (String,Stri
                                 if(info.port==38443 && Pairing.privateIp(host)) found(host,fingerprint)
                             }
                         }
-                    })
+                    }) } catch(_:RuntimeException) { resolving=false }
                 }
             }
         }

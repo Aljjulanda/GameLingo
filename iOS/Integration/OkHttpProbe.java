@@ -91,7 +91,7 @@ public final class OkHttpProbe {
                 socket.send("{\"v\":1,\"type\":\"heartbeat\"}");
                 require(next().getString("type").equals("heartbeat"),"expected heartbeat; stale subtitle replayed");
                 // Stay through multiple RFC 6455 ping/pong cycles (Android pingInterval).
-                Thread.sleep(2400);
+                Thread.sleep(Math.max(2400,input.optInt("hold_seconds",0)*1000));
                 require(closed.getCount()==1,"connection lost during ping/pong");
                 result.put("heartbeat",true);
                 if (input.optBoolean("abort")) { socket.cancel(); closed.await(3,TimeUnit.SECONDS); }
