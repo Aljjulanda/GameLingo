@@ -41,8 +41,10 @@ jobs:
             iOS/.build/native
             iOS/.build/lib
             iOS/.build/include
-          key: ios-native-xcode16.4-${{ runner.arch }}-${{ hashFiles('iOS/Scripts/bootstrap.py', 'iOS/Scripts/build-native.sh', 'iOS/Scripts/combine-libraries.py', 'iOS/Native/GLRemotePlay.c', 'iOS/Native/GLRemotePlay.h') }}
-          restore-keys: ios-native-xcode16.4-${{ runner.arch }}-
+          key: ios-native-xcode16.4-${{ runner.arch }}-${{ hashFiles('iOS/Scripts/bootstrap.py', 'iOS/Scripts/build-native.sh', 'iOS/Scripts/combine-libraries.py', 'iOS/Native/GLRemotePlay.c', 'iOS/Native/GLRemotePlay.h') }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            ios-native-xcode16.4-${{ runner.arch }}-${{ hashFiles('iOS/Scripts/bootstrap.py', 'iOS/Scripts/build-native.sh', 'iOS/Scripts/combine-libraries.py', 'iOS/Native/GLRemotePlay.c', 'iOS/Native/GLRemotePlay.h') }}-
+            ios-native-xcode16.4-${{ runner.arch }}-
       - name: Validate source and preserve existing platform implementations
         run: |
           python3 iOS/Scripts/validate-source.py

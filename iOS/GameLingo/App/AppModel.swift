@@ -121,6 +121,7 @@ final class AppModel: ObservableObject {
     }
     func start() {
         guard !running, modelReady, !pairing, let console = consoles.first(where:{ $0.id == settings.selectedConsoleID }) else { errorMessage = "اختر PS5 مسجلًا وجهّز نموذج الترجمة أولًا"; return }
+        guard settings.roi.isValid else { errorMessage = "اضبط منطقة الحوار داخل حدود صورة البث أولًا"; return }
         do {
             try remote.connect(console)
             pipeline.start(roi:settings.roi,mode:settings.mode); running = true

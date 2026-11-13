@@ -76,6 +76,13 @@ def patch_ct2(path):
     (path / 'CMakeLists.txt').write_text(text, encoding='utf-8', newline='\n')
 
 
+def patch_sentencepiece(path):
+    text = subprocess.check_output(['git', 'show', 'HEAD:src/CMakeLists.txt'], cwd=path, text=True)
+    text = replace_exact(text, 'if (CMAKE_SYSTEM_NAME STREQUAL "iOS")\n  set_xcode_property',
+                         'if (CMAKE_SYSTEM_NAME STREQUAL "iOS" AND COMMAND set_xcode_property)\n  set_xcode_property')
+    (path / 'src/CMakeLists.txt').write_text(text, encoding='utf-8', newline='\n')
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--patch-only', action='store_true')
@@ -85,6 +92,7 @@ def main():
             fetch(name, url, commit)
     patch_pylux(SOURCES / 'pylux')
     patch_ct2(SOURCES / 'ctranslate2')
+    patch_sentencepiece(SOURCES / 'sentencepiece')
     manifest = {name: {'url': url, 'commit': commit} for name, (url, commit) in LOCK.items()}
     manifest['json-c'] = {'url': 'https://github.com/json-c/json-c.git', 'commit': 'b4c371fa0cbc4dcbaccc359ce9e957a22988fb34'}
     manifest['miniupnpc'] = {'url': 'https://github.com/miniupnp/miniupnp.git', 'commit': 'b55145ec095652289a59c33603f3abafee898273'}

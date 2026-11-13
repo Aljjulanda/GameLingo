@@ -68,7 +68,7 @@ cmake -S "$SOURCES/sentencepiece" -B "$WORK/spm" "${COMMON[@]}" \
 cmake --build "$WORK/spm" --target sentencepiece-static -j3
 # Only archives produced for requested library targets are combined, never tools or tests.
 python3 Scripts/combine-libraries.py "$WORK" "$ROOT/.build/lib/$SDK/libGameLingoNative.a"
-cp -R "$SOURCES/ctranslate2/include/ctranslate2" "$ROOT/.build/include/"
+cp -R "$SOURCES/ctranslate2/include/." "$ROOT/.build/include/"
 cp "$SOURCES/sentencepiece/src/sentencepiece_processor.h" "$ROOT/.build/include/"
 cp "$SOURCES/sentencepiece/src/sentencepiece_model.pb.h" "$ROOT/.build/include/" 2>/dev/null || true
 cp -R "$PREFIX/include/openssl" "$ROOT/.build/include/"
