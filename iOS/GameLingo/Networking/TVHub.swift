@@ -252,7 +252,7 @@ final class TVHub {
     private func reject(_ connection: NWConnection, reason: String) {
         diagnostic("auth.rejected", reason, show:true)
         let metadata = NWProtocolWebSocket.Metadata(opcode:.close)
-        metadata.closeCode = .policyViolation
+        metadata.closeCode = .protocolCode(.policyViolation)
         connection.send(content:nil,contentContext:NWConnection.ContentContext(identifier:"rejected",metadata:[metadata]),isComplete:true,completion:.contentProcessed { [weak self,weak connection] _ in
             guard let self, let connection else { return }; self.disconnect(connection,reason:reason)
         })
