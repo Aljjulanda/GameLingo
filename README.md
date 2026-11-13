@@ -11,3 +11,7 @@
 الخلفية تحيط بالنص؛ أقصى عرض افتراضي 60% مع الحفاظ على قيم المظهر المحفوظة سابقًا. الجمل لها ساعات محلية مستقلة على التلفزيون، حد نهائي 8 ثوانٍ افتراضيًا، ومهلة اختفاء مصدر 1.5 ثانية، وتلاشي 200ms. توجد هذه القيم في إعدادات العرض. الاقتران المحفوظ يُستأنف تلقائيًا دون إعادة عرض جملة قديمة.
 
 راجع BUILD.md للبناء من المصدر، وDEPENDENCIES.md وTHIRD_PARTY_LICENSES.md للتراخيص. تقارير evidence تميز اختبارات النافذة المولّدة عن القياسات على جهاز TCL.
+
+## iPhone target
+
+The native iPhone implementation lives in [iOS](iOS/README.md), alongside the existing Windows and Android TV applications. Start with its architecture, build-status and real-device verification notes. No unsigned IPA or Apple-device verification is claimed until an actual macOS build and acceptance run succeed.

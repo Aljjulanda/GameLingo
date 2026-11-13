@@ -9,4 +9,12 @@ __pycache__/
 *.p12
 .venv/
 *.spec.tmp
+/iOS/.build/
+/iOS/GameLingoTests/Fixtures/en_ar/
+/iOS/**/xcuserdata/
+*.ipa
+*.xcarchive/
+*.mobileprovision
+*.p8
+*.pfx
 

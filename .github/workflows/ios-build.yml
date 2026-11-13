@@ -1,0 +1,67 @@
+name: GameLingo iOS unsigned IPA
+
+on:
+  workflow_dispatch:
+  push:
+    paths: ['iOS/**', '.github/workflows/ios-build.yml']
+  pull_request:
+    paths: ['iOS/**', '.github/workflows/ios-build.yml']
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+concurrency:
+  group: gamelingo-ios-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ios:
+    runs-on: macos-15-intel
+    timeout-minutes: 90
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
+      IOS_TEST_DESTINATION: platform=iOS Simulator,name=iPhone 16,OS=18.5,arch=x86_64
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Install native build dependencies
+        run: brew install cmake ninja protobuf
+      - name: Validate source and preserve existing platform implementations
+        run: |
+          python3 iOS/Scripts/validate-source.py
+          python3 iOS/Scripts/test-build-tools.py
+      - name: Prepare pinned dependencies and native iPhone libraries
+        run: bash iOS/Scripts/prepare.sh 2>&1 | tee prepare.log
+      - name: Validate Apple project
+        run: |
+          plutil -lint iOS/GameLingo/Resources/Info.plist
+          plutil -lint iOS/GameLingo/Resources/PrivacyInfo.xcprivacy
+          plutil -lint iOS/GameLingo.xcodeproj/project.pbxproj
+      - name: Core and Apple integration tests
+        run: bash iOS/Scripts/test.sh
+      - name: Archive and package unsigned IPA
+        run: bash iOS/Scripts/build-unsigned.sh
+      - name: Upload unsigned IPA
+        uses: actions/upload-artifact@v7
+        with:
+          name: GameLingo-unsigned-IPA
+          path: iOS/build/GameLingo-unsigned.ipa
+          if-no-files-found: error
+          retention-days: 14
+      - name: Upload build logs and test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: GameLingo-iOS-validation
+          path: |
+            prepare.log
+            iOS/build/logs/
+            iOS/build/*.xcresult
+            iOS/.build/dependency-sources.json
+          if-no-files-found: warn
+          retention-days: 14

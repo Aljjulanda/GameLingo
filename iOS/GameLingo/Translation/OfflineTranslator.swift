@@ -1,0 +1,97 @@
+import Foundation
+import CryptoKit
+import ZIPFoundation
+
+/// One model instance and one inference worker. No text is sent to a remote service.
+final class OfflineTranslator {
+    static let modelID = "argos-en_ar-1.0"
+    static let modelURL = URL(string:"https://argos-net.com/v1/translate-en_ar-1_0.argosmodel")!
+    static let modelDigest = "e2a6e84337f7ebbb55f9dc61dcba3a861c0d786ae5a46fa198fd8d6473f5c775"
+    static let modelSize: Int64 = 88_502_631
+    static let required = ["model/model.bin","model/shared_vocabulary.txt","sentencepiece.model","metadata.json","README.md"]
+    let folder: URL
+    private let queue = DispatchQueue(label:"dev.gamelingo.translation",qos:.userInitiated)
+    private let lock = NSLock()
+    private var engine: GLTranslation?
+    private var cache = BoundedLRU<String,String>(capacity:256)
+    init(folder: URL? = nil) {
+        self.folder = folder ?? FileManager.default.urls(for:.applicationSupportDirectory,in:.userDomainMask)[0].appendingPathComponent(Self.modelID,isDirectory:true)
+    }
+    var installed: Bool { Self.required.allSatisfy { FileManager.default.fileExists(atPath:folder.appendingPathComponent($0).path) } }
+    func load(completion: @escaping (Result<Void,Error>) -> Void) {
+        queue.async { [self] in
+            do {
+                guard installed else { throw LingoError.invalid("نزّل نموذج English → Arabic أولًا") }
+                var error: NSError?
+                guard let loaded = GLTranslation(modelPath:folder.path,error:&error) else { throw error ?? LingoError.invalid("تعذر تهيئة النموذج") as NSError }
+                lock.lock(); engine = loaded; lock.unlock()
+                DispatchQueue.main.async { completion(.success(Void())) }
+            } catch { DispatchQueue.main.async { completion(.failure(error)) } }
+        }
+    }
+    func cancel() { lock.lock(); engine?.cancel(); lock.unlock() }
+    func translate(_ text: String, completion: @escaping (Result<String,Error>,Double) -> Void) {
+        queue.async { [self] in
+            let start = ProcessInfo.processInfo.systemUptime
+            let result: Result<String,Error>
+            do {
+                let normalized = DialogueText.normalized(text)
+                let key = Self.modelID+"/commands-v2/en/ar/"+normalized
+                if let cached = cache.get(key) { result = .success(cached) }
+                else {
+                    lock.lock(); let current = engine; lock.unlock()
+                    guard let current else { throw LingoError.invalid("نموذج الترجمة غير جاهز") }
+                    current.resume()
+                    let command = normalized.lowercased().trimmingCharacters(in:CharacterSet(charactersIn:".?!"))
+                    let commands = ["go":"انطلق!","run":"اركض!","wait":"انتظر!","no":"لا!"]
+                    var error: NSError?
+                    guard let value = commands[command] ?? current.translate(normalized,error:&error), !value.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty else {
+                        throw error ?? LingoError.invalid("الترجمة فارغة") as NSError
+                    }
+                    cache.put(value,for:key); result = .success(value)
+                }
+            } catch { result = .failure(error) }
+            completion(result,(ProcessInfo.processInfo.systemUptime-start)*1000)
+        }
+    }
+    /// Verify the original package before extraction; extract only the five known files.
+    func install(package: URL, completion: @escaping (Result<Void,Error>) -> Void) {
+        queue.async { [self] in
+            do {
+                let size = try package.resourceValues(forKeys:[.fileSizeKey]).fileSize ?? 0
+                guard size == Self.modelSize else { throw LingoError.invalid("حجم نموذج الترجمة غير صحيح") }
+                let data = try Data(contentsOf:package,options:.mappedIfSafe)
+                let digest = SHA256.hash(data:data).map { String(format:"%02x",$0) }.joined()
+                guard digest == Self.modelDigest else { throw LingoError.invalid("فشل التحقق من SHA-256 للنموذج") }
+                let parent = folder.deletingLastPathComponent()
+                try FileManager.default.createDirectory(at:parent,withIntermediateDirectories:true)
+                let stage = parent.appendingPathComponent("model-stage-"+UUID().uuidString,isDirectory:true)
+                try FileManager.default.createDirectory(at:stage,withIntermediateDirectories:true)
+                defer { try? FileManager.default.removeItem(at:stage) }
+                let archive = try Archive(url:package,accessMode:.read)
+                for file in Self.required {
+                    guard let entry = archive["en_ar/"+file], entry.type == .file, entry.uncompressedSize <= 250*1024*1024 else { throw LingoError.invalid("محتويات حزمة النموذج غير صالحة") }
+                    let destination = stage.appendingPathComponent(file)
+                    try FileManager.default.createDirectory(at:destination.deletingLastPathComponent(),withIntermediateDirectories:true)
+                    _ = try archive.extract(entry,to:destination)
+                }
+                let metadata = try JSONSerialization.jsonObject(with:Data(contentsOf:stage.appendingPathComponent("metadata.json"))) as? [String:Any]
+                guard metadata?["from_code"] as? String == "en", metadata?["to_code"] as? String == "ar" else { throw LingoError.invalid("زوج لغات غير صحيح") }
+                if FileManager.default.fileExists(atPath:folder.path) { _ = try FileManager.default.replaceItemAt(folder,withItemAt:stage) }
+                else { try FileManager.default.moveItem(at:stage,to:folder) }
+                var stored = folder; var values = URLResourceValues(); values.isExcludedFromBackup = true; try stored.setResourceValues(values)
+                DispatchQueue.main.async { completion(.success(Void())) }
+            } catch { DispatchQueue.main.async { completion(.failure(error)) } }
+        }
+    }
+    func remove(completion: @escaping (Result<Void,Error>) -> Void) {
+        cancel()
+        queue.async { [self] in
+            do {
+                lock.lock(); engine = nil; lock.unlock(); cache = BoundedLRU(capacity:256)
+                if FileManager.default.fileExists(atPath:folder.path) { try FileManager.default.removeItem(at:folder) }
+                DispatchQueue.main.async { completion(.success(Void())) }
+            } catch { DispatchQueue.main.async { completion(.failure(error)) } }
+        }
+    }
+}

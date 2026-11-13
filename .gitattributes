@@ -1,0 +1,4 @@
+iOS/** text eol=lf
+.github/workflows/ios-build.yml text eol=lf
+.gitattributes text eol=lf
+docs/IOS_ARCHITECTURE.md text eol=lf
