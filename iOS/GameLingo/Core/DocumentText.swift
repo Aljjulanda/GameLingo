@@ -39,7 +39,7 @@ enum DocumentText {
         }
         return paragraphs
     }
-    static func chunks(_ paragraphs: [String], limit: Int = 600, maximumCharacters: Int = 16000, maximumChunks: Int = 192) -> [String] {
+    static func chunks(_ paragraphs: [String], limit: Int = 400, maximumCharacters: Int = 16000, maximumChunks: Int = 192) -> [String] {
         var result: [String] = [], total = 0
         for paragraph in paragraphs {
             var remaining = paragraph.trimmingCharacters(in:.whitespacesAndNewlines)

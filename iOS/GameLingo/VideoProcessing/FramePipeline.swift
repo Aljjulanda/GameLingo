@@ -9,6 +9,8 @@ struct PipelineMetrics {
     var queueDepth = 0
     var contextEntries = 0
     var translationP95 = 0.0, ocrP95 = 0.0
+    var documentMilliseconds = 0.0, documentOCRMilliseconds = 0.0, documentTranslationMilliseconds = 0.0, documentExtraMegabytes = 0.0
+    var documentCompleted = 0, documentTotal = 0
 }
 
 final class FramePipeline {
@@ -35,6 +37,8 @@ final class FramePipeline {
     private var isBackground = false
     private var reading = false, captureRequested = false
     private var readingTicket = UUID()
+    private var documentStarted = 0.0
+    private var documentResident: UInt64 = 0
     private var pending: DialogueJob?
     private var translating = false
     private var lastSample = 0.0
@@ -124,10 +128,12 @@ final class FramePipeline {
                 captureRequested = false
                 do {
                     let paragraphs = try autoreleasepool { try ocr.document(buffer) }
+                    metrics.documentOCRMilliseconds = (ProcessInfo.processInfo.systemUptime-now)*1000
                     guard paragraphs.reduce(0,{ $0+$1.count }) <= 16000 else {
                         finishReading(message:"النص طويل جدًا؛ اعرض المستند على أجزاء أصغر ثم أعد القراءة"); return
                     }
                     let chunks = DocumentText.chunks(paragraphs)
+                    metrics.documentTotal = chunks.count; reportDocumentMetrics()
                     guard !chunks.isEmpty else { finishReading(message:"لم يُعثر على نص إنجليزي واضح"); return }
                     translateDocument(chunks,index:0,translated:[],epoch:runID)
                 } catch { finishReading(message:"تعذرت قراءة النص من الإطار") }
@@ -191,6 +197,10 @@ final class FramePipeline {
         translator.cancel()
         queue.async { [self] in
             runID = UUID(); pending = nil; tracker.markInterrupted(); reading = true; captureRequested = true; readingTicket = ticket
+            documentStarted = ProcessInfo.processInfo.systemUptime; documentResident = ResourceMonitor.residentBytes()
+            metrics.documentMilliseconds = 0; metrics.documentTranslationMilliseconds = 0; metrics.documentOCRMilliseconds = 0
+            metrics.documentCompleted = 0; metrics.documentTotal = 0; metrics.documentExtraMegabytes = 0
+            reportDocumentMetrics()
             slotLock.lock(); latest = nil; slotLock.unlock() // Require a newly decoded frame.
             publish(TVProtocol.envelope("subtitle_clear"))
             DispatchQueue.main.async { self.onReading?(ticket,true,[],"بانتظار إطار جديد لقراءة النص…") }
@@ -207,19 +217,29 @@ final class FramePipeline {
             let pages = DocumentText.pages(translated)
             guard !pages.isEmpty else { finishReading(message:"النص المترجم طويل جدًا؛ اقرأ المستند على أجزاء"); return }
             let ticket = readingTicket
+            metrics.documentMilliseconds = (ProcessInfo.processInfo.systemUptime-documentStarted)*1000; reportDocumentMetrics()
             DispatchQueue.main.async { self.onReading?(ticket,true,pages,"القراءة جاهزة · \(pages.count) صفحات") }
             return
         }
-        translator.translate(chunks[index]) { [weak self] result,_ in
+        translator.translate(chunks[index]) { [weak self] result,latency in
             guard let self else { return }
             self.queue.async {
                 guard self.reading, self.runID == epoch else { return }
+                self.metrics.documentTranslationMilliseconds += latency; self.metrics.documentCompleted = index+1
+                if index+1 == chunks.count || ProcessInfo.processInfo.systemUptime-self.lastMetrics >= 0.25 { self.reportDocumentMetrics() }
                 switch result {
                 case .success(let text): self.translateDocument(chunks,index:index+1,translated:translated+[text],epoch:epoch)
                 case .failure: self.finishReading(message:"تعذرت ترجمة المستند؛ أعد المحاولة")
                 }
             }
         }
+    }
+    private func reportDocumentMetrics() {
+        let resident = ResourceMonitor.residentBytes()
+        let extra = resident > documentResident ? Double(resident-documentResident)/1048576 : 0
+        metrics.documentExtraMegabytes = max(metrics.documentExtraMegabytes,extra)
+        lastMetrics = ProcessInfo.processInfo.systemUptime
+        let value = metrics; DispatchQueue.main.async { self.onMetrics?(value) }
     }
     func closeReading() {
         translator.cancel(); queue.async { [self] in runID = UUID(); finishReading() }

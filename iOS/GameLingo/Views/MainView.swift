@@ -138,7 +138,10 @@ struct TranslationView: View {
                     Text(model.readingStatus)
                     if model.tvConnected && !model.tvDocuments { Text("تحتاج هذه الميزة تحديث تطبيق التلفزيون.").font(.footnote) }
                     if model.readingActive {
-                        if model.readingPages.isEmpty { ProgressView() }
+                        if model.readingPages.isEmpty {
+                            ProgressView()
+                            if model.metrics.documentTotal>0 { Text("ترجمة الجزء \(model.metrics.documentCompleted) من \(model.metrics.documentTotal)") }
+                        }
                         else {
                             Text("الصفحة \(model.readingPage+1) من \(model.readingPages.count)")
                             HStack {
@@ -193,12 +196,20 @@ struct PerformanceView: View {
                     metric("ذاكرة العملية RSS",model.residentMegabytes,suffix:"MB")
                     if let used = model.batteryUsed { metric("انخفاض نسبة البطارية منذ البدء",used,suffix:"%") }
                     Text(model.audioStatus).font(.footnote)
+                    ShareLink(item:model.performanceSnapshot) { Label("مشاركة قياسات الجلسة",systemImage:"square.and.arrow.up") }
                     LabeledContent("الشبكة",value:model.networkStatus)
                     LabeledContent("الحالة الحرارية",value:thermalTitle)
                     LabeledContent("الذاكرة المتاحة للعملية",value:String(format:"%.0f MB",Double(model.availableMemory)/1048576))
                     LabeledContent("وضع الأداء",value:model.settings.mode.title)
                     Text("تصفّر القياسات حتى وصول إطارات حقيقية. تُخفّض العينات عند الحرارة أو وضع الطاقة المنخفضة، وتتوقف الجلسة عند الحرارة الحرجة.").font(.footnote).foregroundColor(.secondary)
                     Text("تجربة الصوت الصامت اختيارية ولا تضمن استمرار التنفيذ. تأكيد الرسم يصل من تطبيق TV المتوافق، ولا يغني عن التحقق من ظهور حوار جديد فعليًا أثناء القفل. قياسات البطارية تقريبية وليست اختبار طاقة مخبريًا.").font(.footnote).foregroundColor(.secondary)
+                }
+                Section("تكلفة Smart Reading · عند الطلب فقط") {
+                    metric("OCR للمستند",model.metrics.documentOCRMilliseconds,suffix:"ms")
+                    metric("مجموع ترجمة المستند",model.metrics.documentTranslationMilliseconds,suffix:"ms")
+                    metric("الزمن الكلي للمستند",model.metrics.documentMilliseconds,suffix:"ms")
+                    metric("زيادة RSS المرصودة أثناء العمل",model.metrics.documentExtraMegabytes,suffix:"MB")
+                    Text("قياسات مرصودة للعملية، وليست قياسًا لمعدل استهلاك البطارية أو ضمانًا لالتقاط كل ذروة ذاكرة. لا يُقاس GPU هنا.").font(.footnote).foregroundColor(.secondary)
                 }
             }.navigationTitle("الأداء")
         }.navigationViewStyle(.stack)

@@ -26,6 +26,7 @@ final class AppModel: ObservableObject {
     @Published var backgroundDeliveries: UInt64 = 0
     @Published var tvConnected = false
     @Published var tvDocuments = false
+    @Published var tvSpeakers = false
     @Published var readingActive = false
     @Published var readingPages: [String] = []
     @Published var readingPage = 0
@@ -67,6 +68,9 @@ final class AppModel: ObservableObject {
     private var displayedIDs = Set<String>()
     private var resources = ResourceMonitor()
     private var initialBattery: Float = -1
+    var performanceSnapshot: String {
+        "GameLingo 0.2.0\n\(sessionStatus)\n\(audioStatus)\nCPU: \(NumericInput.format(cpuPercent))% (100%=one core)\nRSS: \(NumericInput.format(residentMegabytes)) MB\nThermal: \(thermal.rawValue)\nTranslation p95: \(NumericInput.format(metrics.translationP95)) ms\nOCR p95: \(NumericInput.format(metrics.ocrP95)) ms\nTV background render ACKs: \(backgroundDeliveries)\nRecovery counter: \(recoveryAttempts)\nBattery percentage change: \(batteryUsed.map(NumericInput.format) ?? "unavailable")\nSmart Reading: \(NumericInput.format(metrics.documentMilliseconds)) ms, sampled extra RSS \(NumericInput.format(metrics.documentExtraMegabytes)) MB"
+    }
 
     init() {
         do {
@@ -126,18 +130,21 @@ final class AppModel: ObservableObject {
         hub.onDiagnostics = { [weak self] in self?.tvDiagnostics = $0 }
         hub.onListening = { [weak self] listening in
             guard let self else { return }
+            let wasListening = self.tvListening
             self.tvListening = listening
+            if listening { self.hubStarting = false }
             if !listening { self.pairingCode = "" }
-            if !listening && self.policy.wanted { self.scheduleRecovery() }
+            if !listening && wasListening && self.policy.wanted { self.scheduleRecovery() }
             UIApplication.shared.isIdleTimerDisabled = listening || self.running
         }
+        hub.onListenerFailure = { [weak self] in self?.hubStarting = false; self?.scheduleRecovery() }
         let processor = self.pipeline
         hub.onDisconnected = { [weak self,weak processor] in
             processor?.tvDisconnected()
-            DispatchQueue.main.async { self?.tvConnected = false; self?.tvDocuments = false }
+            DispatchQueue.main.async { self?.tvConnected = false; self?.tvDocuments = false; self?.tvSpeakers = false }
         }
         hub.onConnected = { [weak self] in self?.tvConnected = true }
-        hub.onCapabilities = { [weak self] in self?.tvDocuments = $0.contains("document_v1") }
+        hub.onCapabilities = { [weak self] in self?.tvDocuments = $0.contains("document_v1"); self?.tvSpeakers = $0.contains("speaker_v1") }
         hub.onDisplayAck = { [weak self] id in
             guard let self, self.policy.wanted, !self.displayedIDs.contains(id) else { return }
             if self.displayedIDs.count >= 128 { self.displayedIDs.removeAll() }
@@ -191,13 +198,17 @@ final class AppModel: ObservableObject {
         pipeline.configure(mode:settings.mode,thermal:thermal.rawValue,lowPower:ProcessInfo.processInfo.isLowPowerModeEnabled)
         if thermal == .critical && running { stop(reason:"أُوقفت الجلسة بسبب الحرارة"); errorMessage = "أُوقفت الجلسة بسبب الحالة الحرارية الحرجة" }
     }
-    func connectTV() {
+    func connectTV(automatic: Bool = false) {
         refreshAddresses(); pairingCode = ""
         hubStarting = true
         let host = settings.localIP, display = settings.display
         tvStatus = "جارٍ إعداد اتصال التلفزيون…"
         do { try hub.start(host:host,settings:display) }
-        catch { hubStarting = false; errorMessage = error.localizedDescription }
+        catch {
+            hubStarting = false
+            if automatic { sessionStatus = "تعذر ربط عنوان Wi-Fi؛ ستعاد المحاولة"; scheduleRecovery() }
+            else { errorMessage = error.localizedDescription }
+        }
     }
     func pair(host: String, account: String, pin: String) {
         do { try remote.pair(host:host,account:account,pin:pin); pairing = true }
@@ -308,14 +319,13 @@ final class AppModel: ObservableObject {
         guard ProcessInfo.processInfo.thermalState != .critical else { sessionStatus = "بانتظار انخفاض الحرارة"; return }
         guard policy.network else { sessionStatus = "بانتظار الشبكة"; return }
         if policy.experimentalAudio && !audio.wanted { audio.start() }
-        else { audio.recover(foreground:policy.foreground) }
+        else { audio.recover() }
         guard policy.canRecover else { sessionStatus = "بانتظار السماح بالتنفيذ"; return }
+        refreshAddresses()
+        guard !addresses.isEmpty else { sessionStatus = "بانتظار عنوان Wi-Fi محلي"; scheduleRecovery(); return }
         if !pipelineActive { pipeline.start(roi:settings.roi,mode:settings.mode,preservingState:true); pipelineActive = true }
         if let console = consoles.first(where:{ $0.id == settings.selectedConsoleID }) { remote.recover(console) }
-        if !tvListening {
-            // A previous bind failure must not leave the UI's in-progress flag stuck.
-            hubStarting = false; connectTV()
-        }
+        if !tvListening && !hubStarting { connectTV(automatic:true) }
         sessionStatus = streamConnected ? "الترجمة نشطة" : "جارٍ استرداد الاتصال"
     }
     func applyDim() {

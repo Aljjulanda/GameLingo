@@ -7,7 +7,7 @@ struct DialogueContent {
         let names = Set(knownNames.split(separator:",").map { $0.trimmingCharacters(in:.whitespacesAndNewlines).lowercased() }.filter { !$0.isEmpty })
         let lines = text.components(separatedBy:.newlines).filter { !$0.trimmingCharacters(in:.whitespaces).isEmpty }
         guard let first = lines.first else { return DialogueContent(text:"",speaker:nil) }
-        let ordinary: Set<String> = ["warning","note","objective","mission","quest","hint","tip","chapter","attention","remember","listen","look","yes","no","hello","inventory","options","settings","item","message","journal","letter","press","hold","system","dialogue","go","run","wait","stop","help","come","follow","leave","hey","okay","sure","please","thanks","we","you","they","he","she","it","the","i"]
+        let ordinary: Set<String> = ["warning","note","objective","mission","quest","hint","tip","chapter","attention","remember","listen","look","yes","no","hello","inventory","options","settings","item","message","journal","letter","press","hold","system","dialogue","go","run","wait","stop","help","come","follow","leave","hey","okay","sure","please","thanks","we","you","they","he","she","it","the","i","left","right","up","down","forward","back","attack","block","jump","reload","fire","aim","interact","move"]
         func clearName(_ label: String) -> Bool {
             let words = label.split(separator:" ")
             return confidence >= 0.65 && !ordinary.contains(label.lowercased()) && (1...3).contains(words.count) &&
@@ -66,7 +66,7 @@ enum Terminology {
             guard key(input) == key(source) else { continue }
             if condition.count == 2 {
                 let trigger = key(condition[0]); guard !trigger.isEmpty,
-                    context.contains(where:{ key($0.source).contains(trigger) }) else { continue }
+                    context.contains(where:{ key($0.source).range(of:"(?<![\\p{L}\\p{N}_])"+NSRegularExpression.escapedPattern(for:trigger)+"(?![\\p{L}\\p{N}_])",options:.regularExpression) != nil }) else { continue }
             }
             return parts[1]
         }

@@ -70,7 +70,7 @@ final class VisionDialogueOCR {
         }
         guard let anchor = candidates.min(by:{ abs($0.box.x+$0.box.w/2-0.5) < abs($1.box.x+$1.box.w/2-0.5) }) else { previousSignature = []; return [] }
         var group = [anchor]
-        for line in candidates.sorted(by:{ abs($0.box.y-anchor.box.y) < abs($1.box.y-anchor.box.y) }) where group.count < 3 {
+        for line in candidates.sorted(by:{ abs($0.box.y-anchor.box.y) < abs($1.box.y-anchor.box.y) }) where group.count < 4 {
             if line.box == anchor.box { continue }
             if group.contains(where: { near in
                 let gap = max(line.box.y-near.box.y-near.box.h,near.box.y-line.box.y-line.box.h,0)

@@ -22,6 +22,7 @@ struct SubtitleSettingsView: View {
                 }
                 Section("الخط والنص") {
                     Toggle("إظهار أسماء المتحدثين",isOn:$model.settings.advanced.showSpeakers)
+                    if model.tvConnected && !model.tvSpeakers { Text("حدّث تطبيق TV لدعم الأسماء داخل السطر.").font(.footnote).foregroundColor(.secondary) }
                     ColorPicker("لون اسم المتحدث",selection:Binding(get:{ Color(hex:model.settings.advanced.speakerColor) },set:{ model.settings.advanced.speakerColor = $0.hexRGB }),supportsOpacity:false)
                     Button("استعادة لون المتحدث الافتراضي") { model.settings.advanced.speakerColor = "#A6C7D8" }
                     Picker("عائلة الخط",selection:string("font_family")) {

@@ -12,6 +12,7 @@ final class BackgroundAudio {
     private(set) var wanted = false
     private(set) var interrupted = false
     private let session = AVAudioSession.sharedInstance()
+    private var lastRecoveryAttempt = -100.0
     init() {
         let center = NotificationCenter.default
         observers.append(center.addObserver(forName:AVAudioSession.interruptionNotification,object:nil,queue:.main) { [weak self] note in
@@ -21,14 +22,22 @@ final class BackgroundAudio {
             Task { @MainActor [weak self] in
                 guard let self else { return }; self.engine = nil
                 self.onChange?(false,self.interrupted,"أُعيدت خدمات الصوت")
-                if self.wanted && !self.interrupted { self.activate(); self.onRecovery?() }
+                if self.wanted { self.lastRecoveryAttempt = -100; self.recover(); self.onRecovery?() }
             }
         })
         observers.append(center.addObserver(forName:AVAudioSession.routeChangeNotification,object:nil,queue:.main) { [weak self] _ in
             Task { @MainActor [weak self] in
-                guard let self, self.wanted, !self.interrupted else { return }
-                if self.engine?.isRunning != true { self.activate() }
+                guard let self, self.wanted else { return }
+                self.recover()
                 self.onRecovery?()
+            }
+        })
+        observers.append(center.addObserver(forName:AVAudioSession.silenceSecondaryAudioHintNotification,object:nil,queue:.main) { [weak self] note in
+            Task { @MainActor [weak self] in
+                guard let self, self.wanted,
+                      let raw = note.userInfo?[AVAudioSessionSilenceSecondaryAudioHintTypeKey] as? UInt,
+                      AVAudioSession.SilenceSecondaryAudioHintType(rawValue:raw) == .end else { return }
+                self.lastRecoveryAttempt = -100; self.recover(); self.onRecovery?()
             }
         })
     }
@@ -38,11 +47,17 @@ final class BackgroundAudio {
         guard wanted else { return }
         // Foreground reactivation is an additional opportunity if the system did
         // not deliver interruption-ended. Never contend with another audible app.
-        if foreground && !session.isOtherAudioPlaying { interrupted = false }
-        if !interrupted && engine?.isRunning != true { activate() }
+        let now = ProcessInfo.processInfo.systemUptime
+        if interrupted {
+            guard !session.isOtherAudioPlaying, !session.secondaryAudioShouldBeSilencedHint,
+                  foreground || now-lastRecoveryAttempt >= 15 else { return }
+            interrupted = false
+        }
+        if engine?.isRunning != true && (foreground || now-lastRecoveryAttempt >= 15) { activate() }
     }
     private func activate() {
         guard wanted, !interrupted, engine?.isRunning != true else { return }
+        lastRecoveryAttempt = ProcessInfo.processInfo.systemUptime
         do {
             try session.setCategory(.playback,mode:.default,options:[.mixWithOthers])
             try session.setPreferredIOBufferDuration(0.1)
@@ -65,11 +80,14 @@ final class BackgroundAudio {
         }
     }
     private func interruption(_ note: Notification) {
+        guard wanted else { return }
         guard let raw = note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
               let type = AVAudioSession.InterruptionType(rawValue:raw) else { return }
         if type == .began {
             interrupted = true; engine?.stop(); engine = nil
-            onChange?(false,true,"الصوت متوقف بسبب مقاطعة؛ نية الترجمة محفوظة")
+            lastRecoveryAttempt = ProcessInfo.processInfo.systemUptime
+            let suspended = note.userInfo?[AVAudioSessionInterruptionWasSuspendedKey] as? Bool ?? false
+            onChange?(false,true,suspended ? "علّق iOS جلسة الصوت؛ نية الترجمة محفوظة" : "الصوت متوقف بسبب مقاطعة؛ نية الترجمة محفوظة")
         } else {
             let options = AVAudioSession.InterruptionOptions(rawValue:note.userInfo?[AVAudioSessionInterruptionOptionKey] as? UInt ?? 0)
             interrupted = !options.contains(.shouldResume)

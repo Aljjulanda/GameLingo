@@ -6,9 +6,34 @@ import CryptoKit
 import CoreImage
 import Vision
 import Network
+import AVFAudio
 @testable import GameLingo
 
 final class AppleIntegrationTests: XCTestCase {
+    @MainActor
+    func testAudioInterruptionRestorationCannotOverrideManualStop() async throws {
+        let audio = BackgroundAudio()
+        defer { audio.stop() }
+        audio.start() // Simulator activation is not physical background validation.
+        let interrupted = expectation(description:"audio interruption event handled")
+        audio.onChange = { _,paused,_ in if paused { interrupted.fulfill() } }
+        NotificationCenter.default.post(name:AVAudioSession.interruptionNotification,object:nil,userInfo:[AVAudioSessionInterruptionTypeKey:AVAudioSession.InterruptionType.began.rawValue])
+        await fulfillment(of:[interrupted],timeout:3)
+        XCTAssertTrue(audio.wanted); XCTAssertTrue(audio.interrupted)
+        audio.onChange = nil; audio.stop()
+        let resumed = expectation(description:"no recovery after manual stop"); resumed.isInverted = true
+        audio.onRecovery = { resumed.fulfill() }
+        audio.onChange = { active,_,_ in if active { resumed.fulfill() } }
+        NotificationCenter.default.post(name:AVAudioSession.interruptionNotification,object:nil,userInfo:[AVAudioSessionInterruptionTypeKey:AVAudioSession.InterruptionType.ended.rawValue,AVAudioSessionInterruptionOptionKey:AVAudioSession.InterruptionOptions.shouldResume.rawValue])
+        await fulfillment(of:[resumed],timeout:0.3)
+        XCTAssertFalse(audio.wanted)
+    }
+    func testResourceMetricsReadCurrentProcess() {
+        var monitor = ResourceMonitor()
+        let sample = monitor.sample()
+        XCTAssertGreaterThan(sample.residentBytes,0)
+        XCTAssertTrue(sample.cpu.isFinite); XCTAssertGreaterThanOrEqual(sample.cpu,0)
+    }
     func testManualSmartReadingUsesFreshFrameAndReturnsToDialogue() async throws {
         let folder = try XCTUnwrap(Bundle(for:Self.self).url(forResource:"en_ar",withExtension:nil))
         let translator = OfflineTranslator(folder:folder)
@@ -51,6 +76,7 @@ final class AppleIntegrationTests: XCTestCase {
         await fulfillment(of:[ready],timeout:30)
         XCTAssertFalse(translatedPages.isEmpty)
         XCTAssertTrue(translatedPages.joined().range(of:"[\\u0600-\\u06FF]",options:.regularExpression) != nil)
+        XCTAssertTrue(translatedPages.joined().contains("11") || translatedPages.joined().contains("١١"),"Document translation must retain the number")
         pipeline.closeReading()
         await fulfillment(of:[closed],timeout:5)
         pipeline.onReading = { _,active,pages,_ in XCTAssertFalse(active); XCTAssertTrue(pages.isEmpty) }

@@ -71,6 +71,8 @@ final class AdvancedDialogueTests: XCTestCase {
         let rules = "river | Go to the bank. = اذهب إلى ضفة النهر.\nWait! = انتظر!"
         XCTAssertEqual(Terminology.resolve("Go to the bank.",rules:rules,context:memory.entries),"اذهب إلى ضفة النهر.")
         XCTAssertNil(Terminology.resolve("Go to the bank.",rules:rules,context:[]))
+        var unrelated = DialogueMemory(); unrelated.observe(job("b","The driver is waiting"),now:0)
+        XCTAssertNil(Terminology.resolve("Go to the bank.",rules:rules,context:unrelated.entries))
         XCTAssertNil(Terminology.resolve("It is raining cats and dogs.",rules:rules,context:memory.entries))
         XCTAssertEqual(Terminology.resolve("Wait!",rules:rules,context:[]),"انتظر!")
     }

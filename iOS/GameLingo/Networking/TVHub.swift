@@ -14,6 +14,7 @@ final class TVHub {
     var onListening: ((Bool) -> Void)?
     var onCapabilities: (([String]) -> Void)?
     var onDisplayAck: ((String) -> Void)?
+    var onListenerFailure: (() -> Void)?
     private let queue = DispatchQueue(label:"dev.gamelingo.tv")
     private var listener: NWListener?
     private var client: NWConnection?
@@ -106,7 +107,7 @@ final class TVHub {
             let pin = String(format:"%06u",random % 1_000_000)
             self.identity = identity; self.pin = pin; failures = 0; deadline = ProcessInfo.processInfo.systemUptime+300
             let tls = NWProtocolTLS.Options()
-            guard let nativeIdentity = sec_identity_create(identity.identity) else { status("تعذر إعداد TLS"); return }
+            guard let nativeIdentity = sec_identity_create(identity.identity) else { listenerFailed(); status("تعذر إعداد TLS"); return }
             sec_protocol_options_set_local_identity(tls.securityProtocolOptions,nativeIdentity)
             sec_protocol_options_set_min_tls_protocol_version(tls.securityProtocolOptions,.TLSv12)
             let parameters = NWParameters(tls:tls,tcp:NWProtocolTCP.Options())
@@ -135,6 +136,7 @@ final class TVHub {
                     case .ready:
                         guard listener.port?.rawValue == TVProtocol.port else {
                             self.stopNow()
+                            self.listenerFailed()
                             self.diagnostic("bind.wrong_port", "فشل الربط: المنفذ الفعلي \(listener.port?.rawValue ?? 0) بدلًا من \(TVProtocol.port)", show:true)
                             return
                         }
@@ -153,17 +155,25 @@ final class TVHub {
                         } else { self.diagnostic("listen.waiting", "الخادم ينتظر الشبكة · \(Self.safeError(error))", show:true) }
                     case .failed(let error):
                         if self.retryBusyPort(error,host:host,settings:self.settings,attempt:bindAttempt) { return }
+                        if self.bonjourEnabled, case .dns = error {
+                            self.bonjourEnabled = false
+                            self.diagnostic("discovery.unavailable", "تعذر الاكتشاف؛ جارٍ استعادة الاتصال اليدوي الآمن")
+                            try? self.start(host:host,settings:self.settings)
+                            return
+                        }
                         self.stopNow(preserveIdentity:true)
+                        self.listenerFailed()
                         self.diagnostic("listen.failed", "تعذر ربط خادم التلفزيون · \(Self.safeError(error))", show:true)
                     default: break
                     }
                 }
                 listener.newConnectionHandler = { [weak self] connection in self?.accept(connection,epoch:epoch) }
                 self.listener = listener; listener.start(queue:queue)
-            } catch { diagnostic("listen.failed", "تعذر إنشاء المستمع · \((error as NSError).domain) / \((error as NSError).code)", show:true) }
-          } catch { diagnostic("identity.failed", "تعذر إعداد هوية TLS · \((error as NSError).domain) / \((error as NSError).code)", show:true) }
+            } catch { listenerFailed(); diagnostic("listen.failed", "تعذر إنشاء المستمع · \((error as NSError).domain) / \((error as NSError).code)", show:true) }
+          } catch { listenerFailed(); diagnostic("identity.failed", "تعذر إعداد هوية TLS · \((error as NSError).domain) / \((error as NSError).code)", show:true) }
         }
     }
+    private func listenerFailed() { DispatchQueue.main.async { self.onListenerFailure?() } }
     private func retryBusyPort(_ error: NWError, host: String, settings: TVSettings, attempt: Int) -> Bool {
         guard case .posix(let code) = error, code == .EADDRINUSE, attempt < 3 else { return false }
         // Cancellation releases a Network.framework socket asynchronously. A
@@ -173,7 +183,8 @@ final class TVHub {
         diagnostic("bind.releasing", "بانتظار تحرير منفذ المستمع السابق")
         queue.asyncAfter(deadline:.now()+0.25*Double(attempt+1)) { [weak self] in
             guard let self, self.generation == epoch else { return }
-            try? self.start(host:host,settings:settings,bindAttempt:attempt+1)
+            do { try self.start(host:host,settings:settings,bindAttempt:attempt+1) }
+            catch { self.listenerFailed(); self.diagnostic("bind.address_changed", "تغير عنوان الربط أثناء إعادة تشغيل المستمع", show:true) }
         }
         return true
     }
@@ -358,7 +369,7 @@ final class TVHub {
     func validateAddress() {
         queue.async { [self] in
             guard listener != nil, !Self.localAddresses().contains(listeningHost) else { return }
-            stopNow(preserveIdentity:true); diagnostic("network.changed", "تغير عنوان Wi-Fi؛ جارٍ انتظار استعادة المستمع", show:true)
+            stopNow(preserveIdentity:true); listenerFailed(); diagnostic("network.changed", "تغير عنوان Wi-Fi؛ جارٍ انتظار استعادة المستمع", show:true)
         }
     }
     func stop() { queue.async { [self] in stopNow(); diagnostic("server.stopped", "أُوقف خادم التلفزيون", show:true) } }
