@@ -75,6 +75,7 @@ final class AppModel: ObservableObject {
         hub.onListening = { [weak self] listening in
             guard let self else { return }
             self.tvListening = listening
+            if !listening { self.pairingCode = "" }
             UIApplication.shared.isIdleTimerDisabled = listening || self.running
         }
         let processor = self.pipeline

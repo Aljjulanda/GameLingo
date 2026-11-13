@@ -305,6 +305,6 @@ final class TVHub {
     private func stopNow() {
         generation += 1; if let client { disconnect(client) }
         listener?.cancel(); listener = nil; heartbeat?.cancel(); heartbeat = nil; identity = nil
-        DispatchQueue.main.async { self.onListening?(false); self.onPairing?("","") }
+        DispatchQueue.main.async { self.onListening?(false) }
     }
 }
