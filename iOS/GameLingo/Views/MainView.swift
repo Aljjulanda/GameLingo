@@ -66,6 +66,7 @@ struct ConnectionView: View {
                 }
                 Section("اتصال TCL") {
                     Text(model.tvStatus)
+                    Text("أبقِ GameLingo في المقدمة أثناء اتصال TCL؛ مغادرة التطبيق توقف الخادم. تُمنع مهلة قفل الشاشة أثناء الاستماع.").font(.footnote).foregroundColor(.secondary)
                     if !model.addresses.isEmpty {
                         Picker("عنوان iPhone",selection:$model.settings.localIP) { ForEach(model.addresses,id:\.self) { Text($0).tag($0) } }
                     }
@@ -75,6 +76,13 @@ struct ConnectionView: View {
                         Text(model.pairingCode).font(.system(.title3,design:.monospaced)).textSelection(.enabled).environment(\.layoutDirection,.leftToRight)
                     }
                     Text("في تطبيق GameLingo TV الحالي، أدخل عنوان iPhone في حقل عنوان الكمبيوتر، ثم الرمز أعلاه. صلاحية الرمز 5 دقائق. عند التبديل بين Windows وiPhone أعد الاقتران بالمصدر المطلوب؛ لا تشغّلهما معًا.").font(.footnote).foregroundColor(.secondary)
+                    if !model.tvDiagnostics.isEmpty {
+                        DisclosureGroup("تشخيص اتصال التلفزيون") {
+                            Text(model.tvDiagnostics.joined(separator:"\n")).font(.system(.caption,design:.monospaced)).textSelection(.enabled)
+                        }
+                        ShareLink(item:model.tvDiagnostics.joined(separator:"\n")) { Label("مشاركة التشخيص",systemImage:"square.and.arrow.up") }
+                        Text("السجل لا يتضمن رمز الاقتران أو رموز المصادقة. قد يتضمن عناوين الشبكة المحلية.").font(.footnote).foregroundColor(.secondary)
+                    }
                 }
             }.navigationTitle("GameLingo")
         }.navigationViewStyle(.stack)

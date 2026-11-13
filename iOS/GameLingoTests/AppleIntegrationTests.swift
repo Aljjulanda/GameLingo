@@ -5,9 +5,73 @@ import VideoToolbox
 import CryptoKit
 import CoreImage
 import Vision
+import Network
 @testable import GameLingo
 
 final class AppleIntegrationTests: XCTestCase {
+    func testPeerAddressUsesBytesIncludingMappedIPv4() throws {
+        XCTAssertEqual(TVHub.peerIPv4(.ipv4(try XCTUnwrap(IPv4Address("192.168.3.138")))) ,"192.168.3.138")
+        XCTAssertEqual(TVHub.peerIPv4(.ipv6(try XCTUnwrap(IPv6Address("::ffff:192.168.3.138")))) ,"192.168.3.138")
+        XCTAssertNil(TVHub.peerIPv4(.ipv6(try XCTUnwrap(IPv6Address("2001:db8::1")))))
+        XCTAssertNil(TVHub.peerIPv4(.name("192.168.3.138.attacker.example",nil)))
+    }
+    func testOkHttpLANPairingSecurityRestartAndInterruption() async throws {
+        // This is a JVM OkHttp client -> simulator listener on its real en* IPv4,
+        // not URLSession, not 127.0.0.1, and not physical iPhone/TCL validation.
+        let hub = TVHub()
+        defer { hub.stop() }
+        let host = try XCTUnwrap(TVHub.localAddresses().first,"LAN interface required for this integration test")
+        var diagnostics: [String] = []
+        hub.onDiagnostics = { diagnostics = $0 }
+        func start() async throws -> String {
+            let ready = expectation(description:"LAN listener bound to 38443")
+            var code = ""
+            hub.onPairing = { _,value in if !value.isEmpty { code = value; ready.fulfill() } }
+            try hub.start(host:host,settings:TVSettings())
+            await fulfillment(of:[ready],timeout:15)
+            return try XCTUnwrap(code.isEmpty ? nil : code)
+        }
+        func probe(_ mode: String, code: String, token: String = "", abort: Bool = false) async throws -> [String:Any] {
+            var request = URLRequest(url:URL(string:"http://127.0.0.1:39999/run")!)
+            request.httpMethod = "POST"; request.timeoutInterval = 40
+            request.httpBody = try JSONSerialization.data(withJSONObject:["mode":mode,"host":host,"prefix":String(code.prefix(12)),"pin":String(code.suffix(6)),"token":token,"abort":abort])
+            let (data,response) = try await URLSession.shared.data(for:request)
+            let result = try XCTUnwrap(JSONSerialization.jsonObject(with:data) as? [String:Any])
+            XCTAssertEqual((response as? HTTPURLResponse)?.statusCode,200,result["error"] as? String ?? "probe HTTP failure")
+            XCTAssertEqual(result["ok"] as? Bool,true,result["error"] as? String ?? "probe failed")
+            try await Task.sleep(nanoseconds:250_000_000)
+            return result
+        }
+        let code = try await start()
+        let wrongPrefix = String(repeating:code.hasPrefix("0") ? "1" : "0",count:12) + "-" + code.suffix(6)
+        let fingerprint = try await probe("bad-fingerprint",code:wrongPrefix)
+        XCTAssertEqual(fingerprint["fingerprint_rejected"] as? Bool,true)
+        let wrongPIN = String(code.prefix(12)) + "-" + (code.hasSuffix("000000") ? "111111" : "000000")
+        let rejected = try await probe("bad-pin",code:wrongPIN)
+        XCTAssertEqual(rejected["authentication_rejected"] as? Bool,true)
+        let paired = try await probe("pair",code:code)
+        let token = try XCTUnwrap(paired["token"] as? String)
+        XCTAssertEqual(paired["heartbeat"] as? Bool,true)
+        XCTAssertTrue(diagnostics.contains { $0.contains("[settings.ack]") })
+        hub.publish(TVProtocol.envelope("subtitle_clear")) // Must never queue for the next client.
+        let reconnect = try await probe("hello",code:code,token:token,abort:true)
+        XCTAssertEqual(reconnect["heartbeat"] as? Bool,true)
+        // Abrupt network loss then a listener/app restart preserve the identity and token.
+        let restartedCode = try await start()
+        XCTAssertEqual(String(code.prefix(12)),String(restartedCode.prefix(12)))
+        let restarted = try await probe("hello",code:restartedCode,token:token)
+        XCTAssertEqual(restarted["heartbeat"] as? Bool,true)
+        // A new explicit pairing replaces the old source's token without weakening pinning.
+        let replacement = try await probe("pair",code:restartedCode)
+        let newToken = try XCTUnwrap(replacement["token"] as? String)
+        XCTAssertNotEqual(newToken,token)
+        let stale = try await probe("bad-token",code:restartedCode,token:token)
+        XCTAssertEqual(stale["authentication_rejected"] as? Bool,true)
+        let finalConnection = try await probe("hello",code:restartedCode,token:newToken)
+        XCTAssertEqual(finalConnection["heartbeat"] as? Bool,true)
+        // Diagnostics must not contain either issued token or either PIN.
+        XCTAssertFalse(diagnostics.contains { $0.contains(token) || $0.contains(newToken) || $0.contains(String(restartedCode.suffix(6))) })
+    }
     func testVideoToolboxDeliversDecodedFrameWithoutRenderer() throws {
         let fixture = EncodedFixture()
         var encoder: VTCompressionSession?

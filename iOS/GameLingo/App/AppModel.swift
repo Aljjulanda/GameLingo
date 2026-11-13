@@ -16,6 +16,8 @@ final class AppModel: ObservableObject {
     @Published var discovered: [DiscoveredConsole] = []
     @Published var remoteStatus = "البث متوقف"
     @Published var tvStatus = "التلفزيون غير متصل"
+    @Published var tvDiagnostics: [String] = []
+    @Published var tvListening = false
     @Published var networkStatus = "جارٍ فحص الشبكة"
     @Published var modelStatus = "لم يُحمّل النموذج"
     @Published var pairingCode = ""
@@ -69,6 +71,12 @@ final class AppModel: ObservableObject {
         }
         hub.onStatus = { [weak self] in self?.tvStatus = $0 }
         hub.onPairing = { [weak self] _,code in self?.pairingCode = code }
+        hub.onDiagnostics = { [weak self] in self?.tvDiagnostics = $0 }
+        hub.onListening = { [weak self] listening in
+            guard let self else { return }
+            self.tvListening = listening
+            UIApplication.shared.isIdleTimerDisabled = listening || self.running
+        }
         let processor = self.pipeline
         hub.onDisconnected = { [weak processor] in processor?.tvDisconnected() }
         // Connection resets only the TV. Previously visible dialogue is deliberately not replayed.
@@ -82,6 +90,7 @@ final class AppModel: ObservableObject {
                 guard let self else { return }
                 self.networkStatus = available ? (path.usesInterfaceType(.wifi) ? "Wi-Fi متصل" : "الشبكة متاحة") : "الشبكة غير متاحة"
                 self.refreshAddresses()
+                self.hub.validateAddress()
                 if !available { self.pipeline.interrupt() }
             }
         }
@@ -103,6 +112,7 @@ final class AppModel: ObservableObject {
         if thermal == .critical && running { stop(); errorMessage = "أُوقفت الجلسة بسبب الحالة الحرارية الحرجة" }
     }
     func connectTV() {
+        refreshAddresses(); pairingCode = ""
         let host = settings.localIP, display = settings.display
         tvStatus = "جارٍ إعداد اتصال التلفزيون…"
         do { try hub.start(host:host,settings:display) }
@@ -131,7 +141,7 @@ final class AppModel: ObservableObject {
     }
     func stop() {
         running = false; pairing = false; loginRequired = false; remote.stop(); pipeline.stop()
-        UIApplication.shared.isIdleTimerDisabled = false
+        UIApplication.shared.isIdleTimerDisabled = tvListening
         if let brightness = originalBrightness { UIScreen.main.brightness = brightness; originalBrightness = nil }
     }
     func background() {

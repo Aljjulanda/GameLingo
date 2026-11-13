@@ -57,7 +57,18 @@ class MainActivity : Activity() {
             }
         }
         button("إخفاء النص وإيقاف الخدمة") { stopService(Intent(this, OverlayService::class.java)); refresh() }
-        button("الاتصال بتطبيق Windows") { connectionDialog() }
+        button("الاتصال بـ Windows / iPhone") { connectionDialog() }
+        button("تشخيص الاتصال") {
+            val log = TextView(this).apply {
+                text = prefs.getString("connection_diagnostics","لم تُسجل محاولة اتصال بعد")
+                textSize = 14f; setPadding(dp(16),dp(12),dp(16),dp(12)); setTextIsSelectable(true)
+            }
+            android.app.AlertDialog.Builder(this).setTitle("تشخيص الاتصال · بلا رموز سرية")
+                .setView(ScrollView(this).apply { addView(log) }).setPositiveButton("إغلاق",null)
+                .setNeutralButton(if (prefs.getBoolean("diagnostics_enabled",false)) "إيقاف سجل ADB" else "تفعيل سجل ADB") { _,_ ->
+                    prefs.edit().putBoolean("diagnostics_enabled", !prefs.getBoolean("diagnostics_enabled",false)).apply()
+                }.show()
+        }
         val savedHost=prefs.getString("host","") ?: ""
         if(Settings.canDrawOverlays(this) && prefs.contains("token") && Pairing.privateIp(savedHost)) {
             startForegroundService(Intent(this,OverlayService::class.java).setAction("connect")
@@ -75,9 +86,9 @@ class MainActivity : Activity() {
             inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD or android.text.InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
             textDirection = View.TEXT_DIRECTION_LTR; form.addView(this)
         }
-        val ip = field("عنوان الكمبيوتر 192.168.x.x").apply { setText(suggestedHost ?: prefs.getString("host","")) }
+        val ip = field("عنوان Windows أو iPhone · 192.168.x.x").apply { setText(suggestedHost ?: prefs.getString("host","")) }
         val code = field("رمز الاقتران · اتركه فارغًا بعد الاقتران").apply { setText(suggestedCode ?: "") }
-        android.app.AlertDialog.Builder(this).setTitle("GameLingo · Windows").setView(form)
+        android.app.AlertDialog.Builder(this).setTitle("GameLingo · Windows / iPhone").setView(form)
             .setNegativeButton("إلغاء",null).setPositiveButton("اتصال") { _,_ ->
                 if (Settings.canDrawOverlays(this)) {
                     startForegroundService(Intent(this,OverlayService::class.java).setAction("connect")

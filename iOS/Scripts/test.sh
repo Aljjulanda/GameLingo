@@ -3,13 +3,25 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 source .build/python/bin/activate
 mkdir -p build/logs
+python3 Integration/okhttp-bridge.py > build/logs/okhttp-bridge.log 2>&1 &
+BRIDGE_PID=$!
+cleanup() {
+  kill "$BRIDGE_PID" 2>/dev/null || true
+  export_attachments
+}
 export_attachments() {
   if [[ -d build/GameLingoTests.xcresult ]]; then
     xcrun xcresulttool export attachments --path build/GameLingoTests.xcresult \
       --output-path build/logs/test-attachments || true
   fi
 }
-trap export_attachments EXIT
+trap cleanup EXIT
+for attempt in {1..60}; do
+  if curl --silent --fail http://127.0.0.1:39999/ >/dev/null; then break; fi
+  if ! kill -0 "$BRIDGE_PID" 2>/dev/null; then cat build/logs/okhttp-bridge.log; exit 1; fi
+  sleep 1
+done
+curl --silent --fail http://127.0.0.1:39999/ >/dev/null
 if [[ "${SKIP_CORE_TESTS:-0}" != 1 ]]; then
   swift test --parallel 2>&1 | tee build/logs/core-tests.log
 fi

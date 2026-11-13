@@ -7,6 +7,7 @@ import android.os.SystemClock
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
+import android.util.Log
 import okhttp3.*
 import org.json.JSONObject
 import java.security.KeyStore
@@ -23,6 +24,7 @@ import javax.net.ssl.*
 
 object Pairing {
     fun privateIp(s: String): Boolean {
+        if (s.any { it !in "0123456789." }) return false
         val a = s.split(".").map { it.toIntOrNull() ?: return false }
         return a.size == 4 && a.all { it in 0..255 } && (a[0] == 10 ||
             (a[0] == 192 && a[1] == 168) || (a[0] == 172 && a[1] in 16..31))
@@ -66,17 +68,26 @@ class Receiver(context: Context, private val render: (JSONObject?) -> Unit, priv
     private var serverTime = 0L
     private var syncTime = 0L
     private var observedFingerprint = ""
+    private var stage = "TCP"
+    private var settingsRevision = -1L
+    private fun diagnostic(code: String, text: String, show: Boolean = true) {
+        val line = "${System.currentTimeMillis()} [$code] $text"
+        val old = prefs.getString("connection_diagnostics", "") ?: ""
+        prefs.edit().putString("connection_diagnostics", (old.lines().filter { it.isNotEmpty() } + line).takeLast(60).joinToString("\n")).apply()
+        if (prefs.getBoolean("diagnostics_enabled",false)) Log.i("GameLingoNetwork",line)
+        if (show) status(text)
+    }
 
     fun start(host: String, code: String) {
         stop()
         address = host
         val saved = prefs.getString("host", "") == host && prefs.contains("token")
-        if (!Pairing.privateIp(host)) { status("عنوان الكمبيوتر غير صالح"); return }
+        if (!Pairing.privateIp(host)) { diagnostic("input.ip", "عنوان IP محلي غير صالح"); return }
         if (code.matches(Regex("[0-9a-fA-F]{12}-[0-9]{6}"))) {
             prefix = code.substringBefore("-").lowercase(); pin = code.substringAfter("-")
         } else if (saved && code.isEmpty()) {
             prefix = prefs.getString("fingerprint", "") ?: ""
-        } else { status("أدخل رمز الاقتران كما يظهر على الكمبيوتر"); return }
+        } else { diagnostic("input.code", "أدخل رمز الاقتران كما يظهر على المصدر"); return }
         if (prefix.length !in listOf(12, 64)) { status("بصمة الشهادة غير صالحة"); return }
         connect()
     }
@@ -84,6 +95,7 @@ class Receiver(context: Context, private val render: (JSONObject?) -> Unit, priv
     private fun connect() {
         val generation = ++epoch
         fun onMain(block: () -> Unit) { main.post { if (generation == epoch) block() } }
+        stage = "TCP"; observedFingerprint = ""
         val expected = prefix
         val trust = object : X509TrustManager {
             override fun getAcceptedIssuers(): Array<X509Certificate> = emptyArray()
@@ -98,12 +110,24 @@ class Receiver(context: Context, private val render: (JSONObject?) -> Unit, priv
         }
         val tls = SSLContext.getInstance("TLS").apply { init(null, arrayOf(trust), SecureRandom()) }
         val http = OkHttpClient.Builder().sslSocketFactory(tls.socketFactory, trust)
+            .eventListener(object : EventListener() {
+                override fun secureConnectStart(call: Call) = onMain {
+                    stage = "TLS"; diagnostic("tcp.ok", "نجح TCP؛ جارٍ تفاوض TLS")
+                }
+                override fun secureConnectEnd(call: Call, handshake: Handshake?) = onMain {
+                    stage = "WebSocket"; diagnostic("tls.ok", "نجح TLS وتحققت بصمة الشهادة؛ جارٍ ترقية WebSocket")
+                }
+            })
             .hostnameVerifier { host, _ -> host == address }.pingInterval(6, TimeUnit.SECONDS)
             .followRedirects(false).followSslRedirects(false).connectTimeout(5, TimeUnit.SECONDS).build()
         client = http
-        status("جارٍ الاتصال بالكمبيوتر…")
+        diagnostic("tcp.start", "جارٍ الاتصال بـ $address:38443" + if (attempts > 0) " · محاولة ${attempts + 1}" else "")
+        main.postDelayed({
+            if (generation == epoch && session.isEmpty()) retry("انتهت مهلة الاتصال عند $stage")
+        }, 20000)
         socket = http.newWebSocket(Request.Builder().url("wss://$address:38443/").build(), object : WebSocketListener() {
             override fun onOpen(ws: WebSocket, response: Response) = onMain {
+                stage = "المصادقة"; diagnostic("websocket.ok", "تم إنشاء WebSocket؛ جارٍ الاقتران / المصادقة")
                 try {
                     val auth = if (pin.isNotEmpty()) JSONObject().put("type","pair").put("pin",pin)
                         else JSONObject().put("type","hello").put("token", Pairing.decrypt(prefs.getString("token","")!!))
@@ -121,11 +145,13 @@ class Receiver(context: Context, private val render: (JSONObject?) -> Unit, priv
                             prefs.edit().putString("host",address).putString("token",Pairing.encrypt(token))
                                 .putString("fingerprint",observedFingerprint).apply()
                             pin = ""; prefix = observedFingerprint
+                            diagnostic("pair.accepted", "قُبل الاقتران وحُفظ رمز المصادقة بأمان")
                         }
                         "connection_status" -> {
                             session = m.getString("session"); sequence = 0; attempts = 0
+                            settingsRevision = -1L; stage = "متصل"
                             serverTime = m.getLong("time_ms"); syncTime = SystemClock.elapsedRealtime()
-                            render(null); status("متصل · في انتظار الترجمة")
+                            render(null); diagnostic("auth.ok", "متصل · في انتظار الترجمة")
                         }
                         "subtitle_show", "subtitle_update", "subtitle_hide", "subtitle_clear", "subtitle_source_gone", "context_show", "context_present", "context_clear" -> {
                             if (session.isEmpty() || m.optString("session") != session || m.getLong("seq") <= sequence) return@onMain
@@ -145,12 +171,15 @@ class Receiver(context: Context, private val render: (JSONObject?) -> Unit, priv
                             if(m.has("settings")) {
                                 val incoming=m.getJSONObject("settings")
                                 val rev=incoming.optLong("revision",0)
-                                if(rev<prefs.getLong("settings_revision",0)) return@onMain
+                                // Revisions belong to this authenticated session, not the previous Windows source.
+                                if(rev<settingsRevision) return@onMain
+                                settingsRevision = rev
                                 prefs.edit().putString("display_settings",incoming.toString()).putLong("settings_revision",rev).apply()
                                 main.postDelayed({
                                     if(generation==epoch) {
                                 ws.send(JSONObject().put("v",1).put("type","settings_ack").put("revision",rev)
                                     .put("width_px",contextWidth).put("height_px",contextHeight).put("anchor_x",prefs.getFloat("anchor_x",0f).toDouble()).put("anchor_y",prefs.getFloat("anchor_y",0f).toDouble()).toString())
+                                diagnostic("settings.ack", "تمت مزامنة إعدادات العرض", false)
                                     }
                                 },180)
 
@@ -158,18 +187,19 @@ class Receiver(context: Context, private val render: (JSONObject?) -> Unit, priv
                             render(m)
                         }
                         "heartbeat" -> { serverTime = m.getLong("time_ms"); syncTime = SystemClock.elapsedRealtime() }
-                        "error" -> { render(null); status("خطأ من الكمبيوتر") }
+                        "error" -> { render(null); diagnostic("server.error", "رفض المصدر الطلب") }
                     }
-                } catch (_: Exception) { ws.close(1002,"Invalid message") }
+                } catch (_: Exception) { diagnostic("protocol.invalid", "رسالة بروتوكول غير صالحة"); ws.close(1002,"Invalid message") }
             }
             override fun onClosing(ws: WebSocket, code: Int, reason: String) { ws.close(code, null) }
             override fun onClosed(ws: WebSocket, code: Int, reason: String) = onMain {
-                if (code == 1008 || code == 1002) { stop(); status("رُفض الاقتران. راجع الرمز على الكمبيوتر.") }
-                else retry()
+                if (code == 1008 || code == 1002) { stop(); diagnostic("auth.rejected", "رُفض الاقتران أو البروتوكول؛ تحقق من صلاحية رمز المصدر.") }
+                else retry("انقطع الاتصال بعد إغلاق WebSocket · $code")
             }
             override fun onFailure(ws: WebSocket, t: Throwable, response: Response?) = onMain {
-                if (t is SSLHandshakeException || t is SSLPeerUnverifiedException) { stop(); status("تعذر التحقق من شهادة الكمبيوتر. راجع الرمز.") }
-                else retry()
+                val failure = ConnectionFailure.classify(t,stage,response?.code)
+                if (failure.terminal) { stop(); diagnostic(failure.code,failure.text) }
+                else { diagnostic(failure.code,failure.text,false); retry(failure.text) }
             }
         })
     }
@@ -180,10 +210,12 @@ class Receiver(context: Context, private val render: (JSONObject?) -> Unit, priv
         client?.connectionPool?.evictAll(); client = null
         session = ""; sequence = 0; render(null)
     }
-    private fun retry() {
-        dispose(); status("الاتصال منقطع · ستتم إعادة المحاولة")
+    private fun retry(reason: String) {
+        main.removeCallbacksAndMessages(null)
+        dispose(); diagnostic("retry", "$reason · ستتم إعادة المحاولة")
         val delay = (1000L shl attempts.coerceAtMost(4)); attempts++
-        main.postDelayed({ connect() }, delay)
+        val generation = epoch
+        main.postDelayed({ if (generation == epoch) connect() }, delay)
     }
     fun stop() { main.removeCallbacksAndMessages(null); dispose(); pin = ""; attempts = 0 }
 }
