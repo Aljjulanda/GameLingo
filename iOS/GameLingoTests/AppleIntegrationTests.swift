@@ -108,11 +108,13 @@ final class AppleIntegrationTests: XCTestCase {
         let pixels = try XCTUnwrap(buffer)
         CVPixelBufferLockBaseAddress(pixels,[])
         let bitmap = try XCTUnwrap(CGContext(data:CVPixelBufferGetBaseAddress(pixels),width:1280,height:720,bitsPerComponent:8,bytesPerRow:CVPixelBufferGetBytesPerRow(pixels),space:CGColorSpaceCreateDeviceRGB(),bitmapInfo:CGImageAlphaInfo.premultipliedFirst.rawValue|CGBitmapInfo.byteOrder32Little.rawValue))
-        // Quartz bitmap coordinates are bottom-up; the production CVPixelBuffer
-        // path is top-down. Preserve the renderer image's orientation in memory.
+        // Draw through UIKit in its top-left coordinate system. Drawing the
+        // CGImage directly under this transform vertically inverts its pixels.
         bitmap.translateBy(x:0,y:720)
         bitmap.scaleBy(x:1,y:-1)
-        bitmap.draw(try XCTUnwrap(image.cgImage),in:CGRect(x:0,y:0,width:1280,height:720))
+        UIGraphicsPushContext(bitmap)
+        image.draw(in:CGRect(x:0,y:0,width:1280,height:720))
+        UIGraphicsPopContext()
         bitmap.flush()
         CVPixelBufferUnlockBaseAddress(pixels,[])
         let (text,box) = try VisionDialogueOCR().recognize(pixels,roi:.dialogue)
