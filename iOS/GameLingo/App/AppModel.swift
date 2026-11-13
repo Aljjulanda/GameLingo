@@ -1,6 +1,7 @@
 import SwiftUI
 import Network
 import Darwin
+import os
 
 @MainActor
 final class AppModel: ObservableObject {

@@ -32,6 +32,17 @@ jobs:
           persist-credentials: false
       - name: Install native build dependencies
         run: brew install cmake ninja protobuf
+      - name: Restore native dependency build cache
+        id: native-cache
+        uses: actions/cache/restore@v5
+        with:
+          path: |
+            iOS/.build/sources
+            iOS/.build/native
+            iOS/.build/lib
+            iOS/.build/include
+          key: ios-native-xcode16.4-${{ runner.arch }}-${{ hashFiles('iOS/Scripts/bootstrap.py', 'iOS/Scripts/build-native.sh', 'iOS/Scripts/combine-libraries.py', 'iOS/Native/GLRemotePlay.c', 'iOS/Native/GLRemotePlay.h') }}
+          restore-keys: ios-native-xcode16.4-${{ runner.arch }}-
       - name: Validate source and preserve existing platform implementations
         run: |
           python3 iOS/Scripts/validate-source.py
@@ -45,6 +56,16 @@ jobs:
           plutil -lint iOS/GameLingo.xcodeproj/project.pbxproj
       - name: Core and Apple integration tests
         run: bash iOS/Scripts/test.sh
+      - name: Save compiled native dependencies
+        if: always() && steps.native-cache.outputs.cache-hit != 'true' && hashFiles('iOS/.build/native/iphoneos-arm64/prefix/lib/libcrypto.a') != ''
+        uses: actions/cache/save@v5
+        with:
+          path: |
+            iOS/.build/sources
+            iOS/.build/native
+            iOS/.build/lib
+            iOS/.build/include
+          key: ${{ steps.native-cache.outputs.cache-primary-key }}
       - name: Archive and package unsigned IPA
         run: bash iOS/Scripts/build-unsigned.sh
       - name: Upload unsigned IPA

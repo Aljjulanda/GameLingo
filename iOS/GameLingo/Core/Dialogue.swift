@@ -61,7 +61,7 @@ enum DialogueText {
             if index == short.count && negations.isDisjoint(with: missing) { return true }
         }
         guard a.count == b.count else { return false }
-        let changed = zip(a,b).filter { $0 != $1 }
+        let changed = zip(a,b).filter { pair in pair.0 != pair.1 }
         guard changed.count == 1, let (x,y) = changed.first else { return false }
         return min(x.count,y.count) >= 5 && x.first == y.first && x.last == y.last && similarity(x,y) >= 0.8 && similarity(a.joined(),b.joined()) >= 0.9
     }

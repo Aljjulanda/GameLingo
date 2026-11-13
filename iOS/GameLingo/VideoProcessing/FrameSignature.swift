@@ -1,3 +1,4 @@
+import Foundation
 import CoreVideo
 
 /// A tiny edge mask from the decoder's existing luma plane; no rendered image or full-frame copy.
@@ -28,7 +29,7 @@ struct FrameSignature {
                 edges[i] = abs(Int(samples[i])-Int(samples[i+1])) >= 24 || abs(Int(samples[i])-Int(samples[i+columns])) >= 24 ? 1 : 0
             }
         }
-        let changed = previous.map { old in zip(old,edges).filter { $0 != $1 }.count > 3 } ?? true
+        let changed = previous.map { old in zip(old,edges).filter { pair in pair.0 != pair.1 }.count > 3 } ?? true
         let periodic = now-verified >= (hasText ? 0.65 : 1.2)
         if changed || periodic { previous = edges; verified = now; return true }
         return false

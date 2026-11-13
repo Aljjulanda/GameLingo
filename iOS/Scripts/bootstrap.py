@@ -61,7 +61,13 @@ def patch_pylux(path):
     third_party = replace_exact(third_party, 'GIT_TAG miniupnpc_2_2_8', 'GIT_TAG b55145ec095652289a59c33603f3abafee898273')
     # FetchContent cannot shallow-clone an arbitrary pinned SHA reliably.
     third_party = third_party.replace('GIT_SHALLOW TRUE', 'GIT_SHALLOW FALSE')
+    third_party = replace_exact(third_party, '\t# Configure opus build options before fetching', '\tif(CHIAKI_LIB_ENABLE_OPUS)\n\t# Configure opus build options before fetching')
+    third_party = replace_exact(third_party, '\tadd_library(Opus::opus ALIAS opus)', '\tadd_library(Opus::opus ALIAS opus)\n\tendif()')
     (path / 'third-party/CMakeLists.txt').write_text(third_party, encoding='utf-8', newline='\n')
+    for name in ('audioreceiver.c', 'audiosender.c'):
+        source = subprocess.check_output(['git', 'show', f'HEAD:lib/src/{name}'], cwd=path, text=True)
+        source = replace_exact(source, '#ifdef CHIAKI_LIB_ENABLE_OPUS', '#if CHIAKI_LIB_ENABLE_OPUS')
+        (path / 'lib' / 'src' / name).write_text(source, encoding='utf-8', newline='\n')
 
 
 def patch_ct2(path):
