@@ -76,7 +76,9 @@ final class AppModel: ObservableObject {
             self.scheduleRecovery()
         }
         remote.onAvailability = { [weak self] connected in
-            guard let self else { return }; self.streamConnected = connected
+            guard let self else { return }
+            if connected && !self.policy.wanted { return }
+            self.streamConnected = connected
             if connected { self.recoveryAttempts = 0; self.sessionStatus = "البث متصل؛ الترجمة نشطة" }
         }
         audio.onChange = { [weak self] active,interrupted,text in
@@ -219,7 +221,7 @@ final class AppModel: ObservableObject {
     private func suspendForExecution() {
         endExecutionGrace()
         guard !policy.canExecute else { return }
-        remote.stop(); pipeline.stop(); pipelineActive = false; hub.stop(); hubStarting = false
+        remote.stop(); pipeline.pause(); pipelineActive = false; hub.stop(); hubStarting = false
         sessionStatus = "التنفيذ غير متاح؛ الاستئناف عند سماح iOS أو العودة للتطبيق"
     }
     private func scheduleRecovery() {
@@ -238,7 +240,7 @@ final class AppModel: ObservableObject {
         guard policy.network else { sessionStatus = "بانتظار الشبكة"; return }
         audio.recover()
         guard policy.canRecover else { sessionStatus = "بانتظار السماح بالتنفيذ"; return }
-        if !pipelineActive { pipeline.start(roi:settings.roi,mode:settings.mode); pipelineActive = true }
+        if !pipelineActive { pipeline.start(roi:settings.roi,mode:settings.mode,preservingState:true); pipelineActive = true }
         if let console = consoles.first(where:{ $0.id == settings.selectedConsoleID }) { remote.recover(console) }
         if !tvListening {
             // A previous bind failure must not leave the UI's in-progress flag stuck.

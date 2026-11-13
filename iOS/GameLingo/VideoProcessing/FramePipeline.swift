@@ -29,6 +29,7 @@ final class FramePipeline {
     private var advanced = AdvancedSettings()
     private var memory = DialogueMemory()
     private var stability = PublicationStability()
+    private var isBackground = false
     private var pending: DialogueJob?
     private var translating = false
     private var lastSample = 0.0
@@ -46,10 +47,10 @@ final class FramePipeline {
         latest = (buffer,ProcessInfo.processInfo.systemUptime,TVHub.now())
     }
     private var metricsDropped: UInt64 = 0
-    func start(roi: SourceBox, mode: PerformanceMode) {
+    func start(roi: SourceBox, mode: PerformanceMode, preservingState: Bool = false) {
         queue.async { [self] in
             guard roi.isValid else { return }
-            reset(); self.roi = roi; self.mode = mode; runID = UUID(); lastSample = 0; lastTextChange = 0
+            reset(preservingState:preservingState); self.roi = roi; self.mode = mode; runID = UUID(); lastSample = 0; lastTextChange = 0
             metrics = PipelineMetrics()
             startedAt = ProcessInfo.processInfo.systemUptime
             slotLock.lock(); active = true; metricsDropped = 0; slotLock.unlock()
@@ -61,7 +62,7 @@ final class FramePipeline {
     func configure(mode: PerformanceMode, thermal: Int, lowPower: Bool) {
         queue.async { [self] in self.mode = mode; self.thermal = thermal; self.lowPower = lowPower }
     }
-    func setBackground(_ value: Bool) { queue.async { [self] in ocr.setBackground(value) } }
+    func setBackground(_ value: Bool) { queue.async { [self] in isBackground = value; ocr.setBackground(value) } }
     func configureAdvanced(_ value: AdvancedSettings) {
         queue.async { [self] in
             advanced = value; memory.enabled = value.contextEnabled; memory.capacity = value.contextCapacity
@@ -84,9 +85,15 @@ final class FramePipeline {
         slotLock.lock(); active = false; latest = nil; slotLock.unlock()
         queue.async { [self] in reset(); publish(TVProtocol.envelope("subtitle_clear")) }
     }
-    private func reset() {
-        timer?.cancel(); timer = nil; runID = UUID(); tracker.reset(); pending = nil; ocr = VisionDialogueOCR(); signature = FrameSignature()
-        memory.clear(); stability.clear()
+    func pause() {
+        translator.cancel()
+        slotLock.lock(); active = false; latest = nil; slotLock.unlock()
+        queue.async { [self] in reset(preservingState:true); publish(TVProtocol.envelope("subtitle_clear")) }
+    }
+    private func reset(preservingState: Bool = false) {
+        timer?.cancel(); timer = nil; runID = UUID(); pending = nil; ocr = VisionDialogueOCR(); ocr.setBackground(isBackground); signature = FrameSignature()
+        if preservingState { tracker.markInterrupted(); memory.prune(now:ProcessInfo.processInfo.systemUptime) }
+        else { tracker.reset(); memory.clear(); stability.clear() }
         // An already running inference still owns the single worker until its callback.
     }
     private func sample() {

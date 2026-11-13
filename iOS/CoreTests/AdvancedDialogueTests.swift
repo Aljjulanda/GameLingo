@@ -54,8 +54,8 @@ final class AdvancedDialogueTests: XCTestCase {
             XCTAssertEqual(memory.entries.count,capacity)
             memory.observe(job("29","Wait here!",correction:true),now:30)
             XCTAssertEqual(memory.entries.count,capacity)
-            memory.prune(now:200); XCTAssertTrue(memory.entries.isEmpty())
-            memory.enabled = false; memory.observe(job(),now:201); XCTAssertTrue(memory.entries.isEmpty())
+            memory.prune(now:200); XCTAssertTrue(memory.entries.isEmpty)
+            memory.enabled = false; memory.observe(job(),now:201); XCTAssertTrue(memory.entries.isEmpty)
         }
     }
     func testContextRulesOnlyTranslateNewSentenceAndNeverGuessIdioms() {
