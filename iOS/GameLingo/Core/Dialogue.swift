@@ -134,7 +134,7 @@ struct DialogueTracker {
             return .gone(old.id)
         }
         empty = 0
-        func speakerKey(_ name: String?) -> String? { name.map { DialogueText.normalized($0).lowercased() } }
+        func speakerKey(_ name: String?) -> String? { name.map { DialogueText.exactWords($0).joined(separator:" ") } }
         if let old = current, suppressContinuingCurrent, box.isAdjacent(to:old.box), speaker == nil || old.speaker == nil || speakerKey(speaker) == speakerKey(old.speaker) {
             let oldWords = DialogueText.exactWords(old.text), newWords = DialogueText.exactWords(text)
             let label = DialogueText.exactWords(speaker ?? "")

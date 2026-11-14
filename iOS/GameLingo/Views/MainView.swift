@@ -226,7 +226,7 @@ struct PerformanceView: View {
                 Section("الحوار والمتحدثون") {
                     LabeledContent("قراءات حوار مكررة تم تجاهلها",value:String(model.metrics.duplicatesSuppressed))
                     LabeledContent("تصحيحات OCR مدمجة",value:String(model.metrics.correctionsMerged))
-                    LabeledContent("قراءات اسم متحدث مؤكدة",value:String(model.metrics.speakersDetected))
+                    LabeledContent("قراءات اسم متحدث مقبولة",value:String(model.metrics.speakersDetected))
                     LabeledContent("تسميات اسم غير مؤكدة",value:String(model.metrics.speakersUncertain))
                     DisclosureGroup("تتبع علامات الترقيم · أعداد فقط") {
                         Text(model.metrics.punctuationTrace).font(.system(.caption,design:.monospaced)).textSelection(.enabled)

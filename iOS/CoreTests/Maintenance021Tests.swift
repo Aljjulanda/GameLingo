@@ -71,6 +71,9 @@ final class Maintenance021Tests: XCTestCase {
         guard case .dialogue(let first,_) = t.observe(text:"Wait here.",box:.dialogue,now:0,frameMilliseconds:0,speaker:"ARTHUR") else { return XCTFail() }
         guard case .unchanged = t.observe(text:"Wait here!",box:.dialogue,now:0.2,frameMilliseconds:200,speaker:"Arthur") else { return XCTFail() }
         XCTAssertEqual(first.id,t.current?.id)
+        var doctor = DialogueTracker()
+        _ = doctor.observe(text:"Wait here.",box:.dialogue,now:0,frameMilliseconds:0,speaker:"Dr. Smith")
+        guard case .unchanged = doctor.observe(text:"Wait here.",box:.dialogue,now:0.2,frameMilliseconds:200,speaker:"Dr Smith") else { return XCTFail("Name punctuation alone is not a new person") }
         var unnamed = DialogueTracker()
         _ = unnamed.observe(text:"Wait here.",box:.dialogue,now:0,frameMilliseconds:0)
         unnamed.markInterrupted()
