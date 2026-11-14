@@ -1,0 +1,124 @@
+{
+  "date": "2026-11-14",
+  "development_branch": "codex/0.3.0-translation-packs",
+  "compiled_source": "f1e461176d38ab44f4c8dbfeacd7079d4db36c46",
+  "source_archive_note": "Subsequent validation-only documentation; compiled app source unchanged.",
+  "ios": {
+    "version": "0.3.0",
+    "build": "6",
+    "bundle": "dev.gamelingo.ios",
+    "unsigned": true,
+    "minimum_ios": "16.0",
+    "run_id": 43594936502,
+    "job_id": 132447318193,
+    "conclusion": "success",
+    "core_tests": 67,
+    "apple_simulator_tests": 21,
+    "converter_tests": 17,
+    "packaging_tests": 4,
+    "ipa_artifact": 14113903720,
+    "ipa_artifact_zip_sha256": "15926a2baae76882af507c32d455ffb24524fe8df962cce4e5f8d3b4d07de743",
+    "validation_artifact": 14114048992,
+    "validation_zip_sha256": "b1320daa3809f1a9a7cf28ae9b2b2a0ffc691abd99670a0ebcd8903f0215ed0d",
+    "ipa_sha256": "c77f520a92b1103a70e64087078a4a46115b53bba26c514703b51d491766092c",
+    "ipa_bytes": 2747405,
+    "ipa_structure_and_no_third_party_pack_checked": true
+  },
+  "baseline": {
+    "stable": "ios-v0.2.0",
+    "main": "22139da223b92b17cb8e6b5b7b64e3f70c2530cc",
+    "recovery": "stable/real-device-0.2.0",
+    "recovery_source": "9ffe9814e2be2741a9782c84c08e4c5ff6b62872",
+    "preserved": true,
+    "windows_tests_rerun": 51,
+    "android_tests_rerun": 29,
+    "accepted_trial_correction": "Uninterrupted user half-hour trial was stable 0.2.0; diagnostic snapshot preceded it."
+  },
+  "local_rdr2_pack": {
+    "english_records": 233262,
+    "arabic_records": 242516,
+    "matched_identifiers": 228174,
+    "unmatched_arabic_identifiers": 14342,
+    "unmatched_english_identifiers": 5088,
+    "english_conflicting_ids": 0,
+    "arabic_duplicate_id_records": 0,
+    "arabic_conflicting_ids": 0,
+    "package_records": 228174,
+    "usable_records": 209459,
+    "usable_percent_of_arabic": 86.36914677794455,
+    "ambiguous_normalized_sources": 3168,
+    "flags": {
+      "complex_visual_order": 67,
+      "presentation_forms_converted": 228022,
+      "unresolved_markup_or_placeholder": 18645,
+      "no_arabic": 141,
+      "empty": 36
+    },
+    "usable_categories": {
+      "general": 48848,
+      "dialogue": 160611
+    },
+    "pack_bytes": 26112973,
+    "pack_sha256": "dd046d8b4f66b0da5eb4d4aa9ed19961cb90c66a9226914600180a92298b4528",
+    "database_bytes": 85385216,
+    "database_sha256": "5ceafd8ca44bca3b1992cfa1def3dafe43eded8d34178250598ce9b30291b486",
+    "sqlite_index_bytes": 29880320
+  },
+  "rdr2_native_ci": {
+    "eligible_rows": 209459,
+    "environment": "Actual real RDR2 database, native SQLite and Swift on CI Mac; not physical iPhone or gameplay; correctness is expected lookup decision, not a human linguistic certification",
+    "lookup_average_ms": 0.0421653433160824,
+    "lookup_p95_ms": 0.10545833333708288,
+    "lookup_samples": 1102,
+    "native_validation_ms": 8745.76566666667,
+    "records": 228174,
+    "verified_matches": 1000,
+    "verified_rejections": 102
+  },
+  "licensing": {
+    "third_party_content_publicly_redistributed": false,
+    "permission": "Not established; generated pack and original sample image remain local. Loader MIT license does not license localization text.",
+    "human_authorship": "Not independently established",
+    "coverage": "Partial; eligible row count is not gameplay hit rate or linguistic accuracy"
+  },
+  "android": {
+    "new_production_apk_required": false,
+    "production": "dev.gamelingo.tv 0.6.1 (9)",
+    "main_source_unchanged": true,
+    "physical_tcl_model": "TCL Smart TV Pro Android 12/API 31",
+    "isolated_lab_variant": "dev.gamelingo.tv.lab",
+    "actual_converted_samples_rendered": 6,
+    "rtl_glyph_checks_passed": true,
+    "canvas_visually_reviewed": true,
+    "compositor_screenshot": "Unavailable (zero bytes); original device Canvas PNG retained privately",
+    "cached_inline_1000_calls_ms": 14.21463,
+    "lab_packages_and_temporary_fixture_removed": true,
+    "foreground_production_service_verified": true
+  },
+  "matching": {
+    "selected_game_only": true,
+    "exact_and_normalized": true,
+    "approximate_enabled": false,
+    "ambiguity_fallback": true,
+    "unresolved_placeholders_fallback": true,
+    "bounded_cache_entries": 32,
+    "sqlite_page_cache_kib": 2048,
+    "smart_reading_categories": [
+      "document",
+      "menu",
+      "general"
+    ],
+    "continuous_video_renderer_added": false,
+    "new_ocr_pass_added": false
+  },
+  "physical_iphone_ps5_preview_acceptance": false,
+  "physical_phone_cpu_rss_thermal_energy_ocr_hybrid_p95_and_hit_rate": "Not measured for 0.3.0; CI timings are not physical phone values.",
+  "known_limits": [
+    "Partial/version-dependent source data",
+    "Short timed fragments and unknown markup may not match",
+    "No approximate matching; OCR character loss safely falls back",
+    "Smart Reading uses existing chunks; no substring paragraph replacement",
+    "Manual game selection; no automatic recognition",
+    "No physical iPhone/PS5 full gameplay or locked-screen acceptance for this preview yet"
+  ]
+}
