@@ -87,6 +87,20 @@ protocol LocalizationFormatAdapter {
     func parse(_ text: String, control: LocalizationImportControl) throws -> ParsedLocalization
 }
 enum LocalizationAdapters {
+    static let metadataKeys = ["game_id","game_title","pack_version","attribution","author","copyright","permission","license","source_language","target_language","arabic_order"]
+    static let creditKeys: Set<String> = ["attribution","author","copyright","permission","license"]
+    static func metadata(_ object: [String:Any], into result: inout ParsedLocalization) throws {
+        for key in metadataKeys {
+            guard let raw = object[key], !(raw is NSNull) else { continue }
+            guard let value = raw as? String else { throw LocalizationImportFailure.malformed }
+            if value.isEmpty { continue }
+            if let old = result.metadata[key], old != value {
+                guard creditKeys.contains(key) else { throw LocalizationImportFailure.malformed }
+                result.metadata[key] = old+"\n"+value
+            } else { result.metadata[key] = value }
+            guard (result.metadata[key]?.count ?? 0) <= 4096 else { throw LocalizationImportFailure.limit }
+        }
+    }
     static let all: [LocalizationFormatAdapter] = [JSONLocalizationAdapter(),XMLLocalizationAdapter(),CSVLocalizationAdapter(),POLocalizationAdapter()]
     static func parse(_ data: Data, format: LocalizationFileFormat, control: LocalizationImportControl) throws -> ParsedLocalization {
         guard data.count <= 16*1024*1024 else { throw LocalizationImportFailure.limit }
@@ -119,7 +133,11 @@ struct JSONLocalizationAdapter: LocalizationFormatAdapter {
         do { object = try JSONSerialization.jsonObject(with:Data(text.utf8)) } catch { throw LocalizationImportFailure.malformed }
         var result = ParsedLocalization(), rows: [[String:Any]] = []
         if let root = object as? [String:Any] {
-            for key in ["game_id","game_title","pack_version","attribution","author","copyright","permission","license","source_language","target_language"] { if let value = root[key] as? String { result.metadata[key] = value } }
+            try LocalizationAdapters.metadata(root,into:&result)
+            if let metadata = root["metadata"] {
+                guard let metadata = metadata as? [String:Any] else { throw LocalizationImportFailure.malformed }
+                try LocalizationAdapters.metadata(metadata,into:&result)
+            }
             if let entries = root["entries"] as? [[String:Any]] { rows = entries }
             else if let en = root["en"] as? [String:String], let ar = root["ar"] as? [String:String] {
                 guard en.count <= 50000, ar.count <= 50000 else { throw LocalizationImportFailure.limit }
@@ -169,6 +187,7 @@ struct CSVLocalizationAdapter: LocalizationFormatAdapter {
         for (index,fields) in rows.dropFirst().enumerated() {
             try control.check(); guard fields.count == keys.count else { throw LocalizationImportFailure.malformed }
             let value = Dictionary(uniqueKeysWithValues:zip(keys,fields.map{$0 as Any}))
+            try LocalizationAdapters.metadata(value,into:&result)
             if let record = LocalizationAdapters.record(value,index:index) { result.records.append(record) } else { result.rejected += 1 }
         }
         return result
@@ -184,7 +203,13 @@ struct POLocalizationAdapter: LocalizationFormatAdapter {
         func flush() throws {
             if started && !blocked && !source.isEmpty { result.records.append(.init(id:context.isEmpty ? String(result.records.count) : String(result.records.count)+":"+String(context.prefix(80)),source:source,target:target)) }
             else if started && !source.isEmpty { result.rejected += 1 }
-            else if started && source.isEmpty { attribution.append(target) }
+            else if started && source.isEmpty {
+                attribution.append(target)
+                for line in target.components(separatedBy:.newlines) {
+                    let pair = line.split(separator:":",maxSplits:1).map{String($0).trimmingCharacters(in:.whitespaces)}
+                    if pair.count == 2 && pair[0].lowercased() == "language" { result.metadata["target_language"] = pair[1] }
+                }
+            }
             guard result.records.count <= 50000 else { throw LocalizationImportFailure.limit }
             source = ""; target = ""; context = ""; active = ""; blocked = false; started = false
         }
@@ -219,7 +244,8 @@ private final class LocalizationXMLDelegate: NSObject, XMLParserDelegate {
     init(control: LocalizationImportControl) { self.control = control }
     func parser(_ parser: XMLParser, didStartElement name: String, namespaceURI: String?, qualifiedName: String?, attributes attributesDict: [String:String]) {
         do { try control.check(); nodes += 1; guard nodes <= 300000, stack.count < 32 else { throw LocalizationImportFailure.limit }; stack.append(name); text = ""
-            if stack.count == 1 { for key in ["game_id","game_title","attribution","author","copyright","permission","license"] { result.metadata[key] = attributesDict[key] } }
+            if stack.count > 1 && LocalizationAdapters.metadataKeys.contains(name) { throw LocalizationImportFailure.unsupported("بيانات المصدر والترخيص في XML مدعومة كسمات؛ استخدم المحوّل الخارجي للبنية المتداخلة دون فقد بياناتها") }
+            if stack.count == 1 || name == "entry" || name == "string" { try LocalizationAdapters.metadata(attributesDict.mapValues{$0 as Any},into:&result) }
             if name == "entry" || name == "string" { guard !inEntry else { throw LocalizationImportFailure.malformed }; inEntry = true; entryDepth = stack.count; values = [:]; attributes = attributesDict }
             if inEntry && stack.count > entryDepth+1 { throw LocalizationImportFailure.malformed }
         } catch { failure = error; parser.abortParsing() }
@@ -261,6 +287,14 @@ struct XMLLocalizationAdapter: LocalizationFormatAdapter {
 
 enum EnglishArabicMatcher {
     static func match(_ parsed: ParsedLocalization, control: LocalizationImportControl) throws -> ParsedLocalization {
+        func base(_ value: String) -> String { value.trimmingCharacters(in:.whitespaces).lowercased().split(whereSeparator:{$0 == "-" || $0 == "_"}).first.map(String.init) ?? "" }
+        guard parsed.metadata["source_language"].map({base($0) == "en"}) ?? true,
+              parsed.metadata["target_language"].map({base($0) == "ar"}) ?? true else {
+            throw LocalizationImportFailure.unsupported("المحوّل المحلي يدعم نصوصًا إنجليزية إلى عربية؛ لغات الملف المعلنة مختلفة")
+        }
+        guard parsed.metadata["arabic_order"].map({$0 == "logical"}) ?? true else {
+            throw LocalizationImportFailure.unsupported("الملف يعلن ترتيبًا بصريًا للعربية؛ استخدم المحوّل الخارجي لإنتاج ترتيب منطقي صحيح")
+        }
         var result = parsed; result.records = []
         var targets: [String:Set<String>] = [:], candidates: [LocalizationRecord] = [], ids: [String:LocalizationRecord] = [:]
         for var record in parsed.records {

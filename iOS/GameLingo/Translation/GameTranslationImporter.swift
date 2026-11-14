@@ -112,6 +112,9 @@ final class GameTranslationImporter {
                 return file
             }
             if paths.contains("translations.sqlite") || paths.contains("manifest.json") && paths.contains("checksums.json") { throw LocalizationImportFailure.malformed }
+            guard entries.filter({$0.type == .file}).count == 1 else {
+                throw LocalizationImportFailure.unsupported("أرشيف ZIP متعدد الملفات يحتاج المحوّل الخارجي للحفاظ على ملفات المصدر والترخيص وعدم خلط الألعاب؛ يدعم iPhone حاوية لملف تعريب واحد")
+            }
             report.stage = "جارٍ استخراج ملفات التعريب بأمان"
             publish(report)
             var candidates: [(URL,LocalizationInspection)] = [], mappingMissing = false

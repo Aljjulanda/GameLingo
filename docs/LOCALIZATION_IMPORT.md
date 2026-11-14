@@ -35,7 +35,7 @@ Metadata keys: game_id, game_title, pack_version, attribution, author, copyright
 </localization>
 ```
 
-`string` elements with `name` instead of `entry`/`id`, en/ar child fields and CDATA are also supported. Source/target fields must be direct children. Nested markup, DTD/external entities and duplicate fields are rejected. Root metadata attributes use the JSON metadata keys.
+`string` elements with `name` instead of `entry`/`id`, en/ar child fields and CDATA are also supported. Source/target fields must be direct children. Supported metadata is supplied as attributes; nested metadata elements require the external converter. Nested markup, DTD/external entities and duplicate fields are rejected. Root metadata attributes use the JSON metadata keys.
 
 ### CSV / TSV / structured TXT
 
@@ -60,7 +60,7 @@ Multiline quoted strings, headers and copyright/license/translator/author commen
 
 GLPACK reuses the existing version 1 closed ZIP/SQLite/checksum format. All original validators and atomic installation remain active. The filename may be changed without changing detection.
 
-A general ZIP may contain one convertible localization file (with any filename) or one GLPACK. Paths are validated first; extracted files receive generated names, never archive-supplied filesystem paths. Several usable independent candidates require external merging to avoid mixing games. No more than two ZIP layers are processed. Each general entry is at most 16 MiB; a nested GLPACK must also fit that entry limit. The top-level GLPACK retains the original larger database allowance.
+A general ZIP may contain one convertible localization file (with any filename) or one GLPACK. Paths are validated first; extracted files receive generated names, never archive-supplied filesystem paths. Multi-file archives require the external converter, including README/license sidecars, so source/licensing data is not silently dropped or games mixed. No more than two ZIP layers are processed. Each general entry is at most 16 MiB; a nested GLPACK must also fit that entry limit. The top-level GLPACK retains the original larger database allowance.
 
 ### Recognized but not converted on iPhone
 
@@ -84,3 +84,5 @@ Import/conversion is disabled during live translation, and starting a translatio
 Core parser/matcher/security tests run through Swift Package Manager. Apple integration tests cover actual SQLite/GLPACK creation, installation, failure preservation, cancellation and limits. XCUITest opens the native picker, taps twelve synthetic file types (including an extensionless file), checks that each selected filename reaches inspection, cancels selection and imports from the app inbox. Screenshots/hierarchies are exported as CI evidence.
 
 The existing CI uses an iOS 18.5 simulator. A physical iPhone, iCloud account and third-party provider cannot be certified by these tests. Physical acceptance requires tapping EXE, ZIP, GLPACK and an unknown extension on the target iPhone and verifying the distinction between inspection and actual conversion.
+
+Declared source/target languages are respected (English/Arabic locale variants accepted). A declared visual Arabic order requires external conversion; the importer never relabels it logical. Licensing/attribution metadata must use the supported string fields; unsupported structures are rejected. CSV metadata columns with those names are preserved, with conflicting game identities rejected.

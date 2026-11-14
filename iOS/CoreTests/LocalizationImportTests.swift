@@ -2,6 +2,14 @@ import XCTest
 @testable import LingoCore
 
 final class LocalizationImportTests: XCTestCase {
+    func testDeclaredLanguagesArabicOrderAndLicensingMetadataAreRespected() throws {
+        for extra in [#""source_language":"fr""#,#""target_language":"en""#,#""arabic_order":"visual""#] {
+            XCTAssertThrowsError(try parsed("{\(extra),\"entries\":[{\"en\":\"Move now.\",\"ar\":\"تحرك الآن.\"}]}",.json))
+        }
+        XCTAssertThrowsError(try parsed(#"{"license":{"url":"https://example.com"},"entries":[{"en":"Move now.","ar":"تحرك الآن."}]}"#,.json))
+        let value = try parsed("source,target,attribution,license\nMove now.,تحرك الآن.,Original Team,Original Terms\n",.csv)
+        XCTAssertEqual(value.metadata["attribution"],"Original Team"); XCTAssertEqual(value.metadata["license"],"Original Terms")
+    }
     private func parsed(_ text: String, _ format: LocalizationFileFormat) throws -> ParsedLocalization {
         let control = LocalizationImportControl()
         return try EnglishArabicMatcher.match(LocalizationAdapters.parse(Data(text.utf8),format:format,control:control),control:control)
@@ -58,6 +66,7 @@ final class LocalizationImportTests: XCTestCase {
             "<!DOCTYPE x [<!ENTITY e SYSTEM 'file:///etc/passwd'>]><x>&e;</x>",
             "<x><entry><source>Move <b>now</b>.</source><target>تحرك</target></entry></x>",
             "<x><entry><source>Move</source><source>Wait</source><target>تحرك</target></entry></x>",
+            "<x><license>Original terms</license><entry><source>Move</source><target>تحرك</target></entry></x>",
             "<unclosed>"] {
             XCTAssertThrowsError(try parsed(text,.xml))
         }
