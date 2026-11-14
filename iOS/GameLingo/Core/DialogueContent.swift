@@ -3,28 +3,36 @@ import Foundation
 struct DialogueContent {
     let text: String
     let speaker: String?
-    static func parse(_ text: String, knownNames: String, separateLabel: Bool = false, confidence: Double = 1) -> DialogueContent {
-        let names = Set(knownNames.split(separator:",").map { $0.trimmingCharacters(in:.whitespacesAndNewlines).lowercased() }.filter { !$0.isEmpty })
-        let lines = text.components(separatedBy:.newlines).filter { !$0.trimmingCharacters(in:.whitespaces).isEmpty }
-        guard let first = lines.first else { return DialogueContent(text:"",speaker:nil) }
-        let ordinary: Set<String> = ["warning","note","objective","mission","quest","hint","tip","chapter","attention","remember","listen","look","yes","no","hello","inventory","options","settings","item","message","journal","letter","press","hold","system","dialogue","go","run","wait","stop","help","come","follow","leave","hey","okay","sure","please","thanks","we","you","they","he","she","it","the","i","left","right","up","down","forward","back","attack","block","jump","reload","fire","aim","interact","move"]
-        func clearName(_ label: String) -> Bool {
-            let words = label.split(separator:" ")
-            return confidence >= 0.65 && !ordinary.contains(label.lowercased()) && (1...3).contains(words.count) &&
-                words.allSatisfy { word in !ordinary.contains(word.lowercased()) && word.count >= 2 && word.first?.isUppercase == true && word.allSatisfy { $0.isLetter || "'-".contains($0) } }
+    var uncertainSpeaker = false
+    static let ordinary: Set<String> = ["warning","note","objective","mission","quest","hint","tip","chapter","attention","remember","listen","look","yes","no","hello","inventory","options","settings","item","message","journal","letter","press","hold","system","dialogue","go","run","wait","stop","help","come","follow","leave","hey","okay","sure","please","thanks","we","you","they","he","she","it","the","i","left","right","up","down","forward","back","attack","block","jump","reload","fire","aim","interact","move","get","out","open","close","collect","save","load","exit","enter","new","game"]
+    static func isName(_ value: String, knownNames: String, confidence: Double) -> Bool {
+        let label = value.trimmingCharacters(in:.whitespacesAndNewlines)
+        let key = label.lowercased().trimmingCharacters(in:CharacterSet(charactersIn:".:!"))
+        let words = label.split(separator:" ")
+        guard label.count <= 40, (1...3).contains(words.count), !ordinary.contains(key),
+              words.allSatisfy({ !ordinary.contains($0.lowercased().trimmingCharacters(in:CharacterSet(charactersIn:".:!"))) }) else { return false }
+        let known = knownNames.split(separator:",").contains { $0.trimmingCharacters(in:.whitespacesAndNewlines).lowercased() == label.lowercased() }
+        if known { return confidence >= 0.35 }
+        return confidence >= 0.65 && words.allSatisfy { word in
+            word.first?.isUppercase == true && word.filter(\.isLetter).count >= 2 && word.allSatisfy { $0.isLetter || "'’-.".contains($0) }
         }
+    }
+    static func parse(_ text: String, knownNames: String, separateLabel: Bool = false, confidence: Double = 1) -> DialogueContent {
+        let lines = SubtitlePresentation.clean(text).components(separatedBy:.newlines).filter { !$0.trimmingCharacters(in:.whitespaces).isEmpty }
+        guard let first = lines.first else { return DialogueContent(text:"",speaker:nil) }
         if let colon = first.firstIndex(of:":") {
             let label = first[..<colon].trimmingCharacters(in:.whitespaces)
-            if label.count <= 40 && ((confidence >= 0.35 && names.contains(label.lowercased())) || clearName(label)) {
+            if isName(label,knownNames:knownNames,confidence:confidence) {
                 let rest = String(first[first.index(after:colon)...])
                 return DialogueContent(text:DialogueText.normalized(([rest]+Array(lines.dropFirst())).joined(separator:" ")),speaker:label)
             }
         }
-        if lines.count > 1 && ((confidence >= 0.35 && names.contains(first.trimmingCharacters(in:.whitespaces).lowercased())) || (separateLabel && clearName(first) && DialogueText.words(lines.dropFirst().joined(separator:" ")).count >= 2)) {
+        let known = knownNames.split(separator:",").contains { $0.trimmingCharacters(in:.whitespacesAndNewlines).lowercased() == first.trimmingCharacters(in:.whitespaces).lowercased() }
+        if lines.count > 1 && (known || separateLabel) && isName(first,knownNames:knownNames,confidence:confidence) && DialogueText.words(lines.dropFirst().joined(separator:" ")).count >= 2 {
             return DialogueContent(text:DialogueText.normalized(lines.dropFirst().joined(separator:" ")),speaker:first.trimmingCharacters(in:.whitespaces))
         }
         // An ordinary word, uncertain OCR or uppercase alone is not a speaker.
-        return DialogueContent(text:DialogueText.normalized(text),speaker:nil)
+        return DialogueContent(text:DialogueText.normalized(text),speaker:nil,uncertainSpeaker:first.contains(":") && first.prefix(while:{$0 != ":"}).count <= 40)
     }
 }
 

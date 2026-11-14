@@ -21,13 +21,14 @@ enum TVProtocol {
     }
     static func subtitle(_ job: DialogueJob, arabic: String, now: Int64) -> [String: Any] {
         var fields: [String:Any] = [
-            "id":job.id,"source":job.text,"translated":String(arabic.prefix(2400)),"source_lang":"en","target_lang":"ar",
+            "id":job.id,"source":job.text,"translated":String(SubtitlePresentation.clean(arabic).prefix(2400)),"source_lang":"en","target_lang":"ar",
             "update_type":job.correction ? "correction" : "new","frame_ms":job.frameMilliseconds,"translation_ms":now,
             "x":job.box.x,"y":job.box.y,"w":job.box.w,"h":job.box.h,"category":"text","confidence":NSNull(),"font_sp":25,
             "duration_ms":8000,"expires_at":now+8000
         ]
         fields["event_fresh"] = !job.correction
         fields["meaningful_correction"] = job.meaningfulCorrection
+        if !job.eventBoundary.isEmpty { fields["event_boundary"] = job.eventBoundary; fields["source_gap_ms"] = job.sourceGapMilliseconds }
         if let speaker = job.speaker { fields["speaker"] = ["name":String(speaker.prefix(40))] }
         return envelope(job.correction ? "subtitle_update" : "subtitle_show",fields:fields)
     }

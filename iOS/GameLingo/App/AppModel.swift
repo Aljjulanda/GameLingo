@@ -23,7 +23,10 @@ final class AppModel: ObservableObject {
     @Published var audioStatus = "تجربة الخلفية متوقفة"
     @Published var streamConnected = false
     @Published var recoveryAttempts = 0
-    @Published var totalPS5Reconnects = 0
+    @Published var remoteMetrics = RemoteMetrics()
+    @Published var audioInterruptions = 0, networkInterruptions = 0
+    @Published var sessionDiagnostics: [String] = []
+    @Published var sessionStarted = Date()
     @Published var backgroundDeliveries: UInt64 = 0
     @Published var tvConnected = false
     @Published var tvDocuments = false
@@ -69,8 +72,29 @@ final class AppModel: ObservableObject {
     private var displayedIDs = Set<String>()
     private var resources = ResourceMonitor()
     private var initialBattery: Float = -1
+    private var sessionLog = SessionDiagnostics()
+    private var lastSystemSample = 0.0
+    private var sessionStartedUptime = 0.0
     var performanceSnapshot: String {
-        "GameLingo 0.2.0\n\(sessionStatus)\n\(audioStatus)\nCPU: \(NumericInput.format(cpuPercent))% (100%=one core)\nRSS: \(NumericInput.format(residentMegabytes)) MB\nThermal: \(thermal.rawValue)\nTranslation p95: \(NumericInput.format(metrics.translationP95)) ms\nOCR p95: \(NumericInput.format(metrics.ocrP95)) ms\nTV background render ACKs: \(backgroundDeliveries)\nRecovery backoff counter: \(recoveryAttempts)\nActual PS5 reconnects: \(totalPS5Reconnects)\nBattery percentage change: \(batteryUsed.map(NumericInput.format) ?? "unavailable")\nSmart Reading: \(NumericInput.format(metrics.documentMilliseconds)) ms, sampled extra RSS \(NumericInput.format(metrics.documentExtraMegabytes)) MB"
+        let values = [
+            "GameLingo 0.2.1", "Measurement started: \(sessionStarted.formatted())", sessionStatus, audioStatus,
+            "CPU: \(NumericInput.format(cpuPercent))% (100%=one core)", "RSS: \(NumericInput.format(residentMegabytes)) MB", "Thermal: \(thermal.rawValue)",
+            "Translation p95: \(NumericInput.format(metrics.translationP95)) ms", "OCR p95: \(NumericInput.format(metrics.ocrP95)) ms",
+            "TV background render ACKs: \(backgroundDeliveries)", "Recovery backoff index: \(recoveryAttempts)",
+            "PS5 reconnect attempts: \(remoteMetrics.attempts)", "Confirmed PS5 reconnects: \(remoteMetrics.successes)", "Failed PS5 reconnects: \(remoteMetrics.failures)",
+            "Frame starvation events: \(remoteMetrics.starvations)", "Decoder IDR requests: \(remoteMetrics.decoderRequests)",
+            "Audio interruptions: \(audioInterruptions)", "Network interruptions: \(networkInterruptions)",
+            "Duplicate OCR suppressed: \(metrics.duplicatesSuppressed)", "OCR corrections merged: \(metrics.correctionsMerged)",
+            "Speaker readings detected: \(metrics.speakersDetected)", "Speaker readings uncertain: \(metrics.speakersUncertain)",
+            "Battery percentage change: \(batteryUsed.map(NumericInput.format) ?? "unavailable")",
+            "Smart Reading: \(NumericInput.format(metrics.documentMilliseconds)) ms, sampled extra RSS \(NumericInput.format(metrics.documentExtraMegabytes)) MB",
+            "Punctuation stages (counts only): \(metrics.punctuationTrace)"
+        ]
+        return (values+sessionDiagnostics).joined(separator:"\n")
+    }
+    private func recordSession(_ stage: String, _ detail: String, at: Double? = nil) {
+        sessionLog.record(stage,detail:detail,now:at ?? ProcessInfo.processInfo.systemUptime,foreground:policy.foreground,network:policy.network,interrupted:policy.interrupted)
+        sessionDiagnostics = sessionLog.lines
     }
 
     init() {
@@ -108,10 +132,16 @@ final class AppModel: ObservableObject {
             }
             if connected { self.recoveryAttempts = 0; self.sessionStatus = "البث متصل؛ الترجمة نشطة" }
         }
-        remote.onReconnectAttempt = { [weak self] in if self?.policy.wanted == true { self?.totalPS5Reconnects += 1 } }
+        remote.onTelemetry = { [weak self] metrics,stage,detail,time in
+            guard let self, !self.policy.wanted || time >= self.sessionStartedUptime else { return }; self.remoteMetrics = metrics
+            if let stage { self.recordSession(stage,detail,at:time) }
+        }
         audio.onChange = { [weak self] active,interrupted,text in
             guard let self else { return }
+            let wasInterrupted = self.policy.interrupted
             self.audioStatus = text; self.policy.audioActive = active; self.policy.interrupted = interrupted
+            if interrupted && !wasInterrupted && self.policy.wanted { self.audioInterruptions += 1; self.recordSession("audio.interruption",text) }
+            if active && wasInterrupted { self.recordSession("audio.restored",text) }
             if active { self.endExecutionGrace() }
             else if self.policy.wanted && !self.policy.foreground { self.beginExecutionGrace() }
         }
@@ -170,7 +200,12 @@ final class AppModel: ObservableObject {
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 self.networkStatus = available ? (path.usesInterfaceType(.wifi) ? "Wi-Fi متصل" : "الشبكة متاحة") : "الشبكة غير متاحة"
+                let changed = self.policy.network != available
                 self.policy.network = available
+                if self.policy.wanted && changed {
+                    if !available { self.networkInterruptions += 1 }
+                    self.recordSession(available ? "network.restored" : "network.unavailable","NWPathMonitor availability transition")
+                }
                 self.refreshAddresses()
                 self.hub.validateAddress()
                 if !available { self.pipeline.interrupt(); self.sessionStatus = "بانتظار Wi-Fi" }
@@ -189,6 +224,9 @@ final class AppModel: ObservableObject {
         if !addresses.contains(settings.localIP), let first = addresses.first { settings.localIP = first }
     }
     func sampleSystem() {
+        let now = ProcessInfo.processInfo.systemUptime
+        if policy.wanted && lastSystemSample > 0 && now-lastSystemSample > 8 { recordSession("execution.callback_gap","Main callback gap=\(Int(now-lastSystemSample))s; OS suspension is not confirmed") }
+        lastSystemSample = now; remote.sampleHealth()
         let usage = resources.sample(); cpuPercent = usage.cpu; residentMegabytes = Double(usage.residentBytes)/1048576
         let battery = UIDevice.current.batteryLevel
         if running && battery >= 0 {
@@ -231,7 +269,10 @@ final class AppModel: ObservableObject {
             policy.start(); policy.experimentalAudio = settings.advanced.backgroundAudio
             SessionIntentStore.save(true); initialBattery = -1; batteryUsed = nil; UIDevice.current.isBatteryMonitoringEnabled = true
             displayedIDs.removeAll(); backgroundDeliveries = 0
-            totalPS5Reconnects = 0
+            remoteMetrics = RemoteMetrics(); audioInterruptions = 0; networkInterruptions = 0
+            sessionLog = SessionDiagnostics(); sessionDiagnostics = []; sessionStarted = Date(); lastSystemSample = ProcessInfo.processInfo.systemUptime
+            sessionStartedUptime = lastSystemSample
+            recordSession("session.start","Counters reset for this user-started session")
             sessionStatus = "جارٍ بدء الجلسة"; recoveryAttempts = 0
             if policy.experimentalAudio { audio.start() }
             try remote.connect(console)
@@ -242,6 +283,7 @@ final class AppModel: ObservableObject {
         } catch { policy.stop(); SessionIntentStore.save(false); audio.stop(); errorMessage = error.localizedDescription }
     }
     func stop(reason: String = "أوقفها المستخدم") {
+        recordSession("session.stop",reason+"; automatic recovery disabled")
         closeReading()
         policy.stop(); recoveryTask?.cancel(); recoveryTask = nil; endExecutionGrace(); audio.stop()
         SessionIntentStore.save(false); UIDevice.current.isBatteryMonitoringEnabled = false
@@ -269,6 +311,7 @@ final class AppModel: ObservableObject {
     }
     func background() {
         lifecycle += 1; policy.foreground = false
+        if policy.wanted { recordSession("lifecycle.background","UI left foreground; user intent remains active") }
         relaxDisplay()
         pipeline.setBackground(true)
         if policy.wanted && policy.canExecute { sessionStatus = "تجربة الخلفية نشطة؛ راقب وصول جمل جديدة على TCL"; return }
@@ -277,6 +320,7 @@ final class AppModel: ObservableObject {
     }
     func foreground() {
         policy.foreground = true; endExecutionGrace()
+        if policy.wanted { recordSession("lifecycle.foreground","Execution opportunity; preserve healthy sessions") }
         UIApplication.shared.isIdleTimerDisabled = tvListening || running
         applyDim()
         pipeline.setBackground(false)
@@ -306,6 +350,7 @@ final class AppModel: ObservableObject {
     private func suspendForExecution() {
         endExecutionGrace()
         guard !policy.canExecute else { return }
+        recordSession("execution.unavailable","Finite execution grace expired; awaiting execution opportunity")
         remote.stop(); pipeline.pause(); pipelineActive = false; hub.stop(); hubStarting = false
         sessionStatus = "التنفيذ غير متاح؛ الاستئناف عند سماح iOS أو العودة للتطبيق"
     }

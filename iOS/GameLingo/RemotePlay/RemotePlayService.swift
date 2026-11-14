@@ -35,21 +35,34 @@ final class RemotePlayService {
     private var wanted: ConsoleCredentials?
     private var retries = 0
     private var startedAt = 0.0
+    private var accounting = RecoveryAccounting()
     var onState: ((String) -> Void)?
     var onLoginPIN: (() -> Void)?
     var onFrame: ((CVPixelBuffer) -> Void)?
     var onInterruption: (() -> Void)?
     var onStopped: (() -> Void)?
     var onAvailability: ((Bool) -> Void)?
-    var onReconnectAttempt: (() -> Void)?
+    var onTelemetry: ((RemoteMetrics,String?,String,Double) -> Void)?
+    private func telemetry(_ stage: String? = nil, _ detail: String = "") {
+        let now = ProcessInfo.processInfo.systemUptime
+        var value = accounting.snapshot(now:now)
+        if let health = context?.decoder.healthSnapshot() {
+            let clock = DispatchTime.now().uptimeNanoseconds
+            if health.lastInputNanoseconds > 0 { value.encodedFrameAge = Double(clock-health.lastInputNanoseconds)/1_000_000_000 }
+            if health.lastOutputNanoseconds > 0 { value.decodedFrameAge = Double(clock-health.lastOutputNanoseconds)/1_000_000_000 }
+        }
+        DispatchQueue.main.async { self.onTelemetry?(value,stage,detail,now) }
+    }
+    func sampleHealth() { control.async { [weak self] in self?.telemetry() } }
     /// Preserve healthy/starting sessions; restart only after confirmed frame starvation.
     func recover(_ console: ConsoleCredentials, stalled: Bool = false) {
         control.async { [self] in
+            guard accounting.reserveRecovery(hasSession:session != nil,stalled:stalled,age:ProcessInfo.processInfo.systemUptime-startedAt,now:ProcessInfo.processInfo.systemUptime) else { return }
             if session != nil {
-                guard stalled, ProcessInfo.processInfo.systemUptime-startedAt > 12 else { return }
+                telemetry("video.starvation","No decoded frame for >12 seconds; replacing current session")
                 DispatchQueue.main.async { self.onInterruption?() }
             }
-            DispatchQueue.main.async { self.onReconnectAttempt?() }
+            telemetry("reconnect.attempt",stalled ? "frame starvation" : "session unavailable; execution/network trigger")
             wanted = console; retries = 0; sessionEpoch += 1; start(console,epoch:sessionEpoch)
         }
     }
@@ -110,7 +123,7 @@ final class RemotePlayService {
     }
     func connect(_ console: ConsoleCredentials) throws {
         try console.validate()
-        control.async { [self] in wanted = console; retries = 0; sessionEpoch += 1; start(console,epoch:sessionEpoch) }
+        control.async { [self] in accounting.initial(now:ProcessInfo.processInfo.systemUptime); wanted = console; retries = 0; sessionEpoch += 1; start(console,epoch:sessionEpoch) }
     }
     private func state(_ text: String) { DispatchQueue.main.async { self.onState?(text) } }
     private func start(_ console: ConsoleCredentials, epoch: Int) {
@@ -119,22 +132,35 @@ final class RemotePlayService {
         let ctx = StreamContext(event: { [weak self] event,reason in
             guard let self else { return }
             self.control.async {
-                guard self.sessionEpoch == epoch, self.wanted != nil else { return }
+                guard self.sessionEpoch == epoch, self.wanted != nil, self.session != nil else { return }
                 switch event {
                 case 1:
+                    let wasReplacement = self.accounting.metrics.attempts > self.accounting.metrics.successes + self.accounting.metrics.failures
+                    guard self.accounting.established(now:ProcessInfo.processInfo.systemUptime) else { return }
+                    self.telemetry(wasReplacement ? "reconnect.success" : "ps5.connected","Native connected event confirmed")
                     self.retries = 0; self.state("بث PS5 متصل")
                     DispatchQueue.main.async { self.onAvailability?(true) }
-                case 3: DispatchQueue.main.async { self.onLoginPIN?() }; self.state("PS5 يطلب رمز تسجيل الدخول")
+                case 3:
+                    self.accounting.loginRequired(); self.telemetry("ps5.login_required","User login PIN required")
+                    DispatchQueue.main.async { self.onLoginPIN?() }; self.state("PS5 يطلب رمز تسجيل الدخول")
                 case 2:
+                    let uptime = self.accounting.snapshot(now:ProcessInfo.processInfo.systemUptime).uptime
+                    let failures = self.accounting.metrics.failures
+                    self.accounting.ended()
+                    self.telemetry(self.accounting.metrics.failures > failures ? "reconnect.failure" : "ps5.disconnected","Native reason=\(reason); uptime=\(Int(uptime))s")
                     self.closeSession()
                     DispatchQueue.main.async { self.onInterruption?() }
                     self.retries += 1
-                    guard self.retries <= 5 else { self.wanted = nil; self.state("توقف البث (\(reason))؛ أعد الاتصال يدويًا"); DispatchQueue.main.async { self.onStopped?() }; return }
+                    guard self.retries <= 5 else { self.wanted = nil; self.accounting.stop(); self.state("توقف البث (\(reason))؛ أعد الاتصال يدويًا"); DispatchQueue.main.async { self.onStopped?() }; return }
+                    self.accounting.scheduleRetry()
+                    self.telemetry("reconnect.scheduled","Native service owns the pending retry; lifecycle requests cannot bypass it")
                     self.state("انقطع البث (\(reason))؛ إعادة الاتصال \(self.retries)/5")
                     self.control.asyncAfter(deadline: .now()+Double(min(16,1 << self.retries))) {
                         if self.sessionEpoch == epoch, let wanted = self.wanted {
-                            DispatchQueue.main.async { self.onReconnectAttempt?() }
-                            self.start(wanted,epoch:epoch)
+                            guard self.accounting.beginRetry(now:ProcessInfo.processInfo.systemUptime) else { return }
+                            self.sessionEpoch += 1
+                            self.telemetry("reconnect.attempt","Native retry after disconnect")
+                            self.start(wanted,epoch:self.sessionEpoch)
                         }
                     }
                 default: break
@@ -157,11 +183,16 @@ final class RemotePlayService {
         }
         if let session {
             ctx.decoder.onRecoveryNeeded = { [weak self] _ in self?.control.async { [weak self] in
-                guard let self, self.sessionEpoch == epoch else { return }; GLSessionRequestRecovery(self.session)
+                guard let self, self.sessionEpoch == epoch, self.session != nil else { return }
+                self.accounting.decoderRequested(); self.telemetry("decoder.recovery_request","VideoToolbox requested native IDR recovery")
+                GLSessionRequestRecovery(self.session)
             } }
             error = GLSessionStart(session)
         }
-        if error != 0 || session == nil { closeSession(); wanted = nil; state("تعذر بدء البث (\(error))"); DispatchQueue.main.async { self.onStopped?() } }
+        if error != 0 || session == nil {
+            accounting.ended(); telemetry("ps5.start_failed","Native start error=\(error)")
+            closeSession(); wanted = nil; state("تعذر بدء البث (\(error))"); DispatchQueue.main.async { self.onStopped?() }
+        } else { telemetry("ps5.start","Native start accepted; waiting for connected event") }
     }
     private func closeSession() {
         let hadSession = session != nil
@@ -171,11 +202,12 @@ final class RemotePlayService {
     }
     func loginPIN(_ pin: String) throws {
         guard pin.count == 4, pin.utf8.allSatisfy({ (48...57).contains($0) }) else { throw LingoError.invalid("رمز تسجيل الدخول يجب أن يكون 4 أرقام") }
-        control.async { [self] in pin.withCString { _ = GLSessionLoginPIN(session,$0) } }
+        control.async { [self] in accounting.loginSubmitted(); pin.withCString { _ = GLSessionLoginPIN(session,$0) } }
     }
     func stop() {
         control.async { [self] in
             wanted = nil; sessionEpoch += 1; pairingEpoch += 1; discoveryEpoch += 1
+            accounting.stop(); telemetry("ps5.stop","Session stopped; pending native retries invalidated")
             GLDiscoveryDestroy(discovery); discovery = nil
             GLRegistrationDestroy(registration); registration = nil
             registrationContext = nil

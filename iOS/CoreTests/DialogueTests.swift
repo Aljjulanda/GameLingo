@@ -19,13 +19,13 @@ final class DialogueTests: XCTestCase {
         guard case .dialogue(let second,_) = tracker.observe(text:"Follow me to the gate",box:.dialogue,now:0.5,frameMilliseconds:500) else { return XCTFail() }
         XCTAssertEqual(first.id,second.id); XCTAssertTrue(second.correction)
     }
-    func testRepeatedDialogueAfterTwoEmptyObservationsHasFreshIdentity() {
+    func testConfirmedDisappearanceHasFreshIdentity() {
         var tracker = DialogueTracker()
         guard case .dialogue(let first,_) = tracker.observe(text:"Wait!",box:.dialogue,now:0,frameMilliseconds:0) else { return XCTFail() }
         guard case .unchanged = tracker.observe(text:"",box:.dialogue,now:0.1,frameMilliseconds:100) else { return XCTFail() }
-        guard case .gone(let id) = tracker.observe(text:"",box:.dialogue,now:0.4,frameMilliseconds:400) else { return XCTFail() }
+        guard case .gone(let id) = tracker.observe(text:"",box:.dialogue,now:0.9,frameMilliseconds:900) else { return XCTFail() }
         XCTAssertEqual(id,first.id)
-        guard case .dialogue(let again,_) = tracker.observe(text:"Wait!",box:.dialogue,now:0.5,frameMilliseconds:500) else { return XCTFail() }
+        guard case .dialogue(let again,_) = tracker.observe(text:"Wait!",box:.dialogue,now:1.1,frameMilliseconds:1100) else { return XCTFail() }
         XCTAssertNotEqual(first.id,again.id); XCTAssertFalse(again.correction)
     }
     func testStaleTranslationCannotReplaceNewEvent() {
@@ -35,11 +35,11 @@ final class DialogueTests: XCTestCase {
         XCTAssertFalse(tracker.accepts(first))
         tracker.reset(); XCTAssertFalse(tracker.accepts(first))
     }
-    func testCorrectedFullLineRejectsOlderNonPrefixResult() {
+    func testWeakCosmeticReadingKeepsBetterInFlightResult() {
         var tracker = DialogueTracker()
         guard case .dialogue(let first,_) = tracker.observe(text:"Something happened.",box:.dialogue,now:0,frameMilliseconds:0) else { return XCTFail() }
-        _ = tracker.observe(text:"Sometheng happened.",box:.dialogue,now:0.2,frameMilliseconds:200)
-        XCTAssertFalse(tracker.accepts(first))
+        _ = tracker.observe(text:"Sometheng happened.",box:.dialogue,now:0.2,frameMilliseconds:200,confidence:0.4)
+        XCTAssertTrue(tracker.accepts(first))
     }
     func testSpatialMoveStartsNewEvent() {
         var tracker = DialogueTracker()

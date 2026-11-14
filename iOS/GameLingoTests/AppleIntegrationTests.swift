@@ -336,6 +336,10 @@ final class AppleIntegrationTests: XCTestCase {
         XCTAssertLessThan(box.y+box.h,0.93)
         XCTAssertGreaterThan(box.x,0.16)
         XCTAssertLessThan(box.x+box.w,0.84)
+        // This glyph was actually drawn near x=280 in the full 1280px frame.
+        // A range-only ROI assertion cannot detect applying the crop twice.
+        XCTAssertEqual(box.x,280.0/1280,accuracy:0.05)
+        XCTAssertEqual(box.y,510.0/720,accuracy:0.05)
     }
     func testOfflineArabicInferenceUsesVerifiedFixture() throws {
         let folder = try XCTUnwrap(Bundle(for:Self.self).url(forResource:"en_ar",withExtension:nil))

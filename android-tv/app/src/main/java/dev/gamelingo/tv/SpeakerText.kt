@@ -15,13 +15,24 @@ internal class SpeakerColorSpan(val color: Int) : CharacterStyle(), UpdateAppear
 }
 
 internal object SpeakerText {
+    private data class Key(val text:String,val name:String,val enabled:Boolean,val color:Int)
+    // Canvas/UI-thread only. Repeated fades do not re-run presentation regexes.
+    private val cache=object:java.util.LinkedHashMap<Key,CharSequence>(16,.75f,true) {
+        override fun removeEldestEntry(eldest:MutableMap.MutableEntry<Key,CharSequence>?):Boolean=size>12
+    }
     fun inline(dialogue: String, speaker: String, enabled: Boolean, color: Int): CharSequence {
-        val name = speaker.filter { it.isLetterOrDigit() || it in " '-." }.trim().take(40)
-        if (!enabled || name.isEmpty()) return dialogue
-        // Unicode isolates keep an English name inline at the RTL paragraph start.
-        val prefix = "\u2068$name:\u2069 "
-        return SpannableString(prefix+dialogue).apply {
-            setSpan(SpeakerColorSpan(color),0,prefix.length,Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        val key=Key(dialogue,speaker,enabled,color)
+        cache[key]?.let {return it}
+        val name=TextPresentation.name(speaker)
+        val body=TextPresentation.body(dialogue)
+        val result=if(!enabled || name.isEmpty()) body else {
+            // The name is LTR; the separator belongs to the surrounding RTL run.
+            // A colon inside the English isolate appears on the name's far side.
+            SpannableString(TextPresentation.prefix(name)+body).apply {
+                setSpan(SpeakerColorSpan(color),1,1+name.length,Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            }
         }
+        cache[key]=result
+        return result
     }
 }

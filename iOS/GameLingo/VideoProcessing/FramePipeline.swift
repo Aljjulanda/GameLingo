@@ -11,6 +11,8 @@ struct PipelineMetrics {
     var translationP95 = 0.0, ocrP95 = 0.0
     var documentMilliseconds = 0.0, documentOCRMilliseconds = 0.0, documentTranslationMilliseconds = 0.0, documentExtraMegabytes = 0.0
     var documentCompleted = 0, documentTotal = 0
+    var duplicatesSuppressed = 0, correctionsMerged = 0, speakersDetected = 0, speakersUncertain = 0
+    var punctuationTrace = ""
 }
 
 final class FramePipeline {
@@ -39,6 +41,7 @@ final class FramePipeline {
     private var advanced = AdvancedSettings()
     private var memory = DialogueMemory()
     private var stability = PublicationStability()
+    private var translations = BoundedLRU<String,(String,String)>(capacity:8)
     private var isBackground = false
     private var reading = false, captureRequested = false
     private var readingTicket = UUID()
@@ -69,7 +72,7 @@ final class FramePipeline {
         queue.async { [self] in
             guard roi.isValid else { return }
             reset(preservingState:preservingState); self.roi = roi; self.mode = mode; runID = UUID(); lastSample = 0; lastTextChange = 0
-            metrics = PipelineMetrics()
+            if !preservingState { metrics = PipelineMetrics() }
             translationSamples = LatencySamples(); ocrSamples = LatencySamples()
             startedAt = ProcessInfo.processInfo.systemUptime
             slotLock.lock(); active = true; metricsDropped = 0; slotLock.unlock()
@@ -115,7 +118,7 @@ final class FramePipeline {
         finishReading()
         timer?.cancel(); timer = nil; runID = UUID(); pending = nil; ocr = VisionDialogueOCR(); ocr.setBackground(isBackground); signature = FrameSignature()
         if preservingState { tracker.markInterrupted(); memory.prune(now:ProcessInfo.processInfo.systemUptime) }
-        else { tracker.reset(); memory.clear(); stability.clear() }
+        else { tracker.reset(); memory.clear(); stability.clear(); translations = BoundedLRU(capacity:8) }
         // An already running inference still owns the single worker until its callback.
     }
     private func sample() {
@@ -150,9 +153,12 @@ final class FramePipeline {
         }
         guard signature.shouldRecognize(buffer,roi:roi,now:now,hasText:tracker.current != nil) else { return }
         do {
-            let (text,box) = try autoreleasepool { try ocr.recognize(buffer,roi:roi) }
+            let (_,box) = try autoreleasepool { try ocr.recognize(buffer,roi:roi,knownNames:advanced.speakerNames) }
             guard isActive() else { return }
-            let content = DialogueContent.parse(text,knownNames:advanced.speakerNames,separateLabel:ocr.separateSpeakerLabel,confidence:ocr.confidence)
+            let content = ocr.content
+            if content.speaker != nil { metrics.speakersDetected += 1 }
+            if content.uncertainSpeaker { metrics.speakersUncertain += 1 }
+            metrics.punctuationTrace = "OCR " + ocr.punctuationTrace + " | parsed " + SubtitlePresentation.punctuation(content.text)
             metrics.recognitions &+= 1
             metrics.actualOCRRate = Double(metrics.recognitions)/max(0.001,ProcessInfo.processInfo.systemUptime-startedAt)
             metrics.ocrMilliseconds = (ProcessInfo.processInfo.systemUptime-now)*1000
@@ -168,6 +174,8 @@ final class FramePipeline {
                 if !job.correction { translator.cancel() }
                 pending = job; lastTextChange = now; submit()
             }
+            metrics.duplicatesSuppressed = tracker.duplicatesSuppressed
+            metrics.correctionsMerged = tracker.correctionsMerged
             metrics.frameMilliseconds = (ProcessInfo.processInfo.systemUptime-received)*1000
             metrics.queueDepth = (translating ? 1 : 0)+(pending == nil ? 0 : 1)
             if now-lastMetrics >= 1 { lastMetrics = now; let value = metrics; DispatchQueue.main.async { self.onMetrics?(value) } }
@@ -178,20 +186,26 @@ final class FramePipeline {
         pending = nil; translating = true
         let epoch = runID
         memory.prune(now:ProcessInfo.processInfo.systemUptime)
-        let override = Terminology.resolve(job.text,rules:advanced.terminology,context:memory.entries.filter { $0.id != job.id })
+        let cached = translations.get(job.id)
+        let reusable = !job.meaningfulCorrection && cached.map { DialogueText.same($0.0,job.text) && !DialogueText.prefix($0.0,job.text) } == true
+        let override = reusable ? cached?.1 : Terminology.resolve(job.text,rules:advanced.terminology,context:memory.entries.filter { $0.id != job.id })
+        let punctuationTrace = metrics.punctuationTrace
         let completion: (Result<String,Error>,Double) -> Void = { [weak self] result,latency in
             guard let self else { return }
             self.queue.async {
                 self.translating = false
                 if self.isActive() && epoch == self.runID && self.tracker.accepts(job) {
+                    var delivered = job
+                    if let current = self.tracker.current, DialogueText.words(current.text) == DialogueText.words(job.text) { delivered.speaker = current.speaker }
                     switch result {
                     case .success(let text):
-                        if self.stability.shouldPublish(job) {
-                            self.metrics.translationMilliseconds = latency
-                            self.translationSamples.record(latency); self.metrics.translationP95 = self.translationSamples.p95
-                            self.stability.didPublish(job)
+                        if self.stability.shouldPublish(delivered) {
+                            if !reusable { self.metrics.translationMilliseconds = latency; self.translationSamples.record(latency); self.metrics.translationP95 = self.translationSamples.p95 }
+                            self.stability.didPublish(delivered)
+                            self.translations.put((job.text,text),for:job.id)
+                            self.metrics.punctuationTrace = punctuationTrace + " | model " + SubtitlePresentation.punctuation(text) + " | wire " + SubtitlePresentation.punctuation(SubtitlePresentation.clean(text))
                             self.memory.observe(job,now:ProcessInfo.processInfo.systemUptime)
-                            self.publish(TVProtocol.subtitle(job,arabic:text,now:TVHub.now()))
+                            self.publish(TVProtocol.subtitle(delivered,arabic:text,now:TVHub.now()))
                         }
                     case .failure(let error): if !(error is CancellationError) { DispatchQueue.main.async { self.onError?(error.localizedDescription) } }
                     }

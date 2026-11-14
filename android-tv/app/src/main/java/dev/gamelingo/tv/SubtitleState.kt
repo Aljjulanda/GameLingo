@@ -52,7 +52,7 @@ class SubtitleState {
         return at==short.size
     }
     private fun semanticMarkers(text:String):List<String> {
-        val protected=setOf("no","not","never","dont","cannot","cant","wont","without","isnt","wasnt","didnt","shouldnt","wouldnt","couldnt","he","she","they","we","you","i","left","right","north","south","east","west")
+        val protected=setOf("no","not","never","dont","cannot","cant","wont","without","isnt","wasnt","didnt","shouldnt","wouldnt","couldnt","he","she","they","we","you","i","left","right","north","south","east","west","open","close","enter","exit","attack","defend","take","drop","give","keep","stop","start","push","pull","save","kill","follow","stay","leave","collect")
         return sourceWords(text).filter {it in protected || it.any(Char::isDigit)}
     }
     private fun extension(before:String,after:String):Boolean {
@@ -65,7 +65,7 @@ class SubtitleState {
             else fixed.coerceIn(minimum, maximum.coerceAtLeast(minimum))
     }
     fun show(id: String, text: String, now: Long, duration: Long, capacity: Int,source:String="",box:SourceBox?=null,
-        speaker:String="",freshEvent:Boolean=false,meaningfulCorrection:Boolean=false) {
+        speaker:String="",freshEvent:Boolean=false,meaningfulCorrection:Boolean=false,boundary:String?=null,sourceGap:Long=0) {
         expire(now)
         val old = entries.firstOrNull { it.id == (aliases[id] ?: id) }
         if (old != null) {
@@ -79,7 +79,13 @@ class SubtitleState {
         // Event IDs, not translated text, identify dialogue. Distinct source
         // events may legitimately repeat or translate to identical Arabic.
         if (id in seen) return
-        val matching=if(freshEvent) null else entries.lastOrNull {it.id !in visuallySuperseded && it.speaker==speaker && now-it.shownAt<=3500 && sameSource(it,source,box)}
+        val provedNew=boundary=="speaker_change" || boundary=="spatial_change" || (boundary=="source_gap" && sourceGap>=750)
+        val compatible:(SubtitleEntry)->Boolean={it.speaker.isEmpty() || speaker.isEmpty() || it.speaker==speaker}
+        // Legacy fresh-event messages retain their behavior. New senders supply
+        // boundary evidence; a bare new ID must not stack the same active line.
+        val matching=if(provedNew || (freshEvent && boundary==null)) null else if(freshEvent) entries.lastOrNull()?.takeIf {
+            it.id !in visuallySuperseded && compatible(it) && sameSource(it,source,box)
+        } else entries.lastOrNull {it.id !in visuallySuperseded && compatible(it) && now-it.shownAt<=3500 && sameSource(it,source,box)}
         remember(id)
         if(matching!=null) {
             coalesced++
@@ -89,6 +95,7 @@ class SubtitleState {
                 // extending the original local lifetime or adding another box.
                 aliases[id]=matching.id;if(aliases.size>128)aliases.remove(aliases.keys.first())
                 matching.source=source;matching.box=box
+                if(speaker.isNotEmpty()) matching.speaker=speaker
                 return
             }
             // A genuinely repeated line after intervening dialogue becomes the

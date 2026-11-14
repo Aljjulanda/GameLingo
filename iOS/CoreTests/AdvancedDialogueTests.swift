@@ -34,7 +34,7 @@ final class AdvancedDialogueTests: XCTestCase {
     }
     func testDifferentSpeakerCreatesFreshEventAndSemanticRepairKeepsID() {
         var tracker = DialogueTracker()
-        guard case .dialogue(let a,_) = tracker.observe(text:"We will go",box:.dialogue,now:0,frameMilliseconds:0,speaker:"Arthur") else { return XCTFail() }
+        guard case .dialogue(let a,_) = tracker.observe(text:"We will go",box:.dialogue,now:0,frameMilliseconds:0,speaker:"Arthur",confidence:0.4) else { return XCTFail() }
         guard case .dialogue(let repair,_) = tracker.observe(text:"We will not go",box:.dialogue,now:0.3,frameMilliseconds:300,speaker:"Arthur") else { return XCTFail() }
         XCTAssertEqual(a.id,repair.id); XCTAssertTrue(repair.meaningfulCorrection)
         guard case .dialogue(let b,_) = tracker.observe(text:"We will not go",box:.dialogue,now:0.5,frameMilliseconds:500,speaker:"John") else { return XCTFail() }

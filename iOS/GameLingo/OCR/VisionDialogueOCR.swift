@@ -3,12 +3,6 @@ import CoreVideo
 import Vision
 import ImageIO
 
-struct OCRLine {
-    var text: String
-    var box: SourceBox
-    var confidence: Double = 1
-}
-
 final class VisionDialogueOCR {
     private let request: VNRecognizeTextRequest = {
         let request = VNRecognizeTextRequest()
@@ -19,6 +13,8 @@ final class VisionDialogueOCR {
     private var previousSignature: [String] = []
     private(set) var confidence: Double = 0
     private(set) var separateSpeakerLabel = false
+    private(set) var content = DialogueContent(text:"",speaker:nil)
+    private(set) var punctuationTrace = ""
     func setBackground(_ background: Bool) { request.usesCPUOnly = background }
     func document(_ buffer: CVPixelBuffer) throws -> [String] {
         let document = VNRecognizeTextRequest()
@@ -34,7 +30,7 @@ final class VisionDialogueOCR {
         }
         return DocumentText.paragraphs(lines)
     }
-    func recognize(_ buffer: CVPixelBuffer, roi: SourceBox) throws -> (String,SourceBox) {
+    func recognize(_ buffer: CVPixelBuffer, roi: SourceBox, knownNames: String = "") throws -> (String,SourceBox) {
         guard roi.isValid else { throw LingoError.invalid("منطقة الحوار غير صالحة") }
         // Vision's ROI is lower-left origin. The shared TV protocol uses top-left origin.
         request.regionOfInterest = CGRect(x:roi.x,y:1-roi.y-roi.h,width:roi.w,height:roi.h)
@@ -49,14 +45,21 @@ final class VisionDialogueOCR {
                                 w:Double(b.width)*roi.w,h:Double(b.height)*roi.h)
             return OCRLine(text:candidate.string,box:box,confidence:Double(candidate.confidence))
         }
+        punctuationTrace = SubtitlePresentation.punctuation(lines.map(\.text).joined(separator:" "))
+        if let reading = StructuredDialogue.resolve(lines,roi:roi,knownNames:knownNames) {
+            confidence = reading.confidence; content = reading.content; separateSpeakerLabel = reading.content.speaker != nil
+            return (content.text,reading.box)
+        }
         let selected = select(lines,roi:roi)
         confidence = selected.map(\.confidence).min() ?? 0
         let ordered = selected.sorted { $0.box.y < $1.box.y }
         separateSpeakerLabel = ordered.count >= 2 && ordered[0].box.w < ordered[1].box.w*0.5 && ordered[0].box.h <= ordered[1].box.h*1.1
-        guard !selected.isEmpty else { return ("",roi) }
+        guard !selected.isEmpty else { content = DialogueContent(text:"",speaker:nil); return ("",roi) }
         let x = selected.map(\.box.x).min()!, y = selected.map(\.box.y).min()!
         let right = selected.map { $0.box.x+$0.box.w }.max()!, bottom = selected.map { $0.box.y+$0.box.h }.max()!
-        return (String(selected.map(\.text).joined(separator:"\n").prefix(1800)),SourceBox(x:x,y:y,w:right-x,h:bottom-y))
+        let text = String(selected.map(\.text).joined(separator:"\n").prefix(1800))
+        content = DialogueContent.parse(text,knownNames:knownNames,separateLabel:separateSpeakerLabel,confidence:confidence)
+        return (text,SourceBox(x:x,y:y,w:right-x,h:bottom-y))
     }
     /// Port the desktop's structural gate; this is not semantic game/menu classification.
     func select(_ lines: [OCRLine], roi: SourceBox) -> [OCRLine] {

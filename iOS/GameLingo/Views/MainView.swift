@@ -198,14 +198,40 @@ struct PerformanceView: View {
                     metric("OCR p95 · آخر 120 قياسًا",model.metrics.ocrP95,suffix:"ms")
                     LabeledContent("جمل السياق في الذاكرة",value:String(model.metrics.contextEntries))
                     LabeledContent("تأكيدات رسم جمل جديدة بالخلفية",value:String(model.backgroundDeliveries))
-                    LabeledContent("محاولات استرداد الجلسة",value:String(model.recoveryAttempts))
-                    LabeledContent("إعادات اتصال PS5 الفعلية",value:String(model.totalPS5Reconnects))
+                    LabeledContent("بداية قياس الجلسة",value:model.sessionStarted.formatted(date:.omitted,time:.standard))
                     metric("معالجة الإطار حتى OCR",model.metrics.frameMilliseconds,suffix:"ms")
                     metric("حد أخذ العينات الحالي",model.metrics.samplingRate,suffix:"/s")
                     metric("متوسط OCR الفعلي منذ بدء الجلسة",model.metrics.actualOCRRate,suffix:"/s")
                     LabeledContent("الإطارات المعالجة",value:String(model.metrics.frames))
                     LabeledContent("إطارات أحدث حلّت محل القديمة",value:String(model.metrics.dropped))
                     LabeledContent("مهام الترجمة النشطة والمعلقة",value:String(model.metrics.queueDepth))
+                }
+                Section("استرداد PS5 · أحداث مؤكدة") {
+                    LabeledContent("محاولات إعادة اتصال PS5",value:String(model.remoteMetrics.attempts))
+                    LabeledContent("إعادات اتصال PS5 الناجحة",value:String(model.remoteMetrics.successes))
+                    LabeledContent("محاولات إعادة الاتصال الفاشلة",value:String(model.remoteMetrics.failures))
+                    LabeledContent("حوادث غياب الإطارات",value:String(model.remoteMetrics.starvations))
+                    LabeledContent("طلبات إصلاح فك الترميز",value:String(model.remoteMetrics.decoderRequests))
+                    LabeledContent("مقاطعات الصوت",value:String(model.audioInterruptions))
+                    LabeledContent("انقطاعات الشبكة",value:String(model.networkInterruptions))
+                    LabeledContent("مؤشر التراجع الحالي · ليس عدد انقطاعات",value:String(model.recoveryAttempts))
+                    metric("عمر اتصال PS5 الحالي",model.remoteMetrics.uptime,suffix:"s")
+                    if let age = model.remoteMetrics.decodedFrameAge { metric("عمر آخر إطار مفكوك",age,suffix:"s") }
+                    if let age = model.remoteMetrics.encodedFrameAge { metric("عمر آخر إطار وارد",age,suffix:"s") }
+                    if model.remoteMetrics.successes>0 { metric("مدة آخر إعادة اتصال ناجحة",model.remoteMetrics.lastRecoverySeconds,suffix:"s") }
+                    DisclosureGroup("تشخيص الجلسة · دون مفاتيح أو رموز") {
+                        Text(model.sessionDiagnostics.joined(separator:"\n")).font(.system(.caption,design:.monospaced)).textSelection(.enabled)
+                    }
+                }
+                Section("الحوار والمتحدثون") {
+                    LabeledContent("قراءات حوار مكررة تم تجاهلها",value:String(model.metrics.duplicatesSuppressed))
+                    LabeledContent("تصحيحات OCR مدمجة",value:String(model.metrics.correctionsMerged))
+                    LabeledContent("قراءات اسم متحدث مؤكدة",value:String(model.metrics.speakersDetected))
+                    LabeledContent("تسميات اسم غير مؤكدة",value:String(model.metrics.speakersUncertain))
+                    DisclosureGroup("تتبع علامات الترقيم · أعداد فقط") {
+                        Text(model.metrics.punctuationTrace).font(.system(.caption,design:.monospaced)).textSelection(.enabled)
+                        Text("عدد الأقواس والعلامات في OCR والنص المفصول وخرج الترجمة والرسالة؛ لا يتضمن نص الحوار.").font(.footnote)
+                    }
                 }
                 Section("النظام") {
                     metric("CPU · 100% تعني نواة واحدة",model.cpuPercent,suffix:"%")
