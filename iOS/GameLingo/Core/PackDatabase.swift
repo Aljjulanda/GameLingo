@@ -63,33 +63,46 @@ struct PackMatch {
 
 /// One read-only connection, two prepared lookup statements, bounded page cache.
 /// Confined to its owner's serial queue. No caller-supplied SQL is accepted.
+private final class PackSQLiteProgress {
+    var deadline = ProcessInfo.processInfo.systemUptime+30
+    var check: (() throws -> Void)?
+    func interrupted() -> Int32 {
+        do { try check?(); return ProcessInfo.processInfo.systemUptime > deadline ? 1 : 0 }
+        catch { return 1 }
+    }
+}
+
 final class PackDatabase {
     static let table = "CREATE TABLE entries (identifier TEXT NOT NULL, original_id TEXT NOT NULL, source TEXT NOT NULL, normalized TEXT NOT NULL, target TEXT NOT NULL, category TEXT NOT NULL, source_file TEXT NOT NULL, flags TEXT NOT NULL, usable INTEGER NOT NULL)"
     static let indexes = ["by_exact":"CREATE INDEX by_exact ON entries(source, category)","by_normalized":"CREATE INDEX by_normalized ON entries(normalized, category)","by_identifier":"CREATE INDEX by_identifier ON entries(identifier)"]
     private var db: OpaquePointer?
     private var exact: OpaquePointer?, normalized: OpaquePointer?
-    private let deadline = UnsafeMutablePointer<Double>.allocate(capacity:1)
+    private let progress = PackSQLiteProgress()
     private var cache = BoundedLRU<String,PackMatch>(capacity:32)
     init(url: URL) throws {
-        deadline.initialize(to:ProcessInfo.processInfo.systemUptime+30)
         let encoded = url.path.addingPercentEncoding(withAllowedCharacters:.urlPathAllowed)!
-        guard sqlite3_open_v2("file:"+encoded+"?mode=ro&immutable=1",&db,SQLITE_OPEN_READONLY|SQLITE_OPEN_URI|SQLITE_OPEN_NOMUTEX,nil) == SQLITE_OK else { throw PackFailure.damaged }
+        guard sqlite3_open_v2("file:"+encoded+"?mode=ro&immutable=1",&db,SQLITE_OPEN_READONLY|SQLITE_OPEN_URI|SQLITE_OPEN_NOMUTEX,nil) == SQLITE_OK else { sqlite3_close_v2(db); db = nil; throw PackFailure.damaged }
+        do {
         sqlite3_limit(db,SQLITE_LIMIT_LENGTH,65536); sqlite3_limit(db,SQLITE_LIMIT_SQL_LENGTH,4096)
         sqlite3_limit(db,SQLITE_LIMIT_COLUMN,32); sqlite3_limit(db,SQLITE_LIMIT_ATTACHED,0)
         sqlite3_limit(db,SQLITE_LIMIT_EXPR_DEPTH,20); sqlite3_limit(db,SQLITE_LIMIT_VARIABLE_NUMBER,8)
         sqlite3_progress_handler(db,1000,{ pointer in
             guard let pointer else { return 1 }
-            return ProcessInfo.processInfo.systemUptime > pointer.assumingMemoryBound(to:Double.self).pointee ? 1 : 0
-        },deadline)
+            return Unmanaged<PackSQLiteProgress>.fromOpaque(pointer).takeUnretainedValue().interrupted()
+        },Unmanaged.passUnretained(progress).toOpaque())
         try execute("PRAGMA trusted_schema=OFF"); try execute("PRAGMA query_only=ON")
         try execute("PRAGMA mmap_size=0"); try execute("PRAGMA cache_size=-2048")
         try validateSchema()
         exact = try prepare("SELECT target, usable FROM entries WHERE source=? AND category IN (?, ?, 'general') LIMIT 33")
         normalized = try prepare("SELECT target, usable FROM entries WHERE normalized=? AND category IN (?, ?, 'general') LIMIT 33")
+        } catch {
+            sqlite3_finalize(exact); sqlite3_finalize(normalized)
+            sqlite3_progress_handler(db,0,nil,nil); sqlite3_close_v2(db); db = nil
+            throw error
+        }
     }
     deinit {
         sqlite3_finalize(exact); sqlite3_finalize(normalized); sqlite3_close_v2(db)
-        deadline.deinitialize(count:1); deadline.deallocate()
     }
     private func prepare(_ sql: String) throws -> OpaquePointer {
         var statement: OpaquePointer?
@@ -123,15 +136,18 @@ final class PackDatabase {
         let version = try prepare("PRAGMA user_version"); defer { sqlite3_finalize(version) }
         guard sqlite3_step(version) == SQLITE_ROW, sqlite3_column_int(version,0) == 1 else { throw PackFailure.unsupported }
     }
-    func validateContents(manifest: PackManifest) throws {
-        deadline.pointee = ProcessInfo.processInfo.systemUptime+60
-        let check = try prepare("PRAGMA integrity_check(1)"); defer { sqlite3_finalize(check) }
-        guard sqlite3_step(check) == SQLITE_ROW, try string(check,0) == "ok" else { throw PackFailure.damaged }
+    func validateContents(manifest: PackManifest, check: @escaping () throws -> Void = {}) throws {
+        progress.deadline = ProcessInfo.processInfo.systemUptime+60; progress.check = check
+        defer { progress.check = nil }
+        let integrity = try prepare("PRAGMA integrity_check(1)"); defer { sqlite3_finalize(integrity) }
+        let integrityCode = sqlite3_step(integrity); try check()
+        guard integrityCode == SQLITE_ROW, try string(integrity,0) == "ok" else { throw PackFailure.damaged }
         let statement = try prepare("SELECT identifier, original_id, source, normalized, target, category, source_file, flags, usable FROM entries")
         defer { sqlite3_finalize(statement) }
         var count = 0, usable = 0, code = sqlite3_step(statement)
         while code == SQLITE_ROW {
-            count += 1; guard count <= 500000, ProcessInfo.processInfo.systemUptime <= deadline.pointee else { throw PackFailure.size }
+            if count % 256 == 0 { try check() }
+            count += 1; guard count <= 500000, ProcessInfo.processInfo.systemUptime <= progress.deadline else { throw PackFailure.size }
             let fields = try (0..<8).map { try string(statement,Int32($0)) }
             guard fields[0].count <= 128, fields[1].count <= 128, fields[2].count <= 4096,
                   fields[3] == PackLookupKey.normalized(fields[2]), fields[4].count <= 16000,
@@ -148,6 +164,7 @@ final class PackDatabase {
             }
             code = sqlite3_step(statement)
         }
+        try check()
         guard code == SQLITE_DONE, count == manifest.recordCount, usable == manifest.usableCount else { throw PackFailure.damaged }
     }
     private func query(_ statement: OpaquePointer, key: String, category: String, kind: PackMatch.Kind) throws -> PackMatch {
@@ -170,13 +187,13 @@ final class PackDatabase {
         guard source.count <= 4096, !source.contains("\0"), PackManifest.categories.contains(category) else { return PackMatch(text:nil,kind:.unsupported) }
         let key = category+"/"+source
         if let result = cache.get(key) { return result }
-        deadline.pointee = ProcessInfo.processInfo.systemUptime+0.05
+        progress.deadline = ProcessInfo.processInfo.systemUptime+0.05
         var result = try query(exact!,key:source,category:category,kind:.exact)
         if result.kind == .missing { result = try query(normalized!,key:PackLookupKey.normalized(source),category:category,kind:.normalized) }
         cache.put(result,for:key); return result
     }
     func lookupIdentifier(_ identifier: String) throws -> [String] {
-        deadline.pointee = ProcessInfo.processInfo.systemUptime+0.05
+        progress.deadline = ProcessInfo.processInfo.systemUptime+0.05
         let statement = try prepare("SELECT target FROM entries WHERE identifier=? LIMIT 33"); defer { sqlite3_finalize(statement) }
         try bind(identifier,statement,1); var result: [String] = [], code = sqlite3_step(statement)
         while code == SQLITE_ROW { result.append(try string(statement,0)); code = sqlite3_step(statement) }

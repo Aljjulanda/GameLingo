@@ -4,9 +4,77 @@ import CryptoKit
 import SQLite3
 import ZIPFoundation
 import UniformTypeIdentifiers
+import UIKit
 @testable import GameLingo
 
 final class PackIntegrationTests: XCTestCase {
+    private func inspect(_ file: URL, store: TranslationPackStore, temporaryRoot: URL? = nil, cancel: Bool = false) async -> (Result<Void,Error>,LocalizationInspection) {
+        await withCheckedContinuation { continuation in
+            let importer = temporaryRoot.map{GameTranslationImporter(temporaryRoot:$0)} ?? GameTranslationImporter()
+            let control = importer.start(file,store:store,update:{ _ in }) { continuation.resume(returning:($0,$1)) }
+            if cancel { control.cancel() }
+        }
+    }
+    func testUniversalImportRecognizesPackWithWrongAndUnknownExtensions() async throws {
+        let original = try pack(), store = TranslationPackStore(root:try folder())
+        for ext in ["exe","zip","unknown-extension",""] {
+            let file = original.deletingPathExtension().appendingPathExtension(ext)
+            if file != original { try FileManager.default.copyItem(at:original,to:file) }
+            let (result,report) = await inspect(file,store:store)
+            try result.get(); XCTAssertEqual(report.format,"GLPACK"); XCTAssertEqual(report.usable,1)
+        }
+        let installed = await state(store); XCTAssertEqual(installed.registry.packs.count,1)
+    }
+    func testRawJSONConversionPreservesMetadataAndUsesExistingLibrary() async throws {
+        let root = try folder(), file = root.appendingPathComponent("renamed.bin"), store = TranslationPackStore(root:root.appendingPathComponent("library"))
+        try Data(#"{"game_id":"raw-test","game_title":"Original game","attribution":"Original author","license":"Original license","permission":"Original permission","entries":[{"source":"Move now.","target":"تحرك الآن."}]}"#.utf8).write(to:file)
+        let (result,report) = await inspect(file,store:store); try result.get()
+        XCTAssertEqual(report.format,"JSON"); XCTAssertEqual(report.usable,1); XCTAssertEqual(report.mapping,true)
+        let saved = await state(store), manifest = try XCTUnwrap(saved.registry.packs.first?.manifest)
+        XCTAssertEqual(manifest.attribution,"Original author"); XCTAssertTrue(manifest.permission.contains("Original license")); XCTAssertTrue(manifest.permission.contains("Original permission"))
+        store.changeSelection(game:"raw-test"); try await waitLoaded(store)
+        XCTAssertEqual(store.lookup("Move now.",category:"dialogue",eventID:"raw"),"تحرك الآن.")
+    }
+    func testZipExtractionUsesContentsAndRejectsUnsafePaths() async throws {
+        let root = try folder(), raw = root.appendingPathComponent("raw.bytes")
+        try Data(#"[{"en":"Move now.","ar":"تحرك الآن."}]"#.utf8).write(to:raw)
+        let zipped = root.appendingPathComponent("archive.dat"), archive = try Archive(url:zipped,accessMode:.create)
+        try archive.addEntry(with:"localization.custom",fileURL:raw,compressionMethod:.deflate)
+        let store = TranslationPackStore(root:try folder()), (result,report) = await inspect(zipped,store:store)
+        try result.get(); XCTAssertEqual(report.format,"ZIP → JSON"); XCTAssertEqual(report.usable,1)
+        let bad = try pack(corruption:"traversal"), (rejected,_) = await inspect(bad,store:store)
+        XCTAssertThrowsError(try rejected.get())
+        let saved = await state(store); XCTAssertEqual(saved.registry.packs.count,1)
+    }
+    func testUnsupportedContainersAndCancellationPreserveWorkingPack() async throws {
+        let root = try folder(), store = TranslationPackStore(root:try folder())
+        try await importFile(pack(),to:store)
+        let old = try Data(contentsOf:store.root.appendingPathComponent("library.json"))
+        var pe = Data(repeating:0,count:68); pe[0] = 0x4d; pe[1] = 0x5a; pe[60] = 64; pe.replaceSubrange(64..<68,with:[0x50,0x45,0,0])
+        for (index,data) in [pe,Data([0x52,0x61,0x72,0x21,0x1a,7,0]),Data([0x37,0x7a,0xbc,0xaf,0x27,0x1c]),Data([0xff,0,0xff]),Data()].enumerated() {
+            let file = root.appendingPathComponent("input-\(index).glpack"); try data.write(to:file)
+            let (result,report) = await inspect(file,store:store); XCTAssertThrowsError(try result.get()); XCTAssertFalse(report.result.isEmpty)
+            XCTAssertEqual(try Data(contentsOf:store.root.appendingPathComponent("library.json")),old)
+        }
+        let temporary = try folder(), cancelFile = try pack()
+        let (cancelled,report) = await inspect(cancelFile,store:store,temporaryRoot:temporary,cancel:true)
+        XCTAssertThrowsError(try cancelled.get()); XCTAssertTrue(report.result.contains("أُلغي"))
+        XCTAssertTrue(try FileManager.default.contentsOfDirectory(atPath:temporary.path).isEmpty)
+        XCTAssertEqual(try Data(contentsOf:store.root.appendingPathComponent("library.json")),old)
+    }
+    @MainActor
+    func testNativePickerUsesCopyModeAndInboxIncludesArbitraryFiles() throws {
+        let root = try folder(), inbox = LocalizationInbox(directory:root)
+        try inbox.prepare()
+        for ext in ["exe","zip","glpack","rar","7z","xml","json","csv","txt","unrecognized"] { try Data("fixture".utf8).write(to:root.appendingPathComponent("file."+ext)) }
+        try FileManager.default.createDirectory(at:root.appendingPathComponent("nested"),withIntermediateDirectories:true)
+        try FileManager.default.createSymbolicLink(at:root.appendingPathComponent("link"),withDestinationURL:root.appendingPathComponent("file.exe"))
+        XCTAssertEqual(try inbox.files().count,10)
+        let controller = LocalizationFilePicker.controller(directory:root,delegate:nil)
+        XCTAssertEqual(controller.documentPickerMode,.import); XCTAssertFalse(controller.allowsMultipleSelection)
+        XCTAssertTrue(controller.shouldShowFileExtensions); XCTAssertEqual(controller.directoryURL,root)
+        XCTAssertEqual(Bundle.main.object(forInfoDictionaryKey:"UIFileSharingEnabled") as? Bool,true)
+    }
     func testDocumentRegistrationAndProviderFallback() throws {
         let info = try XCTUnwrap(Bundle.main.infoDictionary)
         let exports = try XCTUnwrap(info["UTExportedTypeDeclarations"] as? [[String:Any]])
@@ -31,7 +99,7 @@ final class PackIntegrationTests: XCTestCase {
         try FileManager.default.copyItem(at:file,to:upper)
         XCTAssertFalse(library.importFile(upper,sessionRunning:true)); XCTAssertFalse(library.busy)
         XCTAssertFalse(library.importFile(URL(string:"https://example.com/RDR2.glpack")!))
-        XCTAssertFalse(library.importFile(file.deletingPathExtension().appendingPathExtension("exe")))
+        XCTAssertTrue(GamePackDocument.accepts(file.deletingPathExtension().appendingPathExtension("exe")))
         XCTAssertTrue(library.importFile(upper)); XCTAssertTrue(library.busy)
         XCTAssertFalse(library.importFile(upper)) // A second document must not start another import.
         for _ in 0..<250 { if !library.busy { break }; try await Task.sleep(nanoseconds:20_000_000) }

@@ -62,10 +62,10 @@ final class TranslationPackStore {
         let url = root.appendingPathComponent("library.json")
         try JSONEncoder().encode(registry).write(to:url,options:[.atomic,.completeFileProtectionUntilFirstUserAuthentication])
     }
-    static func hash(_ url: URL) throws -> String {
+    static func hash(_ url: URL, check: () throws -> Void = {}) throws -> String {
         let file = try FileHandle(forReadingFrom:url); defer { try? file.close() }
         var hash = SHA256()
-        while let data = try file.read(upToCount:1024*1024), !data.isEmpty { hash.update(data:data) }
+        while let data = try file.read(upToCount:1024*1024), !data.isEmpty { try check(); hash.update(data:data) }
         return hash.finalize().map { String(format:"%02x",$0) }.joined()
     }
     private func activate() {
@@ -150,11 +150,12 @@ final class TranslationPackStore {
         }
     }
     /// Copies a scoped Files URL into managed storage, validates before registry commit.
-    func importPack(_ external: URL, completion: @escaping (Result<Void,Error>) -> Void) {
+    func importPack(_ external: URL, check: @escaping () throws -> Void = {}, completion: @escaping (Result<Void,Error>) -> Void) {
         let scoped = external.startAccessingSecurityScopedResource()
         importer.async { [self] in
             defer { if scoped { external.stopAccessingSecurityScopedResource() } }
             let result = Result { () throws -> Void in
+                try check()
                 let fm = FileManager.default
                 try fm.createDirectory(at:root,withIntermediateDirectories:true)
                 let stage = root.appendingPathComponent("stage-"+UUID().uuidString,isDirectory:true)
@@ -169,19 +170,21 @@ final class TranslationPackStore {
                         let output = try FileHandle(forWritingTo:package); defer { try? output.close() }
                         var count = 0
                         while let data = try input.read(upToCount:1024*1024), !data.isEmpty {
+                            try check()
                             count += data.count; guard count <= 128*1024*1024 else { throw PackFailure.size }; try output.write(contentsOf:data)
                         }
                     } catch { copyError = error }
                 }
                 if let error = coordinationError { throw error }
                 if let error = copyError { throw error }
-                let manifest = try Self.unpack(package,into:stage)
+                let manifest = try Self.unpack(package,into:stage,check:check)
                 let dbURL = stage.appendingPathComponent("translations.sqlite")
                 try fm.setAttributes([.protectionKey:FileProtectionType.completeUntilFirstUserAuthentication],ofItemAtPath:dbURL.path)
-                let validated = try PackDatabase(url:dbURL); try validated.validateContents(manifest:manifest)
+                let validated = try PackDatabase(url:dbURL); try validated.validateContents(manifest:manifest,check:check)
                 try fm.removeItem(at:package)
                 let size = Int64(try dbURL.resourceValues(forKeys:[.fileSizeKey]).fileSize ?? 0)
                 try queue.sync {
+                    try check()
                     let old = state.registry.packs.first(where:{ $0.manifest.gameId == manifest.gameId })
                     if old?.manifest == manifest { return }
                     guard old != nil || state.registry.packs.count < 32 else { throw PackFailure.size }
@@ -201,11 +204,12 @@ final class TranslationPackStore {
             DispatchQueue.main.async { completion(result) }
         }
     }
-    static func unpack(_ package: URL, into stage: URL) throws -> PackManifest {
+    static func unpack(_ package: URL, into stage: URL, check: () throws -> Void = {}) throws -> PackManifest {
         let archive = try Archive(url:package,accessMode:.read)
         let expected: Set<String> = ["manifest.json","translations.sqlite","checksums.json"]
         var seen = Set<String>()
         for entry in archive {
+            try check()
             guard expected.contains(entry.path), !seen.contains(entry.path), entry.type == .file else { throw PackFailure.invalid }
             seen.insert(entry.path)
             let limit: UInt64 = entry.path == "translations.sqlite" ? 256*1024*1024 : entry.path == "manifest.json" ? 65536 : 2048
@@ -216,6 +220,7 @@ final class TranslationPackStore {
             let output = try FileHandle(forWritingTo:url); defer { try? output.close() }
             var count: UInt64 = 0
             let crc = try archive.extract(entry,bufferSize:65536,skipCRC32:false) { data in
+                try check()
                 count += UInt64(data.count); guard count <= limit, count <= entry.uncompressedSize else { throw PackFailure.size }
                 try output.write(contentsOf:data)
             }
@@ -228,7 +233,7 @@ final class TranslationPackStore {
         guard Set(hashes.keys) == Set(["manifest.json","translations.sqlite"]),
               hashes["manifest.json"] == SHA256.hash(data:raw).map({String(format:"%02x",$0)}).joined(),
               hashes["translations.sqlite"] == manifest.databaseSha256,
-              try Self.hash(stage.appendingPathComponent("translations.sqlite")) == manifest.databaseSha256 else { throw PackFailure.damaged }
+              try Self.hash(stage.appendingPathComponent("translations.sqlite"),check:check) == manifest.databaseSha256 else { throw PackFailure.damaged }
         return manifest
     }
 }

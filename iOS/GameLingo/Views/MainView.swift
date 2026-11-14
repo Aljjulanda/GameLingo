@@ -120,7 +120,7 @@ struct TranslationView: View {
             Form {
                 Section("اللغات") { LabeledContent("المصدر",value:"English"); LabeledContent("الهدف",value:"العربية") }
                 Section("حزم الألعاب") {
-                    NavigationLink("مكتبة ترجمات الألعاب") { GamePackLibraryView(library:model.packLibrary) }
+                    NavigationLink("مكتبة ترجمات الألعاب") { GamePackLibraryView(library:model.packLibrary) }.accessibilityIdentifier("gamePacks.library")
                 }
                 Section("تشغيل الجلسة والخلفية") {
                     Toggle("تجربة الصوت الصامت في الخلفية",isOn:$model.settings.advanced.backgroundAudio)

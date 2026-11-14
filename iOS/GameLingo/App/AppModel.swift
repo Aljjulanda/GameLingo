@@ -106,6 +106,7 @@ final class AppModel: ObservableObject {
     }
 
     init() {
+        try? LocalizationInbox().prepare()
         packLibrary.onNamesChanged = { [weak self] names in self?.pipeline.configurePackNames(names) }
         do {
             if let data = try KeychainStore.read("consoles.v1") {
@@ -273,6 +274,7 @@ final class AppModel: ObservableObject {
         catch { errorMessage = error.localizedDescription }
     }
     func start() {
+        guard !packLibrary.busy else { errorMessage = "انتظر اكتمال استيراد التعريب أو ألغِه قبل بدء الجلسة"; return }
         guard !running, modelReady, !pairing, let console = consoles.first(where:{ $0.id == settings.selectedConsoleID }) else { errorMessage = "اختر PS5 مسجلًا وجهّز نموذج الترجمة أولًا"; return }
         guard settings.roi.isValid else { errorMessage = "اضبط منطقة الحوار داخل حدود صورة البث أولًا"; return }
         do {

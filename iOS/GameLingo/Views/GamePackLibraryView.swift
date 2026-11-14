@@ -3,11 +3,10 @@ import UniformTypeIdentifiers
 
 enum GamePackDocument {
     static let type = UTType(exportedAs:"dev.gamelingo.glpack",conformingTo:.data)
-    // Download/iCloud providers can retain a dynamic or generic type for .glpack.
-    // Let users select those files; the importer verifies extension and contents.
+    // The picker has no extension whitelist. Recognition/validation happens later.
     static let pickerTypes: [UTType] = [.item]
     static func accepts(_ url: URL) -> Bool {
-        url.isFileURL && url.pathExtension.caseInsensitiveCompare("glpack") == .orderedSame
+        url.isFileURL
     }
 }
 
@@ -18,6 +17,9 @@ final class GamePackLibrary: ObservableObject {
     @Published var metrics = HybridMetrics()
     @Published var busy = false
     @Published var message = ""
+    @Published var inspection: LocalizationInspection?
+    private let importer = GameTranslationImporter()
+    private var importControl: LocalizationImportControl?
     var onNamesChanged: ((String) -> Void)?
     init(store: TranslationPackStore = TranslationPackStore()) {
         self.store = store
@@ -32,17 +34,17 @@ final class GamePackLibrary: ObservableObject {
     func importFile(_ url: URL, sessionRunning: Bool = false) -> Bool {
         guard !sessionRunning else { message = "أوقف جلسة الترجمة قبل إضافة حزمة؛ ثم افتح الملف مجددًا."; return false }
         guard !busy else { message = "انتظر اكتمال استيراد الحزمة الحالية."; return false }
-        guard GamePackDocument.accepts(url) else { message = "اختر ملف حزمة ترجمة بامتداد ‎.glpack من تطبيق الملفات."; return false }
-        busy = true; message = "جارٍ التحقق من الحزمة واستيرادها…"
-        store.importPack(url) { [weak self] result in
-            guard let self else { return }; self.busy = false
-            switch result {
-            case .success: self.message = "تم استيراد الحزمة والتحقق منها؛ اختر اللعبة لتفعيلها"
-            case .failure(let error): self.message = (error as? PackFailure)?.localizedDescription ?? "تعذر استيراد الحزمة؛ بقيت المكتبة السابقة محفوظة"
-            }
+        guard GamePackDocument.accepts(url) else { message = "اختر ملفًا محليًا من تطبيق الملفات."; return false }
+        busy = true; message = "جارٍ فحص الملف"; inspection = LocalizationInspection(filename:url.lastPathComponent)
+        importControl = importer.start(url,store:store,update:{ [weak self] report in
+            self?.inspection = report; self?.message = report.stage
+        }) { [weak self] _,report in
+            guard let self else { return }; self.busy = false; self.importControl = nil
+            self.inspection = report; self.message = report.result
         }
         return true
     }
+    func cancelImport() { importControl?.cancel(); message = "جارٍ إلغاء الاستيراد وتنظيف الملفات المؤقتة…" }
     var method: String {
         state.loaded ? "حزمة اللعبة المختارة ثم Argos عند الحاجة" : "Argos المحلي"
     }
@@ -52,6 +54,9 @@ struct GamePackLibraryView: View {
     @EnvironmentObject var model: AppModel
     @ObservedObject var library: GamePackLibrary
     @State private var importing = false
+    @State private var inboxFiles: [URL] = []
+    @State private var inboxError = ""
+    private let inbox = LocalizationInbox()
     var body: some View {
         Form {
             Section("طريقة الترجمة") {
@@ -63,9 +68,11 @@ struct GamePackLibraryView: View {
                 Text("يُبحث في حزمة اللعبة التي تختارها فقط. عند غياب مطابقة موثوقة أو وجود أكثر من ترجمة محتملة، تُستخدم الترجمة المحلية تلقائيًا.").font(.footnote).foregroundColor(.secondary)
             }
             Section("الحزم") {
-                Button("إضافة حزمة ترجمة / تحديث حزمة") { importing = true }.disabled(model.running || library.busy)
+                Button("إضافة ملف تعريب") { importing = true }.disabled(model.running || library.busy).accessibilityIdentifier("gamePacks.import")
                 if library.busy { ProgressView() }
-                if !library.message.isEmpty { Text(library.message) }
+                if let report = library.inspection { Text(report.filename+" · "+report.format).font(.caption).accessibilityIdentifier("gamePacks.fileSummary") }
+                if !library.message.isEmpty { Text(library.message).accessibilityIdentifier("gamePacks.importStatus") }
+                if library.busy { Button("إلغاء الاستيراد",role:.cancel) { library.cancelImport() }.accessibilityIdentifier("gamePacks.cancelImport") }
                 if let error = library.state.error { Text(error).foregroundColor(.orange) }
                 if model.running { Text("أوقف جلسة الترجمة لتغيير اللعبة أو الحزم.").font(.footnote) }
                 ForEach(library.state.registry.packs) { pack in
@@ -96,15 +103,50 @@ struct GamePackLibraryView: View {
                     }
                 }
             }
+            if let report = library.inspection {
+                Section("نتيجة فحص الملف") {
+                    LabeledContent("الملف",value:report.filename)
+                    LabeledContent("النوع من المحتوى",value:report.format)
+                    LabeledContent("الحجم",value:ByteCountFormatter.string(fromByteCount:report.bytes,countStyle:.file))
+                    LabeledContent("بيانات تعريب",value:answer(report.localization))
+                    LabeledContent("تحليل الصيغة مدعوم",value:answer(report.supported))
+                    LabeledContent("مقابلة الإنجليزية والعربية",value:answer(report.mapping))
+                    if let count = report.usable { LabeledContent("المداخل القابلة للاستخدام",value:String(count)) }
+                    if report.rejected > 0 { LabeledContent("مداخل مكررة أو غير صالحة استُبعدت",value:String(report.rejected)) }
+                    if !report.requirement.isEmpty { Text(report.requirement) }
+                    if !report.result.isEmpty { Text(report.result) }
+                }
+            }
+            Section("الاستيراد من مجلد GameLingo") {
+                Text("إذا عطّل مزوّد الملفات اختيار ملف، اضغط عليه مطولًا في «الملفات» وانسخه إلى «على الـiPhone الخاص بي ← GameLingo». حدّث القائمة هنا ثم اضغط اسم الملف؛ لا يعتمد هذا المسار على تصنيف امتداده.").font(.footnote)
+                Button("تحديث ملفات المجلد") { refreshInbox() }.accessibilityIdentifier("gamePacks.refreshInbox")
+                if !inboxError.isEmpty { Text(inboxError) }
+                ForEach(inboxFiles,id:\.self) { file in
+                    Button(file.lastPathComponent) { library.importFile(file,sessionRunning:model.running) }
+                        .disabled(model.running || library.busy).accessibilityIdentifier("gamePacks.inbox."+file.lastPathComponent)
+                }
+            }
             Section("الاستيراد من الملفات") {
-                Text("احفظ ملف ‎.glpack في تطبيق الملفات، ثم أضفه هنا أو افتحه باستخدام GameLingo. يمكن اختيار الملفات حتى إن لم يتعرّف iOS على نوعها؛ لن تُقبل إلا حزمة سليمة. تُنسخ الحزمة إلى GameLingo؛ لن تحتاج بقاء الملف الأصلي أو وجود كمبيوتر أثناء اللعب. استيراد حزمة لنفس اللعبة يحدّثها بعد التحقق، ويحتفظ بالاختيار والتفعيل.").font(.footnote)
+                Text("يمكن اختيار أي امتداد للفحص؛ الاختيار لا يعني نجاح التحويل. تُكتشف GLPACK وZIP من المحتوى. تُحوّل JSON وXML وCSV/TSV وPO التي تتضمن أزواجًا إنجليزية وعربية. المثبّتات والصيغ الأخرى قد تحتاج المحوّل الخارجي؛ لا يُشغّل التطبيق ملفات EXE.").font(.footnote)
+                Text("تحفظ المكتبة الحزمة بعد التحقق. تبقى الحزمة السابقة عند فشل الفحص أو إلغائه؛ اختر اللعبة بعد الاستيراد لتفعيلها.").font(.footnote)
                 Text("القوائم والمستندات تستخدم الحزمة عند المطابقة الكاملة عبر Smart Reading الذي تشغّله يدويًا. لا تُترجم الصور والأنسجة تلقائيًا.").font(.footnote)
+                Text("GameLingo \(Bundle.main.object(forInfoDictionaryKey:"CFBundleShortVersionString") as? String ?? "؟") · البناء \(Bundle.main.object(forInfoDictionaryKey:"CFBundleVersion") as? String ?? "؟")").font(.caption).accessibilityIdentifier("gamePacks.build")
             }
         }
         .navigationTitle("مكتبة ترجمات الألعاب")
-        .fileImporter(isPresented:$importing,allowedContentTypes:GamePackDocument.pickerTypes) { result in
-            switch result { case .success(let url): library.importFile(url,sessionRunning:model.running); case .failure: library.message = "لم يُستورد ملف" }
+        .onAppear { refreshInbox() }
+        .sheet(isPresented:$importing) {
+            LocalizationFilePicker(directory:inboxFiles.isEmpty ? nil : inbox.directory) { url in
+                if let url { library.importFile(url,sessionRunning:model.running) }
+                else { library.message = "أُلغي اختيار الملف؛ لم تتغير المكتبة" }
+                importing = false
+            }
         }
+    }
+    private func answer(_ value: Bool?) -> String { value.map{$0 ? "نعم" : "لا"} ?? "لم يُحدّد بعد" }
+    private func refreshInbox() {
+        do { inboxFiles = try inbox.files(); inboxError = "" }
+        catch { inboxFiles = []; inboxError = "تعذر عرض المجلد أو تجاوز عدد ملفاته الحد؛ انقل الملفات المطلوبة فقط إلى GameLingo" }
     }
 }
 
