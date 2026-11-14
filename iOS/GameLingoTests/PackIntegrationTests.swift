@@ -93,6 +93,8 @@ final class PackIntegrationTests: XCTestCase {
             try await withCheckedThrowingContinuation { continuation in translator.translate(source,eventID:source) { result,_ in continuation.resume(with:result) } }
         }
         let packed = try await translated("Move now."); XCTAssertEqual(packed,"تحرك الآن.")
+        translator.cancel() // Interruption must not discard selected game or reload DB.
+        let afterInterruption = try await translated("Move now."); XCTAssertEqual(afterInterruption,packed)
         let fallback = try await translated("Collect 11 coins."); XCTAssertFalse(fallback.isEmpty)
         store.changeSelection(game:nil); _ = await state(store)
         let noPack = try await translated("Move now."); XCTAssertFalse(noPack.isEmpty)

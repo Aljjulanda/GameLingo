@@ -186,11 +186,11 @@ def build(args):
     files=sorted(root.rglob('*.txt')) if root.is_dir() else [root]
     for file in files:
         rows,bad=parse_file(file,args.english_encoding)
-        if bad:failures[str(file.relative_to(root) if root.is_dir() else file.name)]=bad
-        input_hashes[str(file.relative_to(root) if root.is_dir() else file.name)]=digest(file.read_bytes())
+        if bad:failures[file.relative_to(root).as_posix() if root.is_dir() else file.name]=bad
+        input_hashes[file.relative_to(root).as_posix() if root.is_dir() else file.name]=digest(file.read_bytes())
         for key,text in rows:
             english_rows+=1;canonical=identifier(key)
-            english[canonical].setdefault(text,[]).append(str(file.relative_to(root) if root.is_dir() else file.name))
+            english[canonical].setdefault(text,[]).append(file.relative_to(root).as_posix() if root.is_dir() else file.name)
     arabic,bad=parse_file(args.arabic)
     ar_counts=collections.Counter(identifier(k) for k,_ in arabic)
     ar_variants=collections.defaultdict(set)

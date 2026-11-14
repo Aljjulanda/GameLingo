@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
   push:
     branches: ['main', 'codex/**']
-    paths: ['iOS/**', '.github/workflows/ios-build.yml']
+    paths: ['iOS/**', 'tools/pack_converter/**', '.github/workflows/ios-build.yml']
   pull_request:
-    paths: ['iOS/**', '.github/workflows/ios-build.yml']
+    paths: ['iOS/**', 'tools/pack_converter/**', '.github/workflows/ios-build.yml']
 
 permissions:
   contents: read

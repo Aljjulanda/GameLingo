@@ -39,6 +39,17 @@ final class AppleIntegrationTests: XCTestCase {
             XCTAssertFalse(ocr.content.text.lowercased().contains("arthur"),layout)
         }
     }
+    func testVisionWrappedSpeakerIsExcludedFromEngineSource() throws {
+        for label in ["(Arthur)","[Arthur]"] {
+            let pixels = try visionFixture { _ in
+                (label+" We need to leave now." as NSString).draw(at:CGPoint(x:250,y:530),withAttributes:[.font:UIFont.systemFont(ofSize:32),.foregroundColor:UIColor.white])
+            }
+            let ocr = VisionDialogueOCR(); _ = try ocr.recognize(pixels,roi:.dialogue,knownNames:"Arthur")
+            XCTAssertEqual(ocr.content.speaker?.lowercased(),"arthur")
+            XCTAssertTrue(ocr.content.text.lowercased().contains("we need to leave"))
+            XCTAssertFalse(ocr.content.text.lowercased().contains("arthur"))
+        }
+    }
     func testNativeArgosAndContextRuleBenchmarkOnSyntheticDialogue() throws {
         let folder = try XCTUnwrap(Bundle(for:Self.self).url(forResource:"en_ar",withExtension:nil))
         var error: NSError?

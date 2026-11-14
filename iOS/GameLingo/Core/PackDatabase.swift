@@ -70,13 +70,6 @@ final class PackDatabase {
     private var cache = BoundedLRU<String,PackMatch>(capacity:32)
     init(url: URL) throws {
         deadline.initialize(to:ProcessInfo.processInfo.systemUptime+30)
-        var ready = false
-        defer {
-            if !ready {
-                sqlite3_finalize(exact); sqlite3_finalize(normalized); sqlite3_close_v2(db)
-                deadline.deinitialize(count:1); deadline.deallocate()
-            }
-        }
         let encoded = url.path.addingPercentEncoding(withAllowedCharacters:.urlPathAllowed)!
         guard sqlite3_open_v2("file:"+encoded+"?mode=ro&immutable=1",&db,SQLITE_OPEN_READONLY|SQLITE_OPEN_URI|SQLITE_OPEN_NOMUTEX,nil) == SQLITE_OK else { throw PackFailure.damaged }
         sqlite3_limit(db,SQLITE_LIMIT_LENGTH,65536); sqlite3_limit(db,SQLITE_LIMIT_SQL_LENGTH,4096)
@@ -91,7 +84,6 @@ final class PackDatabase {
         try validateSchema()
         exact = try prepare("SELECT target, usable FROM entries WHERE source=? AND category IN (?, 'general') LIMIT 33")
         normalized = try prepare("SELECT target, usable FROM entries WHERE normalized=? AND category IN (?, 'general') LIMIT 33")
-        ready = true
     }
     deinit {
         sqlite3_finalize(exact); sqlite3_finalize(normalized); sqlite3_close_v2(db)
