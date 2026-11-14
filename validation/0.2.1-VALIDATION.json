@@ -1,0 +1,132 @@
+{
+  "date": "2026-11-14",
+  "branch": "codex/0.2.1-subtitles",
+  "compiled_app_source": "eccdbfe4e476e4a541a762ec615827d99e50a809",
+  "post_build_changes": "Validation documents only; source archive revision is recorded separately in release metadata.",
+  "stable": {
+    "release": "ios-v0.2.0",
+    "main": "22139da223b92b17cb8e6b5b7b64e3f70c2530cc",
+    "recovery_tag": "stable/real-device-0.2.0",
+    "recovery_source": "9ffe9814e2be2741a9782c84c08e4c5ff6b62872",
+    "preserved": true
+  },
+  "user_evidence_correction": {
+    "stable_trial": "Approximately 30 minutes, Red Dead and Mafia, no interruptions including other apps and locked screen",
+    "diagnostic_snapshot": "Before the trial during connection testing; not trial measurements",
+    "game_editions": "not specified"
+  },
+  "ios": {
+    "version": "0.2.1",
+    "build": "5",
+    "bundle_id": "dev.gamelingo.ios",
+    "signed": false,
+    "minimum_os": "16.0",
+    "run_id": 43576726133,
+    "job_id": 132392601875,
+    "conclusion": "success",
+    "core_tests": 59,
+    "apple_simulator_integration_tests": 15,
+    "packaging_tool_tests": 4,
+    "ipa_artifact_id": 14107345126,
+    "artifact_zip_sha256": "7a1e6dfae10da9a1a620c1f8938809c802503ca6df0fcd4bb4c94d25c48d7beb",
+    "validation_artifact_id": 14106981939,
+    "validation_zip_sha256": "73c4f7bb73d7f0dc7132a0f2d1cc188922b09aa217433228a26f34dbcd7ff2ed",
+    "ipa_structure_validated": true
+  },
+  "android": {
+    "version": "0.6.1",
+    "version_code": 9,
+    "package": "dev.gamelingo.tv",
+    "signer_certificate_sha256": "48cf8a45a37f4e5c338f98fa7d5135c7cdbaf59d50b39b8bf591a79622a28e38",
+    "jvm_tests": 29,
+    "failures": 0,
+    "build": "success"
+  },
+  "baseline_tests": {
+    "windows_pytest": 51,
+    "android_jvm": 24,
+    "accepted_swift_core": 42,
+    "accepted_apple": 14,
+    "accepted_packaging_tools": 4
+  },
+  "physical_android": {
+    "model": "TCL Smart TV Pro",
+    "os": "Android 12/API 31",
+    "variant": "dev.gamelingo.tv.lab",
+    "rtl_passed": true,
+    "advanced_canvas_passed": true,
+    "windows_lan_network_passed": true,
+    "source_replacement_and_saved_token_passed": true,
+    "documents_and_mdns_passed": true,
+    "canvas_image": "TCL-RTL-0.2.1.png",
+    "image_origin": "Canvas rendered on actual TCL; visually reviewed; not a compositor screenshot",
+    "compositor_screencap": "Unavailable: returned zero bytes",
+    "cached_inline_1000_calls_ms": 13.934408,
+    "production_unchanged": "0.6.0 (8), foreground overlay service, overlay permission allowed",
+    "lab_packages_removed": true
+  },
+  "benchmark": {
+    "environment": "Same CI macOS host, optimized portable Swift tracker only; NOT OCR, model, phone CPU, battery or thermal benchmark",
+    "workload": "10,000 observations; 2 short blank OCR readings per 40 observations and intervening dialogue; three repetitions",
+    "baseline_tag": "stable/real-device-0.2.0",
+    "results": {
+      "baseline_0.2.0": [
+        {
+          "observations": 10000,
+          "emitted_jobs": 751,
+          "milliseconds": 3827.099333333308
+        },
+        {
+          "observations": 10000,
+          "emitted_jobs": 751,
+          "milliseconds": 3690.554249999991
+        },
+        {
+          "observations": 10000,
+          "emitted_jobs": 751,
+          "milliseconds": 3158.4989166666446
+        }
+      ],
+      "development_0.2.1": [
+        {
+          "observations": 10000,
+          "emitted_jobs": 501,
+          "milliseconds": 7837.787291666644
+        },
+        {
+          "observations": 10000,
+          "emitted_jobs": 501,
+          "milliseconds": 7897.831624999981
+        },
+        {
+          "observations": 10000,
+          "emitted_jobs": 501,
+          "milliseconds": 7311.079083333311
+        }
+      ]
+    }
+  },
+  "benchmark_limits": "Isolated optimized tracker on same CI Mac. 751 to 501 emitted jobs. Median tracking cost 0.369 to 0.784 ms/observation. Does not measure physical iPhone CPU/RSS/p95/energy or exact translation/card count.",
+  "physical_iphone_ps5_preview_validation": false,
+  "remaining": [
+    "Real Red Dead/Mafia examples, including brackets and side labels",
+    "Equivalent foreground/other-app/locked-screen phone trial and resource comparison",
+    "Controlled network interruption and Stop, recovery counter accuracy",
+    "Smart Reading and return to dialogue"
+  ],
+  "binaries": {
+    "GameLingo-unsigned.ipa": {
+      "bytes": 2678321,
+      "sha256": "07df0f84e1de982939aadc8c3d67a3c73e16881e252a4107bdb19ee7370100c2"
+    },
+    "GameLingo-TV-0.6.1.apk": {
+      "bytes": 1419041,
+      "sha256": "30ae013078ef5e5fbf301eeb76a5d70bf96d5e4d58d0f685968c3dfb1b35344c"
+    }
+  },
+  "safe_tcl_results": {
+    "rtl": "INSTRUMENTATION_STATUS: rendered_image_ready=rtl021.png\nINSTRUMENTATION_STATUS_CODE: 0\nINSTRUMENTATION_RESULT: cached_inline_1000_ms=13.934408\nINSTRUMENTATION_RESULT: result=PASS: six names, LTR name + external RTL colon + Arabic glyph bounds, inline color, natural wrapping, balanced punctuation/quotes/numbers, actual legacy bug reproduction and cached presentation\nINSTRUMENTATION_CODE: -1",
+    "canvas": "INSTRUMENTATION_RESULT: result=PASS: inline speaker/color/RTL/wrap, stable card/clock/anchor, document pages and return to dialogue\nINSTRUMENTATION_CODE: -1",
+    "network": "INSTRUMENTATION_RESULT: result=PASS: physical Android LAN TLS/pinning, encrypted token, source/revision replacement, settings, ping/pong, saved-token reconnect, document pages/close and resumed dialogue, obsolete-host recovery through mDNS preserving full pin/token\n\nINSTRUMENTATION_CODE: -1\n\n\nPASS: unchanged Windows server received settings_ack from physical TV"
+  }
+}
