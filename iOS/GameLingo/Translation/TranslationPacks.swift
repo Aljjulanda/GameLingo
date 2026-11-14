@@ -60,8 +60,7 @@ final class TranslationPackStore {
     private func notify() { let value = state; DispatchQueue.main.async { self.onChange?(value) } }
     private func save(_ registry: GamePackRegistry) throws {
         let url = root.appendingPathComponent("library.json")
-        try JSONEncoder().encode(registry).write(to:url,options:.atomic)
-        try FileManager.default.setAttributes([.protectionKey:FileProtectionType.completeUntilFirstUserAuthentication],ofItemAtPath:url.path)
+        try JSONEncoder().encode(registry).write(to:url,options:[.atomic,.completeFileProtectionUntilFirstUserAuthentication])
     }
     static func hash(_ url: URL) throws -> String {
         let file = try FileHandle(forReadingFrom:url); defer { try? file.close() }
@@ -123,6 +122,9 @@ final class TranslationPackStore {
     }
     func sampleState(_ completion: @escaping (GamePackState) -> Void) { queue.async { let value = self.state; DispatchQueue.main.async { completion(value) } } }
     func recordArgos() { queue.async { self.metrics.argos += 1 } }
+    func recordDialogue(_ id: String) {
+        queue.async { [self] in if eventIDs.get(id) == nil { eventIDs.put(true,for:id); metrics.dialogueEvents += 1 } }
+    }
     func lookup(_ source: String, category: String, eventID: String?) -> String? {
         queue.sync { [self] in
             if category == "dialogue", let eventID, eventIDs.get(eventID) == nil { eventIDs.put(true,for:eventID); metrics.dialogueEvents += 1 }
@@ -204,7 +206,7 @@ final class TranslationPackStore {
             seen.insert(entry.path)
             let limit: UInt64 = entry.path == "translations.sqlite" ? 256*1024*1024 : entry.path == "manifest.json" ? 65536 : 2048
             guard entry.uncompressedSize <= limit, entry.uncompressedSize > 0,
-                  entry.uncompressedSize <= max(1,entry.compressedSize)*100 else { throw PackFailure.size }
+                  max(1,entry.compressedSize) >= (entry.uncompressedSize+99)/100 else { throw PackFailure.size }
             let url = stage.appendingPathComponent(entry.path)
             guard FileManager.default.createFile(atPath:url.path,contents:nil) else { throw PackFailure.unavailable }
             let output = try FileHandle(forWritingTo:url); defer { try? output.close() }

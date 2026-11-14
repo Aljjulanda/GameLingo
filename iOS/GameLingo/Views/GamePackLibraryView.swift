@@ -97,7 +97,7 @@ struct HybridStatisticsView: View {
     var body: some View {
         Section("حزمة اللعبة وArgos") {
             Text(library.method)
-            LabeledContent("أحداث حوار مرت إلى المحرك",value:String(library.metrics.dialogueEvents))
+            LabeledContent("أحداث الحوار",value:String(library.metrics.dialogueEvents))
             LabeledContent("عمليات بحث الحزمة",value:String(library.metrics.lookups))
             LabeledContent("مطابقات / رجوع إلى Argos",value:"\(library.metrics.matches) / \(library.metrics.fallbacks)")
             LabeledContent("مطابقات غامضة رُفضت",value:String(library.metrics.ambiguous))

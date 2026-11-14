@@ -171,6 +171,7 @@ final class FramePipeline {
             case .gone(let id):
                 translator.cancel(); pending = nil; publish(TVProtocol.envelope("subtitle_source_gone",fields:["id":id])); lastTextChange = now
             case .dialogue(let job,let previous):
+                translator.packs?.recordDialogue(job.id)
                 if let previous { publish(TVProtocol.envelope("subtitle_source_gone",fields:["id":previous])) }
                 guard stability.shouldPublish(job) else { memory.observe(job,now:now); break }
                 if !job.correction { translator.cancel() }

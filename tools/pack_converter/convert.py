@@ -93,26 +93,22 @@ def parse_file(path, encoding='utf-8-sig'):
 
 
 def visual_line(text):
-    """Explicit presentation-visual adapter: reverse graphemes, preserve LTR islands.
+    """Explicit presentation-visual adapter, preserving LTR islands.
 
     Only used on records containing Arabic presentation forms, after the caller
-    explicitly selects this producer convention. Lam-alef expands AFTER ordering.
+    explicitly selects this producer convention. This producer places vowel marks
+    BEFORE the visual base, so they change order with it, not with punctuation to
+    their left. Lam-alef expands AFTER ordering.
     It is not a general inverse of the Unicode bidi algorithm.
     """
-    pattern = r'~[^~]+~|[+\-]?[A-Za-z0-9][A-Za-z0-9_\x27’.,:/%+\-]*(?: [A-Za-z0-9][A-Za-z0-9_\x27’.,:/%+\-]*)*'
+    text=unicodedata.normalize('NFC',text)
+    latin=r'A-Za-z0-9\u00c0-\u024f\u1e00-\u1eff'
+    pattern = rf'~[^~]+~|[+\-]?[{latin}][{latin}_\x27’.,:/%+\-]*(?: [{latin}][{latin}_\x27’.,:/%+\-]*)*'
     units, at = [], 0
     for match in re.finditer(pattern, text):
-        for char in text[at:match.start()]:
-            if unicodedata.combining(char) and units:
-                units[-1] += char
-            else:
-                units.append(char)
+        units.extend(text[at:match.start()])
         units.append(match.group()); at = match.end()
-    for char in text[at:]:
-        if unicodedata.combining(char) and units:
-            units[-1] += char
-        else:
-            units.append(char)
+    units.extend(text[at:])
     mirrors = str.maketrans('()[]{}<>', ')(][}{><')
     return unicodedata.normalize('NFKC', ''.join(u.translate(mirrors) if len(u)==1 else u for u in reversed(units)))
 
@@ -149,9 +145,11 @@ def prepare(text, arabic=False, order='auto'):
 
 def extract(installer, output):
     """Read CLR manifest resources with dnfile; no CLR loading or installation."""
-    import dnfile
     path = Path(installer)
     if path.stat().st_size > 128*1024*1024: raise ValueError('Installer too large')
+    with path.open('rb') as stream:
+        if stream.read(2) != b'MZ':raise ValueError('Unsupported installer: missing PE header')
+    import dnfile
     pe = dnfile.dnPE(str(path))
     if not pe.net: raise ValueError('Unsupported installer: expected .NET resources')
     resources = {str(r.name):r.data for r in pe.net.resources if str(r.name) in ['r_text.gxt2.gz','r_install.xml','game.ini']}
@@ -180,6 +178,8 @@ def parse_bytes_for_check(data):
 
 
 def build(args):
+    if not re.fullmatch(r'[a-z0-9][a-z0-9._-]{0,63}',args.game_id) or not 0<len(args.title)<=100 or not 0<len(args.pack_version)<=32 or len(args.attribution)>4096 or len(args.permission)>2000 or len(args.timestamp)>64:
+        raise ValueError('Invalid package metadata')
     output=Path(args.output);output.parent.mkdir(parents=True,exist_ok=True)
     english=collections.defaultdict(dict);english_rows=0;failures={};input_hashes={}
     root=Path(args.english)
@@ -211,9 +211,12 @@ def build(args):
             target,flags,target_ok=prepare(raw_target,True,args.arabic_order)
             flags=sorted(set(flags+source_flags))
             category='dialogue' if '~z~' in raw_source else 'general'
+            provenance=';'.join(candidates[raw_source])
+            if len(source)>4096 or len(target)>MAX_TEXT or len(provenance)>8192 or '\0' in source or '\0' in target:
+                flags_count['excluded_invalid_or_oversized_record']+=1;continue
             ok=source_ok and target_ok and bool(normalize(source)) and len(source)<=4096
             if len(target)>MAX_TEXT:ok=False
-            db.execute('INSERT INTO entries VALUES (?,?,?,?,?,?,?,?,?)',(ident,key,source,normalize(source),target,category,';'.join(candidates[raw_source]),json.dumps(flags),int(ok)))
+            db.execute('INSERT INTO entries VALUES (?,?,?,?,?,?,?,?,?)',(ident,key,source,normalize(source),target,category,provenance,json.dumps(flags),int(ok)))
             count+=1;usable+=int(ok);categories[category]+=int(ok);flags_count.update(flags)
             if ok:by_source[normalize(source)].add(target)
         for sql in INDEXES.values():db.execute(sql)

@@ -267,10 +267,10 @@ final class AppModel: ObservableObject {
         catch { errorMessage = error.localizedDescription }
     }
     func start() {
-        packLibrary.store.resetMetrics()
         guard !running, modelReady, !pairing, let console = consoles.first(where:{ $0.id == settings.selectedConsoleID }) else { errorMessage = "اختر PS5 مسجلًا وجهّز نموذج الترجمة أولًا"; return }
         guard settings.roi.isValid else { errorMessage = "اضبط منطقة الحوار داخل حدود صورة البث أولًا"; return }
         do {
+            packLibrary.store.resetMetrics()
             policy.start(); policy.experimentalAudio = settings.advanced.backgroundAudio
             SessionIntentStore.save(true); initialBattery = -1; batteryUsed = nil; UIDevice.current.isBatteryMonitoringEnabled = true
             displayedIDs.removeAll(); backgroundDeliveries = 0

@@ -36,10 +36,11 @@ def main():
     sources = [build(p, 'app') for p in source_paths]
     resource_paths = ['GameLingo/Core/Resources/tv-display-schema.json', 'GameLingo/Resources/PrivacyInfo.xcprivacy', 'GameLingo/Resources/ThirdPartyNotices.txt']
     resources = [build(p, 'resource') for p in resource_paths]
-    tests = [build('GameLingoTests/AppleIntegrationTests.swift', 'test')]
+    test_paths = sorted(str(p.relative_to(ROOT)).replace('\\', '/') for p in (ROOT / 'GameLingoTests').glob('*.swift'))
+    tests = [build(p, 'test') for p in test_paths]
     test_resources = [build('GameLingoTests/Fixtures/en_ar', 'testresource', 'folder')]
     headers = [ref(p) for p in ['Native/GLRemotePlay.h', 'Native/GLTranslation.h', 'Native/GameLingo-Bridging-Header.h', 'GameLingo/Resources/Info.plist', 'GameLingo/Resources/GameLingo.entitlements']]
-    file_ids = [uid('file:' + p) for p in source_paths + resource_paths + ['GameLingoTests/AppleIntegrationTests.swift', 'GameLingoTests/Fixtures/en_ar']] + headers
+    file_ids = [uid('file:' + p) for p in source_paths + resource_paths + test_paths + ['GameLingoTests/Fixtures/en_ar']] + headers
 
     obj('product:app', 'isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = GameLingo.app; sourceTree = BUILT_PRODUCTS_DIR;')
     obj('product:test', 'isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = GameLingoTests.xctest; sourceTree = BUILT_PRODUCTS_DIR;')
@@ -53,7 +54,9 @@ def main():
     obj('package:product', f'isa = XCSwiftPackageProductDependency; package = {uid("package:zip")}; productName = ZIPFoundation;')
     obj('package:build', f'isa = PBXBuildFile; productRef = {uid("package:product")};')
     obj('app:frameworks', f'isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = ({uid("package:build")},); runOnlyForDeploymentPostprocessing = 0;')
-    obj('test:frameworks', 'isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0;')
+    obj('package:testproduct', f'isa = XCSwiftPackageProductDependency; package = {uid("package:zip")}; productName = ZIPFoundation;')
+    obj('package:testbuild', f'isa = PBXBuildFile; productRef = {uid("package:testproduct")};')
+    obj('test:frameworks', f'isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = ({uid("package:testbuild")},); runOnlyForDeploymentPostprocessing = 0;')
     obj('dependency:proxy', f'isa = PBXContainerItemProxy; containerPortal = {uid("project")}; proxyType = 1; remoteGlobalIDString = {uid("target:app")}; remoteInfo = GameLingo;')
     obj('dependency:app', f'isa = PBXTargetDependency; target = {uid("target:app")}; targetProxy = {uid("dependency:proxy")};')
 
@@ -69,7 +72,7 @@ def main():
             obj(f'config:{scope}:{configuration}', f'isa = XCBuildConfiguration; buildSettings = {{ {body} }}; name = {configuration};')
         obj(f'configlist:{scope}', f'isa = XCConfigurationList; buildConfigurations = ({uid(f"config:{scope}:Debug")}, {uid(f"config:{scope}:Release")},); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release;')
     obj('target:app', f'isa = PBXNativeTarget; buildConfigurationList = {uid("configlist:app")}; buildPhases = ({uid("app:sources")}, {uid("app:frameworks")}, {uid("app:resources")},); buildRules = (); dependencies = (); name = GameLingo; packageProductDependencies = ({uid("package:product")},); productName = GameLingo; productReference = {uid("product:app")}; productType = "com.apple.product-type.application";')
-    obj('target:test', f'isa = PBXNativeTarget; buildConfigurationList = {uid("configlist:test")}; buildPhases = ({uid("test:sources")}, {uid("test:frameworks")}, {uid("test:resources")},); buildRules = (); dependencies = ({uid("dependency:app")},); name = GameLingoTests; productName = GameLingoTests; productReference = {uid("product:test")}; productType = "com.apple.product-type.bundle.unit-test";')
+    obj('target:test', f'isa = PBXNativeTarget; buildConfigurationList = {uid("configlist:test")}; buildPhases = ({uid("test:sources")}, {uid("test:frameworks")}, {uid("test:resources")},); buildRules = (); dependencies = ({uid("dependency:app")},); name = GameLingoTests; packageProductDependencies = ({uid("package:testproduct")},); productName = GameLingoTests; productReference = {uid("product:test")}; productType = "com.apple.product-type.bundle.unit-test";')
     obj('project', f'isa = PBXProject; attributes = {{ BuildIndependentTargetsInParallel = YES; LastUpgradeCheck = 1420; TargetAttributes = {{ {uid("target:app")} = {{ CreatedOnToolsVersion = 14.2; }}; {uid("target:test")} = {{ CreatedOnToolsVersion = 14.2; TestTargetID = {uid("target:app")}; }}; }}; }}; buildConfigurationList = {uid("configlist:project")}; compatibilityVersion = "Xcode 14.0"; developmentRegion = ar; hasScannedForEncodings = 0; knownRegions = (ar,en,Base); mainGroup = {uid("group:root")}; packageReferences = ({uid("package:zip")},); productRefGroup = {uid("group:products")}; projectDirPath = ""; projectRoot = ""; targets = ({uid("target:app")}, {uid("target:test")},);')
     project = ROOT / 'GameLingo.xcodeproj'
     project.mkdir(exist_ok=True)

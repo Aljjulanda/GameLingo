@@ -43,6 +43,8 @@ class ConverterTests(unittest.TestCase):
     def test_visual_ltr_islands_and_numbers(self):
         self.assertEqual(c.visual_line('John 11 ﺎﺒﺣﺮﻣ'),'مرحبا John 11')
         self.assertEqual(c.visual_line('(ﺎﺒﺣﺮﻣ)'),'('+'مرحبا'+')')
+        self.assertEqual(c.visual_line('.ًﺍﺩﺪﺠﻣ ًﺎﺒﺣﺮﻣ'),'مرحباً مجدداً.')
+        self.assertEqual(c.visual_line('José 11 ﺎﺒﺣﺮﻣ'),'مرحبا José 11')
     def test_game_markers_and_placeholders(self):
         value,flags,usable=c.prepare('~z~Hello~n~there~sl:0.0:2.0~friend.')
         self.assertTrue(usable);self.assertEqual(value,'Hello\nthere\nfriend.')
@@ -77,5 +79,17 @@ class ConverterTests(unittest.TestCase):
     def test_non_arabic_and_empty_records_are_unusable(self):
         result=c.build(self.arguments('0x1 = Talk\n0x2 = Stop\n','0x1 = Talk\n0x2 = \n'))
         self.assertEqual(result['usable_records'],0)
+    def test_unsupported_installer_is_never_executed(self):
+        p=self.root/'untrusted.exe';p.write_bytes(b'not an executable or archive')
+        self.assertRaises(ValueError,c.extract,p,self.root/'out')
+        self.assertFalse((self.root/'out').exists())
+    def test_invalid_manifest_metadata_rejected_before_build(self):
+        args=self.arguments();args.game_id='../outside'
+        self.assertRaises(ValueError,c.build,args)
+        self.assertFalse(Path(args.output).exists())
+    def test_oversized_record_excluded_without_breaking_valid_rows(self):
+        args=self.arguments('0x1 = '+('x'*5000)+'\n0x2 = Talk\n','0x1 = تحدث\n0x2 = تحدث\n')
+        result=c.build(args);self.assertEqual(result['package_records'],1)
+        self.assertEqual(result['flags']['excluded_invalid_or_oversized_record'],1)
 
 if __name__=='__main__':unittest.main()

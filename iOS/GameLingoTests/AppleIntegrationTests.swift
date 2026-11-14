@@ -71,6 +71,16 @@ final class AppleIntegrationTests: XCTestCase {
         let json = try JSONSerialization.data(withJSONObject:["environment":"iOS Simulator on CI Mac, not physical iPhone; synthetic dialogue and explicit hand-written rules","results":records],options:[.sortedKeys])
         print("SYNTHETIC_NATIVE_TRANSLATION_BENCHMARK "+String(decoding:json,as:UTF8.self))
     }
+    func testNativeTranslationCanRetireImmediatelyAfterSynchronousResult() throws {
+        let folder = try XCTUnwrap(Bundle(for:Self.self).url(forResource:"en_ar",withExtension:nil))
+        for _ in 0..<10 {
+            try autoreleasepool {
+                var error: NSError?
+                let engine = try XCTUnwrap(GLTranslation(modelPath:folder.path,error:&error))
+                XCTAssertFalse(try XCTUnwrap(engine.translate("Wait near the gate.",error:&error)).isEmpty)
+            }
+        }
+    }
     @MainActor
     func testAudioInterruptionRestorationCannotOverrideManualStop() async throws {
         let audio = BackgroundAudio()
