@@ -1,6 +1,16 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
+enum GamePackDocument {
+    static let type = UTType(exportedAs:"dev.gamelingo.glpack",conformingTo:.data)
+    // Download/iCloud providers can retain a dynamic or generic type for .glpack.
+    // Let users select those files; the importer verifies extension and contents.
+    static let pickerTypes: [UTType] = [.item]
+    static func accepts(_ url: URL) -> Bool {
+        url.isFileURL && url.pathExtension.caseInsensitiveCompare("glpack") == .orderedSame
+    }
+}
+
 @MainActor
 final class GamePackLibrary: ObservableObject {
     let store: TranslationPackStore
@@ -18,8 +28,12 @@ final class GamePackLibrary: ObservableObject {
         }
     }
     func refreshMetrics() { store.sampleMetrics { [weak self] in self?.metrics = $0 } }
-    func importFile(_ url: URL) {
-        guard !busy else { return }; busy = true; message = "جارٍ التحقق من الحزمة واستيرادها…"
+    @discardableResult
+    func importFile(_ url: URL, sessionRunning: Bool = false) -> Bool {
+        guard !sessionRunning else { message = "أوقف جلسة الترجمة قبل إضافة حزمة؛ ثم افتح الملف مجددًا."; return false }
+        guard !busy else { message = "انتظر اكتمال استيراد الحزمة الحالية."; return false }
+        guard GamePackDocument.accepts(url) else { message = "اختر ملف حزمة ترجمة بامتداد ‎.glpack من تطبيق الملفات."; return false }
+        busy = true; message = "جارٍ التحقق من الحزمة واستيرادها…"
         store.importPack(url) { [weak self] result in
             guard let self else { return }; self.busy = false
             switch result {
@@ -27,6 +41,7 @@ final class GamePackLibrary: ObservableObject {
             case .failure(let error): self.message = (error as? PackFailure)?.localizedDescription ?? "تعذر استيراد الحزمة؛ بقيت المكتبة السابقة محفوظة"
             }
         }
+        return true
     }
     var method: String {
         state.loaded ? "حزمة اللعبة المختارة ثم Argos عند الحاجة" : "Argos المحلي"
@@ -82,13 +97,13 @@ struct GamePackLibraryView: View {
                 }
             }
             Section("الاستيراد من الملفات") {
-                Text("احفظ ملف ‎.glpack في تطبيق الملفات، ثم أضفه هنا. تُنسخ الحزمة إلى GameLingo؛ لن تحتاج بقاء الملف الأصلي أو وجود كمبيوتر أثناء اللعب. استيراد حزمة لنفس اللعبة يحدّثها بعد التحقق، ويحتفظ بالاختيار والتفعيل.").font(.footnote)
+                Text("احفظ ملف ‎.glpack في تطبيق الملفات، ثم أضفه هنا أو افتحه باستخدام GameLingo. يمكن اختيار الملفات حتى إن لم يتعرّف iOS على نوعها؛ لن تُقبل إلا حزمة سليمة. تُنسخ الحزمة إلى GameLingo؛ لن تحتاج بقاء الملف الأصلي أو وجود كمبيوتر أثناء اللعب. استيراد حزمة لنفس اللعبة يحدّثها بعد التحقق، ويحتفظ بالاختيار والتفعيل.").font(.footnote)
                 Text("القوائم والمستندات تستخدم الحزمة عند المطابقة الكاملة عبر Smart Reading الذي تشغّله يدويًا. لا تُترجم الصور والأنسجة تلقائيًا.").font(.footnote)
             }
         }
         .navigationTitle("مكتبة ترجمات الألعاب")
-        .fileImporter(isPresented:$importing,allowedContentTypes:[UTType(importedAs:"dev.gamelingo.glpack"),.data]) { result in
-            switch result { case .success(let url): library.importFile(url); case .failure: library.message = "لم يُستورد ملف" }
+        .fileImporter(isPresented:$importing,allowedContentTypes:GamePackDocument.pickerTypes) { result in
+            switch result { case .success(let url): library.importFile(url,sessionRunning:model.running); case .failure: library.message = "لم يُستورد ملف" }
         }
     }
 }

@@ -11,6 +11,14 @@ struct MainView: View {
             PerformanceView().tabItem { Label("الأداء",systemImage:"gauge") }
         }
         .tint(.teal)
+        .sheet(isPresented:$model.showingPackLibrary) {
+            NavigationView {
+                GamePackLibraryView(library:model.packLibrary)
+                    .toolbar { ToolbarItem(placement:.cancellationAction) {
+                        Button("إغلاق") { model.showingPackLibrary = false }
+                    } }
+            }.environmentObject(model)
+        }
         .alert("GameLingo",isPresented:Binding(get:{ model.errorMessage != nil },set:{ if !$0 { model.errorMessage = nil } })) {
             Button("حسنًا") { model.errorMessage = nil }
         } message: { Text(model.errorMessage ?? "") }

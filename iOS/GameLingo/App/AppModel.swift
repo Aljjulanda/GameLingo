@@ -43,6 +43,7 @@ final class AppModel: ObservableObject {
     @Published var modelStatus = "لم يُحمّل النموذج"
     @Published var pairingCode = ""
     @Published var errorMessage: String?
+    @Published var showingPackLibrary = false
     @Published var running = false
     @Published var modelReady = false
     @Published var modelBusy = false
@@ -97,6 +98,11 @@ final class AppModel: ObservableObject {
     private func recordSession(_ stage: String, _ detail: String, at: Double? = nil) {
         sessionLog.record(stage,detail:detail,now:at ?? ProcessInfo.processInfo.systemUptime,foreground:policy.foreground,network:policy.network,interrupted:policy.interrupted)
         sessionDiagnostics = sessionLog.lines
+    }
+
+    func openTranslationPack(_ url: URL) {
+        if packLibrary.importFile(url,sessionRunning:running) { showingPackLibrary = true }
+        else { errorMessage = packLibrary.message }
     }
 
     init() {

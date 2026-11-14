@@ -3,9 +3,45 @@ import Foundation
 import CryptoKit
 import SQLite3
 import ZIPFoundation
+import UniformTypeIdentifiers
 @testable import GameLingo
 
 final class PackIntegrationTests: XCTestCase {
+    func testDocumentRegistrationAndProviderFallback() throws {
+        let info = try XCTUnwrap(Bundle.main.infoDictionary)
+        let exports = try XCTUnwrap(info["UTExportedTypeDeclarations"] as? [[String:Any]])
+        let declaration = try XCTUnwrap(exports.first { $0["UTTypeIdentifier"] as? String == GamePackDocument.type.identifier })
+        XCTAssertTrue((declaration["UTTypeConformsTo"] as? [String] ?? []).contains("public.data"))
+        XCTAssertTrue(GamePackDocument.type.conforms(to:.data))
+        XCTAssertEqual(UTType(filenameExtension:"glpack"),GamePackDocument.type)
+        let documents = try XCTUnwrap(info["CFBundleDocumentTypes"] as? [[String:Any]])
+        XCTAssertTrue(documents.contains { ($0["LSItemContentTypes"] as? [String] ?? []).contains(GamePackDocument.type.identifier) })
+        XCTAssertEqual(info["LSSupportsOpeningDocumentsInPlace"] as? Bool,true)
+        let providerType = UTType(importedAs:"dev.gamelingo.test-provider-unknown",conformingTo:.item)
+        for type in [providerType,.data,.zip,GamePackDocument.type] {
+            XCTAssertTrue(GamePackDocument.pickerTypes.contains { type.conforms(to:$0) })
+        }
+    }
+
+    @MainActor
+    func testDocumentImportValidatesContentsAndProtectsActiveSession() async throws {
+        let library = GamePackLibrary(store:TranslationPackStore(root:try folder()))
+        let file = try pack(), upper = file.deletingLastPathComponent().appendingPathComponent("rdr2-Arabic.GLPACK")
+        try FileManager.default.copyItem(at:file,to:upper)
+        XCTAssertFalse(library.importFile(upper,sessionRunning:true)); XCTAssertFalse(library.busy)
+        XCTAssertFalse(library.importFile(URL(string:"https://example.com/RDR2.glpack")!))
+        XCTAssertFalse(library.importFile(file.deletingPathExtension().appendingPathExtension("exe")))
+        XCTAssertTrue(library.importFile(upper)); XCTAssertTrue(library.busy)
+        XCTAssertFalse(library.importFile(upper)) // A second document must not start another import.
+        for _ in 0..<250 { if !library.busy { break }; try await Task.sleep(nanoseconds:20_000_000) }
+        XCTAssertFalse(library.busy); XCTAssertEqual(library.state.registry.packs.count,1)
+        let bad = upper.deletingLastPathComponent().appendingPathComponent("invalid.glpack")
+        try Data("not a translation pack".utf8).write(to:bad)
+        XCTAssertTrue(library.importFile(bad))
+        for _ in 0..<250 { if !library.busy { break }; try await Task.sleep(nanoseconds:20_000_000) }
+        XCTAssertFalse(library.busy); XCTAssertEqual(library.state.registry.packs.count,1)
+        XCTAssertFalse(library.message.hasPrefix("تم استيراد"))
+    }
     private func folder() throws -> URL {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at:url,withIntermediateDirectories:true)

@@ -7,6 +7,7 @@ struct GameLingoApp: App {
     var body: some Scene {
         WindowGroup {
             MainView().environmentObject(model).environment(\.layoutDirection,.rightToLeft)
+                .onOpenURL { model.openTranslationPack($0) }
                 .onChange(of:phase) {
                     if $0 == .background { model.background() }
                     else if $0 == .active { model.foreground() }
