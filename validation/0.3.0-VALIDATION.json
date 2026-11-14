@@ -1,7 +1,7 @@
 {
   "date": "2026-11-14",
   "development_branch": "codex/0.3.0-translation-packs",
-  "compiled_source": "f1e461176d38ab44f4c8dbfeacd7079d4db36c46",
+  "compiled_source": "d0ccbaf189537539e03e8cf55075b9876296534c",
   "source_archive_note": "Subsequent validation-only documentation; compiled app source unchanged.",
   "ios": {
     "version": "0.3.0",
@@ -9,19 +9,19 @@
     "bundle": "dev.gamelingo.ios",
     "unsigned": true,
     "minimum_ios": "16.0",
-    "run_id": 43594936502,
-    "job_id": 132447318193,
+    "run_id": 43596664382,
+    "job_id": 132452520549,
     "conclusion": "success",
     "core_tests": 67,
     "apple_simulator_tests": 21,
     "converter_tests": 17,
     "packaging_tests": 4,
-    "ipa_artifact": 14113903720,
-    "ipa_artifact_zip_sha256": "15926a2baae76882af507c32d455ffb24524fe8df962cce4e5f8d3b4d07de743",
-    "validation_artifact": 14114048992,
-    "validation_zip_sha256": "b1320daa3809f1a9a7cf28ae9b2b2a0ffc691abd99670a0ebcd8903f0215ed0d",
-    "ipa_sha256": "c77f520a92b1103a70e64087078a4a46115b53bba26c514703b51d491766092c",
-    "ipa_bytes": 2747405,
+    "ipa_artifact": 14114746592,
+    "ipa_artifact_zip_sha256": "861a24a7d3a3c0d88d913d2e1e73ad71baeca62546a0d78f591d78e3025999d4",
+    "validation_artifact": 14114452863,
+    "validation_zip_sha256": "58761ab3b17ac58f72a83ba7b7fa215a08a8fa7292187e3d711a32bd3f39621f",
+    "ipa_sha256": "9490a5cb56503f861ac45881712827b3533f97ab9eaff6e02a0467168cd50dd0",
+    "ipa_bytes": 2747471,
     "ipa_structure_and_no_third_party_pack_checked": true
   },
   "baseline": {
@@ -67,10 +67,10 @@
   "rdr2_native_ci": {
     "eligible_rows": 209459,
     "environment": "Actual real RDR2 database, native SQLite and Swift on CI Mac; not physical iPhone or gameplay; correctness is expected lookup decision, not a human linguistic certification",
-    "lookup_average_ms": 0.0421653433160824,
-    "lookup_p95_ms": 0.10545833333708288,
+    "lookup_average_ms": 0.02512288263749055,
+    "lookup_p95_ms": 0.043500000003859896,
     "lookup_samples": 1102,
-    "native_validation_ms": 8745.76566666667,
+    "native_validation_ms": 7499.321000000009,
     "records": 228174,
     "verified_matches": 1000,
     "verified_rejections": 102
@@ -120,5 +120,6 @@
     "Smart Reading uses existing chunks; no substring paragraph replacement",
     "Manual game selection; no automatic recognition",
     "No physical iPhone/PS5 full gameplay or locked-screen acceptance for this preview yet"
-  ]
+  ],
+  "native_data_scope": "CI rebuild of same pinned input data; local delivery container metadata and SQLite producer may differ. Delivered pack hashes are in RDR2-CONVERSION.json. Physical iPhone import not yet validated."
 }
