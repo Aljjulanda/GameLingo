@@ -50,7 +50,7 @@ final class PackDatabaseTests: XCTestCase {
         }
     }
     func testUntrustedSchemaViewsAndTriggersAreRejected() throws {
-        for sql in ["CREATE VIEW stolen AS SELECT * FROM entries","CREATE TRIGGER surprise AFTER INSERT ON entries BEGIN DELETE FROM entries; END","CREATE TABLE extra(value TEXT)"] {
+        for sql in ["CREATE VIEW stolen AS SELECT * FROM entries","CREATE VIEW sqliteevil AS SELECT * FROM entries","CREATE TRIGGER surprise AFTER INSERT ON entries BEGIN DELETE FROM entries; END","CREATE TABLE extra(value TEXT)"] {
             let (file,_) = try fixture([("Move.","تحرك.","dialogue")],extraSQL:sql)
             XCTAssertThrowsError(try PackDatabase(url:file))
         }

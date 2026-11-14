@@ -111,7 +111,7 @@ final class PackDatabase {
         guard value.withCString({ sqlite3_bind_text(statement,column,$0,-1,unsafeBitCast(-1,to:sqlite3_destructor_type.self)) }) == SQLITE_OK else { throw PackFailure.damaged }
     }
     private func validateSchema() throws {
-        let statement = try prepare("SELECT type, name, sql FROM sqlite_master WHERE name NOT LIKE 'sqlite_%'")
+        let statement = try prepare("SELECT type, name, sql FROM sqlite_master")
         defer { sqlite3_finalize(statement) }
         var found = Set<String>(), code = sqlite3_step(statement)
         while code == SQLITE_ROW {
