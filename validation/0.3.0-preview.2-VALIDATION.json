@@ -1,0 +1,41 @@
+{
+  "version": "0.3.0",
+  "build": 7,
+  "run_id": 43619694040,
+  "job_id": 132522326585,
+  "compiled_source": "860326788e2bb1415f3065b6ed0e58d136751a92",
+  "conclusion": "success",
+  "run_url": "https://github.com/Aljjulanda/GameLingo/actions/runs/43619694040",
+  "tests": {
+    "swift_core": 67,
+    "apple_integration": 23,
+    "python_converter": 17,
+    "packaging": 4,
+    "document_provider_fallback_passed": true,
+    "document_import_validation_passed": true
+  },
+  "native_rdr2_validation": {
+    "eligible_rows": 209459,
+    "environment": "Actual real RDR2 database, native SQLite and Swift on CI Mac; not physical iPhone or gameplay; correctness is expected lookup decision, not a human linguistic certification",
+    "lookup_average_ms": 0.028587794918342145,
+    "lookup_p95_ms": 0.04791666668779726,
+    "lookup_samples": 1102,
+    "native_validation_ms": 8035.28641666665,
+    "records": 228174,
+    "verified_matches": 1000,
+    "verified_rejections": 102
+  },
+  "artifact": {
+    "id": 14123757021,
+    "sha256": "sha256:84bbee4025be76a6b6e4fbdb2c1df51231ed99d59c8655a1332f5463abe5c60f",
+    "size_in_bytes": 2739760
+  },
+  "physical_iphone_picker_validation": false,
+  "third_party_pack_publicly_redistributed": false,
+  "first_attempt": {
+    "run_id": 43618274790,
+    "conclusion": "failure",
+    "reason": "Incorrect unregistered static UTI test fixture; replaced by system-generated dynamic type."
+  },
+  "ipa_sha256": "3922d3bcc99eef4cab998d65d571af3737eb20787bc2766212c03b876a26d7e8"
+}
