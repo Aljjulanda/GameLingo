@@ -52,7 +52,8 @@ final class AppModel: ObservableObject {
     @Published var loginRequired = false
     @Published var pairing = false
     @Published var addresses: [String] = []
-    let translator = OfflineTranslator()
+    let packLibrary = GamePackLibrary()
+    lazy var translator = OfflineTranslator(packs:packLibrary.store)
     let hub = TVHub()
     let remote = RemotePlayService()
     private lazy var pipeline = FramePipeline(translator:translator,publish:{ [weak hub = self.hub] in hub?.publish($0) })
@@ -78,7 +79,7 @@ final class AppModel: ObservableObject {
     private var sessionStartedUptime = 0.0
     var performanceSnapshot: String {
         let values = [
-            "GameLingo 0.2.1", "Measurement started: \(sessionStarted.formatted())", sessionStatus, audioStatus,
+            "GameLingo 0.3.0", "Measurement started: \(sessionStarted.formatted())", sessionStatus, audioStatus,
             "CPU: \(NumericInput.format(cpuPercent))% (100%=one core)", "RSS: \(NumericInput.format(residentMegabytes)) MB", "Thermal: \(thermal.rawValue)",
             "Translation p95: \(NumericInput.format(metrics.translationP95)) ms", "OCR p95: \(NumericInput.format(metrics.ocrP95)) ms",
             "TV background render ACKs: \(backgroundDeliveries)", "Recovery backoff index: \(recoveryAttempts)",
@@ -91,7 +92,7 @@ final class AppModel: ObservableObject {
             "Smart Reading: \(NumericInput.format(metrics.documentMilliseconds)) ms, sampled extra RSS \(NumericInput.format(metrics.documentExtraMegabytes)) MB",
             "Punctuation stages (counts only): \(metrics.punctuationTrace)"
         ]
-        return (values+sessionDiagnostics).joined(separator:"\n")
+        return (values+[packLibrary.metrics.summary]+sessionDiagnostics).joined(separator:"\n")
     }
     private func recordSession(_ stage: String, _ detail: String, at: Double? = nil) {
         sessionLog.record(stage,detail:detail,now:at ?? ProcessInfo.processInfo.systemUptime,foreground:policy.foreground,network:policy.network,interrupted:policy.interrupted)
@@ -99,6 +100,7 @@ final class AppModel: ObservableObject {
     }
 
     init() {
+        packLibrary.onNamesChanged = { [weak self] names in self?.pipeline.configurePackNames(names) }
         do {
             if let data = try KeychainStore.read("consoles.v1") {
                 consoles = try JSONDecoder().decode([ConsoleCredentials].self,from:data)
@@ -225,6 +227,7 @@ final class AppModel: ObservableObject {
         if !addresses.contains(settings.localIP), let first = addresses.first { settings.localIP = first }
     }
     func sampleSystem() {
+        packLibrary.refreshMetrics()
         let now = ProcessInfo.processInfo.systemUptime
         if policy.wanted && lastSystemSample > 0 && now-lastSystemSample > 8 { recordSession("execution.callback_gap","Main callback gap=\(Int(now-lastSystemSample))s; OS suspension is not confirmed") }
         lastSystemSample = now; remote.sampleHealth()
@@ -264,6 +267,7 @@ final class AppModel: ObservableObject {
         catch { errorMessage = error.localizedDescription }
     }
     func start() {
+        packLibrary.store.resetMetrics()
         guard !running, modelReady, !pairing, let console = consoles.first(where:{ $0.id == settings.selectedConsoleID }) else { errorMessage = "اختر PS5 مسجلًا وجهّز نموذج الترجمة أولًا"; return }
         guard settings.roi.isValid else { errorMessage = "اضبط منطقة الحوار داخل حدود صورة البث أولًا"; return }
         do {

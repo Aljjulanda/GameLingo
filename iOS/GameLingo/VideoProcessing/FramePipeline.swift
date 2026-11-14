@@ -39,6 +39,7 @@ final class FramePipeline {
     private var signature = FrameSignature()
     private var tracker = DialogueTracker()
     private var advanced = AdvancedSettings()
+    private var packSpeakerNames = ""
     private var memory = DialogueMemory()
     private var stability = PublicationStability()
     private var translations = BoundedLRU<String,(String,String)>(capacity:8)
@@ -91,6 +92,7 @@ final class FramePipeline {
             memory.prune(now:ProcessInfo.processInfo.systemUptime)
         }
     }
+    func configurePackNames(_ names: String) { queue.async { self.packSpeakerNames = String(names.prefix(2000)) } }
     func interrupt() { translator.cancel(); queue.async { [self] in
         finishReading()
         runID = UUID(); tracker.markInterrupted(); pending = nil; publish(TVProtocol.envelope("subtitle_clear"))
@@ -153,7 +155,7 @@ final class FramePipeline {
         }
         guard signature.shouldRecognize(buffer,roi:roi,now:now,hasText:tracker.current != nil) else { return }
         do {
-            let (_,box) = try autoreleasepool { try ocr.recognize(buffer,roi:roi,knownNames:advanced.speakerNames) }
+            let (_,box) = try autoreleasepool { try ocr.recognize(buffer,roi:roi,knownNames:advanced.speakerNames+","+packSpeakerNames) }
             guard isActive() else { return }
             let content = ocr.content
             if content.speaker != nil { metrics.speakersDetected += 1 }
@@ -214,7 +216,7 @@ final class FramePipeline {
             }
         }
         if let override { completion(.success(override),0) }
-        else { translator.translate(job.text,completion:completion) }
+        else { translator.translate(job.text,eventID:job.id,completion:completion) }
     }
     func requestReading(ticket: UUID) {
         translator.cancel()
@@ -244,7 +246,7 @@ final class FramePipeline {
             DispatchQueue.main.async { self.onReading?(ticket,true,pages,"القراءة جاهزة · \(pages.count) صفحات") }
             return
         }
-        translator.translate(chunks[index]) { [weak self] result,latency in
+        translator.translate(chunks[index],category:"document") { [weak self] result,latency in
             guard let self else { return }
             self.queue.async {
                 guard self.isActive(), self.reading, self.runID == epoch else { return }

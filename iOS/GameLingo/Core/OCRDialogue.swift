@@ -60,7 +60,7 @@ enum StructuredDialogue {
             guard let anchor = matches.max(by: { $0.box.w < $1.box.w }) else { continue }
             let body = group(anchor,excluding:label)
             guard !body.isEmpty else { continue }
-            return Reading(content:DialogueContent(text:DialogueText.normalized(body.map(\.text).joined(separator:" ")),speaker:label.text.trimmingCharacters(in:.whitespacesAndNewlines)),box:union(body),confidence:body.map(\.confidence).min() ?? 0)
+            return Reading(content:DialogueContent(text:DialogueText.normalized(body.map(\.text).joined(separator:" ")),speaker:DialogueContent.speakerLabel(label.text)),box:union(body),confidence:body.map(\.confidence).min() ?? 0)
         }
         return nil
     }

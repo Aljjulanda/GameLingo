@@ -10,12 +10,14 @@ final class OfflineTranslator {
     static let modelSize: Int64 = 88_502_631
     static let required = ["model/model.bin","model/shared_vocabulary.txt","sentencepiece.model","metadata.json","README.md"]
     let folder: URL
+    let packs: TranslationPackStore?
     private let queue = DispatchQueue(label:"dev.gamelingo.translation",qos:.userInitiated)
     private let lock = NSLock()
     private var engine: GLTranslation?
     private var cancellationGeneration: UInt64 = 0
     private var cache = BoundedLRU<String,String>(capacity:256)
-    init(folder: URL? = nil) {
+    init(folder: URL? = nil, packs: TranslationPackStore? = nil) {
+        self.packs = packs
         self.folder = folder ?? FileManager.default.urls(for:.applicationSupportDirectory,in:.userDomainMask)[0].appendingPathComponent(Self.modelID,isDirectory:true)
     }
     var installed: Bool { Self.required.allSatisfy { FileManager.default.fileExists(atPath:folder.appendingPathComponent($0).path) } }
@@ -34,7 +36,7 @@ final class OfflineTranslator {
     private func isCurrent(_ generation: UInt64) -> Bool {
         lock.lock(); defer { lock.unlock() }; return cancellationGeneration == generation
     }
-    func translate(_ text: String, completion: @escaping (Result<String,Error>,Double) -> Void) {
+    func translate(_ text: String, category: String = "dialogue", eventID: String? = nil, completion: @escaping (Result<String,Error>,Double) -> Void) {
         lock.lock(); let generation = cancellationGeneration; lock.unlock()
         queue.async { [self] in
             let start = ProcessInfo.processInfo.systemUptime
@@ -43,8 +45,10 @@ final class OfflineTranslator {
                 guard isCurrent(generation) else { throw CancellationError() }
                 let normalized = DialogueText.normalized(text)
                 let key = Self.modelID+"/commands-v2/en/ar/"+normalized
-                if let cached = cache.get(key) { result = .success(cached) }
+                if let localized = packs?.lookup(text,category:category,eventID:eventID) { result = .success(localized) }
+                else if let cached = cache.get(key) { packs?.recordArgos(); result = .success(cached) }
                 else {
+                    packs?.recordArgos()
                     lock.lock()
                     let current = cancellationGeneration == generation ? engine : nil
                     current?.resume()

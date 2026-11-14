@@ -111,6 +111,9 @@ struct TranslationView: View {
         NavigationView {
             Form {
                 Section("اللغات") { LabeledContent("المصدر",value:"English"); LabeledContent("الهدف",value:"العربية") }
+                Section("حزم الألعاب") {
+                    NavigationLink("مكتبة ترجمات الألعاب") { GamePackLibraryView(library:model.packLibrary) }
+                }
                 Section("تشغيل الجلسة والخلفية") {
                     Toggle("تجربة الصوت الصامت في الخلفية",isOn:$model.settings.advanced.backgroundAudio)
                         .onChange(of:model.settings.advanced.backgroundAudio) { _ in model.updateBackgroundExperiment() }
@@ -233,6 +236,7 @@ struct PerformanceView: View {
                         Text("عدد الأقواس والعلامات في OCR والنص المفصول وخرج الترجمة والرسالة؛ لا يتضمن نص الحوار.").font(.footnote)
                     }
                 }
+                HybridStatisticsView(library:model.packLibrary)
                 Section("النظام") {
                     metric("CPU · 100% تعني نواة واحدة",model.cpuPercent,suffix:"%")
                     metric("ذاكرة العملية RSS",model.residentMegabytes,suffix:"MB")

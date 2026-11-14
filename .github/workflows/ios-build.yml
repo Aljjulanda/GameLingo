@@ -49,6 +49,7 @@ jobs:
             ios-native-xcode16.4-
       - name: Validate source and preserve existing platform implementations
         run: |
+          python3 tools/pack_converter/test_converter.py
           python3 iOS/Scripts/validate-source.py
           python3 iOS/Scripts/test-build-tools.py
       - name: Test portable Swift dialogue and protocol logic
