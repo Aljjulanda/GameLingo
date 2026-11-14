@@ -17,7 +17,8 @@ final class PackIntegrationTests: XCTestCase {
         let documents = try XCTUnwrap(info["CFBundleDocumentTypes"] as? [[String:Any]])
         XCTAssertTrue(documents.contains { ($0["LSItemContentTypes"] as? [String] ?? []).contains(GamePackDocument.type.identifier) })
         XCTAssertEqual(info["LSSupportsOpeningDocumentsInPlace"] as? Bool,true)
-        let providerType = UTType(importedAs:"dev.gamelingo.test-provider-unknown",conformingTo:.item)
+        let providerType = try XCTUnwrap(UTType(tag:"gamelingo-provider-fixture",tagClass:.filenameExtension,conformingTo:.item))
+        XCTAssertTrue(providerType.isDynamic)
         for type in [providerType,.data,.zip,GamePackDocument.type] {
             XCTAssertTrue(GamePackDocument.pickerTypes.contains { type.conforms(to:$0) })
         }
