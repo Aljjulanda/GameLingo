@@ -220,7 +220,7 @@ enum LocalizationPackBuilder {
             if index % 1024 == 0 { progress(index,parsed.records.count) }
             try control.check(); sqlite3_reset(statement); sqlite3_clear_bindings(statement)
             let fields = ["raw-\(index)",record.id,record.source,PackLookupKey.normalized(record.source),record.target,record.category,sourceName,"[]"]
-            for (column,value) in fields.enumerated() { guard value.withCString({sqlite3_bind_text(statement,Int32(column+1),$0,-1,unsafeBitCast(-1,to:sqlite3_destructor_type.self))}) == SQLITE_OK else { throw PackFailure.damaged } }
+            for (column,value) in fields.enumerated() { guard value.withCString({sqlite3_bind_text(statement,Int32(column+1),$0,Int32(value.utf8.count),unsafeBitCast(-1,to:sqlite3_destructor_type.self))}) == SQLITE_OK else { throw PackFailure.damaged } }
             guard sqlite3_step(statement) == SQLITE_DONE else { throw PackFailure.damaged }
         }
         guard sqlite3_exec(db,"COMMIT",nil,nil,nil) == SQLITE_OK else { throw PackFailure.damaged }

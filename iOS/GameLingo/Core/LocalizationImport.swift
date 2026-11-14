@@ -92,7 +92,7 @@ enum LocalizationAdapters {
     static func metadata(_ object: [String:Any], into result: inout ParsedLocalization) throws {
         for key in metadataKeys {
             guard let raw = object[key], !(raw is NSNull) else { continue }
-            guard let value = raw as? String else { throw LocalizationImportFailure.malformed }
+            guard let value = raw as? String, !value.contains("\0") else { throw LocalizationImportFailure.malformed }
             if value.isEmpty { continue }
             if let old = result.metadata[key], old != value {
                 guard creditKeys.contains(key) else { throw LocalizationImportFailure.malformed }
@@ -301,7 +301,7 @@ enum EnglishArabicMatcher {
             try control.check()
             record.source = record.source.trimmingCharacters(in:.whitespacesAndNewlines)
             record.target = SubtitlePresentation.clean(record.target)
-            guard record.id.count <= 128, record.source.count <= 4096, record.target.count <= 16000,
+            guard record.id.count <= 128, !record.id.contains("\0"), record.source.count <= 4096, record.target.count <= 16000,
                   !record.source.contains("\0"), !record.target.contains("\0"),
                   record.source.range(of:"[A-Za-z]",options:.regularExpression) != nil,
                   record.target.unicodeScalars.contains(where:{(0x0600...0x06ff).contains($0.value)}),

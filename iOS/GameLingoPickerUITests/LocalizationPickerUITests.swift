@@ -86,7 +86,15 @@ final class LocalizationPickerUITests: XCTestCase {
             let text = try visiblePickerText()
             print("PICKER_VISIBLE_LABELS "+text.map{$0.0}.joined(separator:" | "))
             if let item = text.first(where:{ row in row.1.midY < 0.80 && row.1.midY > 0.11 && aliases.contains(where:{row.0.contains($0)}) }) {
-                return CGPoint(x:item.1.midX,y:1-item.1.midY)
+                // Files' grid caption is not the primary hit region. Tap the
+                // thumbnail above the recognized caption, never an AUT element.
+                let point = CGPoint(x:item.1.midX,y:1-item.1.midY-60/screenHeight)
+                if point.y < 0.21 {
+                    screenCoordinate(CGPoint(x:0.5,y:0.35)).press(forDuration:0.05,thenDragTo:screenCoordinate(CGPoint(x:0.5,y:0.52)))
+                    continue
+                }
+                print("PICKER_THUMBNAIL_TAP \(ext) \(point)")
+                return point
             }
             screenCoordinate(CGPoint(x:0.5,y:0.74)).press(forDuration:0.05,thenDragTo:screenCoordinate(CGPoint(x:0.5,y:0.40)))
         }
