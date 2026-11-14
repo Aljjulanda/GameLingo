@@ -1,0 +1,39 @@
+{
+  "date": "2026-11-14",
+  "timezone": "Asia/Muscat",
+  "device": {
+    "model": "TCL Smart TV Pro",
+    "android": "12",
+    "api": 31,
+    "ipv4": "192.168.3.138"
+  },
+  "host_fixture_ipv4": "192.168.3.70",
+  "app_source_commit": "e7b7a3ea3782408e8768477a80d3c32331594929",
+  "variant": "dev.gamelingo.tv.lab",
+  "variant_version": "0.6.0 (8)",
+  "production_preserved": "dev.gamelingo.tv 0.5.2 (7)",
+  "lab_and_test_packages_removed": true,
+  "fixture_dependencies": {
+    "zeroconf": "0.154.0",
+    "ifaddr": "0.2.0"
+  },
+  "test_harness_canonical_lf_sha256": {
+    "android-tv/app/src/androidTest/java/dev/gamelingo/tv/NetworkRunner.kt": "1ed3b46e9feb688884700f9cf9657340b6440152fc62c24ab0361c0e24cadec1",
+    "iOS/Integration/test-tv-windows.py": "590d3185e94db911c2cabec9471f729c6a700f988557430de66de932d33907b8"
+  },
+  "results": {
+    "canvas": {
+      "passed": true,
+      "safe_output": "INSTRUMENTATION_RESULT: result=PASS: inline speaker/color/RTL/wrap, stable card/clock/anchor, document pages and return to dialogue\nINSTRUMENTATION_CODE: -1"
+    },
+    "network": {
+      "passed": true,
+      "safe_output": "INSTRUMENTATION_RESULT: result=PASS: physical Android LAN TLS/pinning, encrypted token, source/revision replacement, settings, ping/pong, saved-token reconnect, document pages/close and resumed dialogue, obsolete-host recovery through mDNS preserving full pin/token\n\nINSTRUMENTATION_CODE: -1\n\n\nPASS: unchanged Windows server received settings_ack from physical TV"
+    }
+  },
+  "iphone_physical_validation": false,
+  "background_continuity_validated": false,
+  "published_binaries_changed": false,
+  "post_hardware_run_change": "Python fixture timeout-only redaction guard; no success-path or app changes",
+  "simulated_timeout_redaction_passed": true
+}

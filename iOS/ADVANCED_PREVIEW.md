@@ -1,5 +1,7 @@
 # GameLingo advanced preview: implementation and evidence
 
+**2026-11-14 physical TCL follow-up:** document rendering, real receiver delivery and pinned mDNS recovery subsequently passed. See [TCL-PREVIEW-2026-11-14.md](../validation/TCL-PREVIEW-2026-11-14.md). The original release copy of this report predates that follow-up; the IPA/APK binaries are unchanged.
+
 ## Protected baseline
 
 The user confirmed physical iPhone/PS5/TCL operation on iOS 0.1.1 / TV 0.5.2, commit `ce6d3995f20b2250f5567348c7b7c6834785e172`. Low battery use and no noticeable heat are user observations, not lab measurements. Recovery tag: `stable/real-device-0.1.1`; development branch: `codex/advanced-ios`. Main and the stable release remain unchanged. An ignored local recovery bundle also preserves the baseline.

@@ -32,12 +32,27 @@ class NetworkRunner : Instrumentation() {
             val settings = CountDownLatch(1)
             val connected = CountDownLatch(1)
             val reconnect = CountDownLatch(1)
+            val discovered = CountDownLatch(1)
+            val documentFirst = CountDownLatch(1)
+            val documentNext = CountDownLatch(1)
+            val documentClosed = CountDownLatch(1)
+            val afterDocument = CountDownLatch(1)
+            val documents = inputs.getString("documents") == "true"
+            val discovery = inputs.getString("discovery") == "true"
             runOnMainSync {
                 prefs.edit().clear().putString("host","192.168.255.254")
                     .putString("token",Pairing.encrypt("stale-windows-fixture-token-not-used"))
                     .putString("fingerprint","0".repeat(64)).putLong("settings_revision",999999).commit()
                 receiver = Receiver(isolated, { message ->
                     if (message?.optString("type") == "settings_sync") settings.countDown()
+                    when(message?.optString("type")) {
+                        "document_show" -> if(message.optInt("page")==1) documentFirst.countDown() else if(message.optInt("page")==2) documentNext.countDown()
+                        "document_hide" -> documentClosed.countDown()
+                        "subtitle_show" -> if(message.optString("id")=="after-document") {
+                            receiver?.acknowledge("after-document") // Must be withheld for legacy Windows.
+                            afterDocument.countDown()
+                        }
+                    }
                 }, { text -> if (text.startsWith("متصل")) connected.countDown() })
                 receiver!!.start(host,code)
             }
@@ -47,7 +62,14 @@ class NetworkRunner : Instrumentation() {
             check(prefs.getString("host","")==host) { "New pairing host not saved" }
             val encrypted = checkNotNull(prefs.getString("token",null))
             check(Pairing.decrypt(encrypted).length in 32..128) { "Token encryption round trip failed" }
+            if(documents) {
+                check(documentFirst.await(8,TimeUnit.SECONDS)) { "First document page missing" }
+                check(documentNext.await(8,TimeUnit.SECONDS)) { "Next document page missing" }
+                check(documentClosed.await(8,TimeUnit.SECONDS)) { "Document close missing" }
+                check(afterDocument.await(8,TimeUnit.SECONDS)) { "Dialogue did not resume" }
+            }
             SystemClock.sleep(7000) // Real Android OkHttp RFC6455 ping/pong.
+            check(!(prefs.getString("connection_diagnostics","") ?: "").contains("[retry]")) { "Legacy server connection unexpectedly retried" }
             runOnMainSync { receiver!!.stop() }
             SystemClock.sleep(400)
             runOnMainSync {
@@ -55,9 +77,26 @@ class NetworkRunner : Instrumentation() {
                 receiver!!.start(host,"")
             }
             check(reconnect.await(12,TimeUnit.SECONDS)) { "Saved token reconnect failed" }
+            if(discovery) {
+                runOnMainSync { receiver!!.stop() }
+                SystemClock.sleep(400)
+                val fingerprint=prefs.getString("fingerprint","")
+                val obsolete="192.168.255.254"
+                runOnMainSync {
+                    prefs.edit().putString("host",obsolete).commit()
+                    receiver=Receiver(isolated,{}, {text -> if(text.startsWith("متصل")) discovered.countDown()})
+                    receiver!!.start(obsolete,"")
+                }
+                check(discovered.await(40,TimeUnit.SECONDS)) { "Pinned discovery recovery timed out" }
+                check(prefs.getString("host","")==host) { "Discovered host not authenticated and saved" }
+                check(prefs.getString("fingerprint","")==fingerprint) { "Discovery changed the full saved TLS pin" }
+                check(prefs.getString("token","")==encrypted) { "Discovery replaced the saved authentication token" }
+                check((prefs.getString("connection_diagnostics","") ?: "").contains("[discovery.found]")) { "Recovery did not use discovery" }
+            }
             val lines = prefs.getString("connection_diagnostics","") ?: ""
             check(!lines.contains(code) && !lines.contains(Pairing.decrypt(encrypted))) { "Secret in diagnostics" }
-            output.putString("result","PASS: physical Android LAN TLS/pinning, pairing, encrypted token, source/revision replacement, settings, ping/pong and saved-token reconnect")
+            output.putString("result","PASS: physical Android LAN TLS/pinning, encrypted token, source/revision replacement, settings, ping/pong, saved-token reconnect" +
+                (if(documents) ", document pages/close and resumed dialogue" else "") + (if(discovery) ", obsolete-host recovery through mDNS preserving full pin/token" else ""))
             resultCode = Activity.RESULT_OK
         } catch (_: Throwable) {
             // Only fixed states, not arguments or throwable contents.
