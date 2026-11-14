@@ -92,6 +92,7 @@ final class TranslationPackStore {
         queue.async { [self] in
             do {
                 guard game == nil || state.registry.packs.contains(where:{ $0.manifest.gameId == game }) else { throw PackFailure.invalid }
+                if state.registry.selectedGame == game && (state.loaded || game == nil) { return }
                 var next = state.registry; next.selectedGame = game; try save(next); state.registry = next; activate()
             } catch { state.error = "تعذر حفظ اختيار اللعبة"; notify() }
         }
@@ -100,7 +101,8 @@ final class TranslationPackStore {
         queue.async { [self] in
             do {
                 guard let at = state.registry.packs.firstIndex(where:{ $0.id == id }) else { return }
-                var next = state.registry; next.packs[at].enabled = enabled; try save(next); state.registry = next; activate()
+                var next = state.registry; next.packs[at].enabled = enabled; try save(next); state.registry = next
+                if next.selectedGame == next.packs[at].manifest.gameId { activate() } else { notify() }
             } catch { state.error = "تعذر حفظ إعداد الحزمة"; notify() }
         }
     }
@@ -109,8 +111,10 @@ final class TranslationPackStore {
             do {
                 guard let item = state.registry.packs.first(where:{ $0.id == id }) else { return }
                 var next = state.registry; next.packs.removeAll { $0.id == id }
-                if next.selectedGame == item.manifest.gameId { next.selectedGame = nil }
-                try save(next); state.registry = next; activate()
+                let wasSelected = next.selectedGame == item.manifest.gameId
+                if wasSelected { next.selectedGame = nil }
+                try save(next); state.registry = next
+                if wasSelected { activate() } else { notify() }
                 let folder = root.appendingPathComponent(item.id)
                 importer.async { try? FileManager.default.removeItem(at:folder) }
             } catch { state.error = "تعذر حذف الحزمة"; notify() }

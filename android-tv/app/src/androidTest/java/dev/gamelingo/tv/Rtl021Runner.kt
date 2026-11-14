@@ -16,6 +16,7 @@ class Rtl021Runner:Instrumentation() {
     override fun onStart() {
         val result=Bundle();var code=Activity.RESULT_CANCELED
         var bitmap:Bitmap?=null
+        var packBitmap:Bitmap?=null
         var preview:ImageView?=null
         val wm=targetContext.getSystemService(android.content.Context.WINDOW_SERVICE) as WindowManager
         try {
@@ -88,7 +89,29 @@ class Rtl021Runner:Instrumentation() {
                 repeat(1000) {check(SpeakerText.inline(arabic,"Arthur",true,Color.rgb(166,199,216))===cached)}
                 result.putString("cached_inline_1000_ms",((System.nanoTime()-start)/1_000_000.0).toString())
                 File(targetContext.filesDir,"rtl021.png").outputStream().use {bitmap!!.compress(Bitmap.CompressFormat.PNG,100,it)}
-                preview=ImageView(targetContext).apply {setBackgroundColor(Color.BLACK);setImageBitmap(bitmap);scaleType=ImageView.ScaleType.FIT_CENTER}
+                // Optional local-only localization samples. Never bundled in APK/Git.
+                val fixture=File(targetContext.filesDir,"pack-fixture.json")
+                if(fixture.exists()) {
+                    check(fixture.length()<=65536)
+                    val samples=org.json.JSONArray(fixture.readText(Charsets.UTF_8));check(samples.length() in 1..6)
+                    packBitmap=Bitmap.createBitmap(1800,1100,Bitmap.Config.ARGB_8888)
+                    val board=Canvas(packBitmap!!);board.drawColor(Color.rgb(16,37,41))
+                    board.drawText("Private converted RDR2 samples / actual TCL StaticLayout",40f,45f,heading)
+                    var top=90f
+                    for(index in 0 until samples.length()) {
+                        val body=samples.getString(index);check(body.length in 1..1600)
+                        val text=SpeakerText.inline(body,"Arthur",true,Color.rgb(166,199,216))
+                        check(TextPresentation.clean(text.toString()).replace('\u00a0',' ')=="Arthur: $body")
+                        val rendered=layout(text)
+                        val prefix=TextPresentation.prefix("Arthur");val colon=prefix.indexOf(':')
+                        check(bounds(rendered,colon,colon+1).right<=bounds(rendered,1,7).left+1)
+                        check(rendered.getLineForOffset(prefix.length)==0)
+                        board.save();board.translate(40f,top);rendered.draw(board);board.restore();top+=155
+                    }
+                    File(targetContext.filesDir,"pack-rendering.png").outputStream().use {packBitmap!!.compress(Bitmap.CompressFormat.PNG,100,it)}
+                    result.putString("private_pack_samples_rendered",samples.length().toString())
+                }
+                preview=ImageView(targetContext).apply {setBackgroundColor(Color.BLACK);setImageBitmap(packBitmap ?: bitmap);scaleType=ImageView.ScaleType.FIT_CENTER}
                 wm.addView(preview,WindowManager.LayoutParams(-1,-1,WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
                     WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,PixelFormat.OPAQUE))
             }
@@ -97,7 +120,7 @@ class Rtl021Runner:Instrumentation() {
             result.putString("result","PASS: six names, LTR name + external RTL colon + Arabic glyph bounds, inline color, natural wrapping, balanced punctuation/quotes/numbers, actual legacy bug reproduction and cached presentation")
             code=Activity.RESULT_OK
         } catch(t:Throwable) {result.putString("error",t.message ?: "RTL rendering fixture failed")}
-        finally {runOnMainSync {preview?.let {wm.removeViewImmediate(it)};bitmap?.recycle()} }
+        finally {runOnMainSync {preview?.let {wm.removeViewImmediate(it)};bitmap?.recycle();packBitmap?.recycle()} }
         finish(code,result)
     }
 }
