@@ -14,6 +14,7 @@ enum StructuredDialogue {
         let confidence: Double
     }
     static func union(_ lines: [OCRLine]) -> SourceBox {
+        if lines.count == 1 { return lines[0].box }
         let x = lines.map(\.box.x).min()!, y = lines.map(\.box.y).min()!
         return SourceBox(x:x,y:y,w:lines.map { $0.box.x+$0.box.w }.max()!-x,h:lines.map { $0.box.y+$0.box.h }.max()!-y)
     }

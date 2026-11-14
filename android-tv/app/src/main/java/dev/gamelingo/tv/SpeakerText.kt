@@ -25,7 +25,7 @@ internal object SpeakerText {
         cache[key]?.let {return it}
         val name=TextPresentation.name(speaker)
         val body=TextPresentation.body(dialogue)
-        val result=if(!enabled || name.isEmpty()) body else {
+        val result:CharSequence=if(!enabled || name.isEmpty()) body else {
             // The name is LTR; the separator belongs to the surrounding RTL run.
             // A colon inside the English isolate appears on the name's far side.
             SpannableString(TextPresentation.prefix(name)+body).apply {

@@ -28,7 +28,7 @@ class AdvancedCanvasRunner : Instrumentation() {
         try {
             runOnMainSync {
                 val text=SpeakerText.inline("علينا التحرك الآن","Arthur",true,Color.rgb(166,199,216))
-                check(text is Spanned && text.toString().startsWith("\u2068Arthur:\u2069 ") && !text.contains('\n'))
+                check(text is Spanned && text.toString().startsWith("\u2066Arthur\u2069\u200f:\u00a0") && !text.contains('\n'))
                 check(text.getSpans(0,text.length,SpeakerColorSpan::class.java).single().color==Color.rgb(166,199,216))
                 check(SpeakerText.inline("علينا التحرك الآن","Arthur",false,Color.RED).toString()=="علينا التحرك الآن")
                 view=SubtitleCanvas(isolated) {}
