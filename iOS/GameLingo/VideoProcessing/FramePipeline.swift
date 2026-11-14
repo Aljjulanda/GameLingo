@@ -73,8 +73,8 @@ final class FramePipeline {
             guard roi.isValid else { return }
             reset(preservingState:preservingState); self.roi = roi; self.mode = mode; runID = UUID(); lastSample = 0; lastTextChange = 0
             if !preservingState { metrics = PipelineMetrics() }
-            translationSamples = LatencySamples(); ocrSamples = LatencySamples()
-            startedAt = ProcessInfo.processInfo.systemUptime
+            if !preservingState { translationSamples = LatencySamples(); ocrSamples = LatencySamples() }
+            if !preservingState || startedAt == 0 { startedAt = ProcessInfo.processInfo.systemUptime }
             slotLock.lock(); active = true; metricsDropped = 0; slotLock.unlock()
             let timer = DispatchSource.makeTimerSource(queue:queue)
             timer.schedule(deadline:.now(),repeating:.milliseconds(50),leeway:.milliseconds(10))
@@ -196,7 +196,7 @@ final class FramePipeline {
                 self.translating = false
                 if self.isActive() && epoch == self.runID && self.tracker.accepts(job) {
                     var delivered = job
-                    if let current = self.tracker.current, DialogueText.words(current.text) == DialogueText.words(job.text) { delivered.speaker = current.speaker }
+                    if let current = self.tracker.current, DialogueText.exactWords(current.text) == DialogueText.exactWords(job.text) { delivered.speaker = current.speaker }
                     switch result {
                     case .success(let text):
                         if self.stability.shouldPublish(delivered) {

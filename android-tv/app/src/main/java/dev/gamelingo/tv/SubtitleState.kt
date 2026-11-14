@@ -10,6 +10,9 @@ class SubtitleState {
     private val seen = java.util.LinkedHashSet<String>()
     private val aliases=java.util.LinkedHashMap<String,String>()
     private val visuallySuperseded=mutableSetOf<String>()
+    private val semanticKeys=object:java.util.LinkedHashMap<String,String>(16,.75f,true) {
+        override fun removeEldestEntry(eldest:MutableMap.MutableEntry<String,String>?):Boolean=size>16
+    }
     var visualCompactions=0;private set
     var coalesced=0;private set
     private fun remember(id:String) {seen.add(id);if(seen.size>128)seen.remove(seen.first())}
@@ -34,12 +37,6 @@ class SubtitleState {
         fun names(text:String)=Regex("[A-Za-z]+").findAll(text).drop(1).map {it.value}.filter {Regex("[A-Z][a-z]{2,}").matches(it)}.toList()
         if(names(entry.source)!=names(source))return false
         if(semanticMarkers(entry.source)!=semanticMarkers(source))return false
-        fun target(text:String):List<String> {
-            val words=sourceWords(text)
-            val anchors=setOf("to","toward","towards","at","near","through","into","inside","outside","behind","follow","reach","find","visit","enter","exit","open","close")
-            val at=words.indexOfLast {it in anchors}
-            return if(at<0) emptyList() else words.drop(at+1).filter {it !in setOf("the","a","an","me","him","her","us","them")}.take(12)
-        }
         val destinationA=target(entry.source);val destinationB=target(source)
         if(destinationA.isNotEmpty() && destinationB.isNotEmpty() && destinationA!=destinationB && !extension(entry.source,source) && !extension(source,entry.source))return false
         val locationsA=a.filter {it in setOf("here","there")};val locationsB=b.filter {it in setOf("here","there")}
@@ -60,6 +57,18 @@ class SubtitleState {
         var at=0
         for(word in long)if(at<short.size && word==short[at])at++
         return at==short.size
+    }
+    private fun target(text:String):List<String> {
+        val words=sourceWords(text)
+        val anchors=setOf("to","toward","towards","at","near","through","into","inside","outside","behind","follow","reach","find","visit","enter","exit","open","close")
+        val at=words.indexOfLast {it in anchors}
+        return if(at<0) emptyList() else words.drop(at+1).filter {it !in setOf("the","a","an","me","him","her","us","them")}.take(12)
+    }
+    private fun semanticKey(text:String):String {
+        semanticKeys[text]?.let {return it}
+        val names=Regex("[A-Za-z]+").findAll(text).drop(1).map {it.value}.filter {Regex("[A-Z][a-z]{2,}").matches(it)}.joinToString(" ")
+        val key=semanticMarkers(text).joinToString(" ")+"/"+target(text).joinToString(" ")+"/"+sourceWords(text).filter {it in setOf("here","there")}.joinToString(" ")+"/"+names
+        semanticKeys[text]=key;return key
     }
     private fun semanticMarkers(text:String):List<String> {
         val protected=setOf("no","not","never","dont","cannot","cant","wont","without","isnt","wasnt","didnt","shouldnt","wouldnt","couldnt","he","she","they","we","you","i","left","right","north","south","east","west","open","close","enter","exit","attack","defend","take","drop","give","keep","stop","start","push","pull","save","kill","follow","stay","leave","collect")
@@ -90,7 +99,7 @@ class SubtitleState {
         // events may legitimately repeat or translate to identical Arabic.
         if (id in seen) return
         val provedNew=boundary=="speaker_change" || boundary=="spatial_change" || (boundary=="source_gap" && sourceGap>=750)
-        val compatible:(SubtitleEntry)->Boolean={it.speaker.isEmpty() || speaker.isEmpty() || it.speaker==speaker}
+        val compatible:(SubtitleEntry)->Boolean={it.speaker.isEmpty() || speaker.isEmpty() || it.speaker.equals(speaker,true)}
         // Legacy fresh-event messages retain their behavior. New senders supply
         // boundary evidence; a bare new ID must not stack the same active line.
         val matching=if(provedNew || (freshEvent && boundary==null)) null else if(freshEvent) entries.lastOrNull()?.takeIf {
@@ -121,7 +130,7 @@ class SubtitleState {
         val keys=mutableSetOf<String>()
         for(entry in entries.asReversed()) {
             if(entry.id in visuallySuperseded)continue
-            val key=entry.speaker+"/"+semanticMarkers(entry.source).joinToString(" ")+"/"+java.text.Normalizer.normalize(entry.text,java.text.Normalizer.Form.NFKC)
+            val key=entry.speaker.lowercase(java.util.Locale.ROOT)+"/"+semanticKey(entry.source)+"/"+java.text.Normalizer.normalize(entry.text,java.text.Normalizer.Form.NFKC)
                 .trim().trimEnd('.','!','?','؟','،','؛','…').replace(Regex("\\s+")," ")
             if(!keys.add(key)) {visuallySuperseded.add(entry.id);visualCompactions++}
         }
@@ -137,6 +146,6 @@ class SubtitleState {
     }
     fun alpha(entry: SubtitleEntry, now: Long, fade: Long): Float =
         if (fade <= 0) 1f else ((entry.until-now).toFloat()/fade).coerceIn(0f,1f)
-    fun clear() { entries.clear(); seen.clear();aliases.clear();visuallySuperseded.clear() }
+    fun clear() { entries.clear(); seen.clear();aliases.clear();visuallySuperseded.clear();semanticKeys.clear() }
 }
 

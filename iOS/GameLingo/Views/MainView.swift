@@ -218,7 +218,7 @@ struct PerformanceView: View {
                     metric("عمر اتصال PS5 الحالي",model.remoteMetrics.uptime,suffix:"s")
                     if let age = model.remoteMetrics.decodedFrameAge { metric("عمر آخر إطار مفكوك",age,suffix:"s") }
                     if let age = model.remoteMetrics.encodedFrameAge { metric("عمر آخر إطار وارد",age,suffix:"s") }
-                    if model.remoteMetrics.successes>0 { metric("مدة آخر إعادة اتصال ناجحة",model.remoteMetrics.lastRecoverySeconds,suffix:"s") }
+                    if model.remoteMetrics.successes>0 { metric("زمن محاولة الاتصال الناجحة",model.remoteMetrics.lastRecoverySeconds,suffix:"s") }
                     DisclosureGroup("تشخيص الجلسة · دون مفاتيح أو رموز") {
                         Text(model.sessionDiagnostics.joined(separator:"\n")).font(.system(.caption,design:.monospaced)).textSelection(.enabled)
                     }

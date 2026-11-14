@@ -66,6 +66,22 @@ final class Maintenance021Tests: XCTestCase {
         guard case .dialogue(let again,_) = t.observe(text:"Wait here.",box:.dialogue,now:0.6,frameMilliseconds:600,speaker:"Arthur") else { return XCTFail() }
         XCTAssertNotEqual(again.id,first.id)
     }
+    func testCaseOnlySpeakerChangeAndLateEnrichmentCannotReplayAfterInterruption() {
+        var t = DialogueTracker()
+        guard case .dialogue(let first,_) = t.observe(text:"Wait here.",box:.dialogue,now:0,frameMilliseconds:0,speaker:"ARTHUR") else { return XCTFail() }
+        guard case .unchanged = t.observe(text:"Wait here!",box:.dialogue,now:0.2,frameMilliseconds:200,speaker:"Arthur") else { return XCTFail() }
+        XCTAssertEqual(first.id,t.current?.id)
+        var unnamed = DialogueTracker()
+        _ = unnamed.observe(text:"Wait here.",box:.dialogue,now:0,frameMilliseconds:0)
+        unnamed.markInterrupted()
+        guard case .unchanged = unnamed.observe(text:"Wait here.",box:.dialogue,now:20,frameMilliseconds:20000,speaker:"Arthur") else { return XCTFail("Enriching an old line must not replay it") }
+    }
+    func testCanonicalGlyphAliasesCannotHideChangedProperDestination() {
+        var t = DialogueTracker()
+        guard case .dialogue(let a,_) = t.observe(text:"Go to Berlin",box:.dialogue,now:0,frameMilliseconds:0) else { return XCTFail() }
+        guard case .dialogue(let b,_) = t.observe(text:"Go to Beriin",box:.dialogue,now:0.2,frameMilliseconds:200) else { return XCTFail() }
+        XCTAssertNotEqual(a.id,b.id);XCTAssertFalse(t.accepts(a))
+    }
     func testMissingWordsAndWrappingRetainBestReference() {
         var t = DialogueTracker()
         guard case .dialogue(let a,_) = t.observe(text:"Something happened near the gate.",box:.dialogue,now:0,frameMilliseconds:0) else { return XCTFail() }

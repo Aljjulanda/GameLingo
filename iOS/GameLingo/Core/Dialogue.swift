@@ -22,10 +22,13 @@ enum DialogueText {
         }
     }
     static func words(_ text: String) -> [String] {
-        let plain = normalized(text).lowercased().replacingOccurrences(of: "['’`]", with: "", options: .regularExpression)
-        return matches(plain, "[+-]?\\d+(?:[.,]\\d+)+|[+-]\\d+|[\\p{L}\\p{N}_]+").map {
+        exactWords(text).map {
             $0.count >= 4 && $0.allSatisfy(\.isLetter) ? $0.replacingOccurrences(of: "l", with: "i") : $0
         }
+    }
+    static func exactWords(_ text: String) -> [String] {
+        let plain = normalized(text).lowercased().replacingOccurrences(of: "['’`]", with: "", options: .regularExpression)
+        return matches(plain, "[+-]?\\d+(?:[.,]\\d+)+|[+-]\\d+|[\\p{L}\\p{N}_]+")
     }
     static func prefix(_ before: String, _ after: String) -> Bool {
         let a = words(before), b = words(after)
@@ -131,20 +134,29 @@ struct DialogueTracker {
             return .gone(old.id)
         }
         empty = 0
-        if let old = current, (speaker == nil || speaker == old.speaker), DialogueText.words(text) == DialogueText.words(old.text), box.isAdjacent(to: old.box) {
+        func speakerKey(_ name: String?) -> String? { name.map { DialogueText.normalized($0).lowercased() } }
+        if let old = current, suppressContinuingCurrent, box.isAdjacent(to:old.box), speaker == nil || old.speaker == nil || speakerKey(speaker) == speakerKey(old.speaker) {
+            let oldWords = DialogueText.exactWords(old.text), newWords = DialogueText.exactWords(text)
+            let label = DialogueText.exactWords(speaker ?? "")
+            let stripped = !label.isEmpty && oldWords.starts(with:label) && Array(oldWords.dropFirst(label.count)) == newWords
+            if oldWords == newWords || stripped {
+                lastSeen = now; duplicatesSuppressed += 1; return .unchanged
+            }
+        }
+        if let old = current, (speaker == nil || speakerKey(speaker) == speakerKey(old.speaker)), DialogueText.exactWords(text) == DialogueText.exactWords(old.text), box.isAdjacent(to: old.box) {
             lastSeen = now
             duplicatesSuppressed += 1
             return .unchanged
         }
         let old = current
         suppressContinuingCurrent = false
-        let adjacent = old.map { box.isAdjacent(to:$0.box) && (speaker == nil || $0.speaker == nil || speaker == $0.speaker) } ?? false
+        let adjacent = old.map { box.isAdjacent(to:$0.box) && (speaker == nil || $0.speaker == nil || speakerKey(speaker) == speakerKey($0.speaker)) } ?? false
         let equivalent = old.map { DialogueText.same($0.text,text) } ?? false
         // A high-overlap semantic correction during initial OCR acquisition can
         // repair the same event. Later changes remain fresh dialogue events.
         let important = old.map { !equivalent && adjacent && now-firstSeen <= 0.8 && $0.confidence < 0.65 && confidence >= 0.8 && confidence-$0.confidence >= 0.2 && DialogueText.similarity($0.text.lowercased(),text.lowercased()) >= 0.72 } ?? false
         let correction = adjacent && (equivalent || important)
-        if let old, correction && equivalent && confidence <= old.confidence && !DialogueText.prefix(old.text,text) && (speaker == nil || speaker == old.speaker) {
+        if let old, correction && equivalent && confidence <= old.confidence && !DialogueText.prefix(old.text,text) && (speaker == nil || speakerKey(speaker) == speakerKey(old.speaker)) {
             // Keep the best bounded reference, instead of allowing a chain of
             // successively worse OCR variants to drift into a new event.
             lastSeen = now; correctionsMerged += 1; duplicatesSuppressed += 1
@@ -158,7 +170,7 @@ struct DialogueTracker {
             return words.starts(with:prefix) && Array(words.dropFirst(prefix.count)) == DialogueText.words(text)
         } ?? false
         if correction { correctionsMerged += 1 }
-        let boundary = correction ? "continuity" : old == nil ? (confirmedGap > 0 ? "source_gap" : "initial") : old!.speaker != nil && speaker != nil && old!.speaker != speaker ? "speaker_change" : !box.isAdjacent(to:old!.box) ? "spatial_change" : "dialogue_change"
+        let boundary = correction ? "continuity" : old == nil ? (confirmedGap > 0 ? "source_gap" : "initial") : old!.speaker != nil && speaker != nil && speakerKey(old!.speaker) != speakerKey(speaker) ? "speaker_change" : !box.isAdjacent(to:old!.box) ? "spatial_change" : "dialogue_change"
         let job = DialogueJob(id: correction ? old!.id : "\(namespace)-\(serial)", text: text, generation: generation, correction: correction, box: box, frameMilliseconds: frameMilliseconds,speaker:speaker ?? (correction ? old?.speaker : nil),confidence:confidence,meaningfulCorrection:correction && (!equivalent || removedLabel),eventBoundary:boundary,sourceGapMilliseconds:confirmedGap)
         confirmedGap = 0
         current = job; lastSeen = now
@@ -166,7 +178,7 @@ struct DialogueTracker {
     }
     func accepts(_ result: DialogueJob) -> Bool {
         guard let current, current.id == result.id else { return false }
-        return current.generation == result.generation || (DialogueText.semanticMarkers(result.text) == DialogueText.semanticMarkers(current.text) && (DialogueText.words(result.text) == DialogueText.words(current.text) || DialogueText.prefix(result.text,current.text)))
+        return current.generation == result.generation || (DialogueText.semanticMarkers(result.text) == DialogueText.semanticMarkers(current.text) && (DialogueText.exactWords(result.text) == DialogueText.exactWords(current.text) || DialogueText.prefix(result.text,current.text)))
     }
     mutating func reset() { current = nil; empty = 0; suppressContinuingCurrent = false; confirmedGap = 0; duplicatesSuppressed = 0; correctionsMerged = 0; generation &+= 1 }
 }
