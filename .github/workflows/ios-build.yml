@@ -57,6 +57,8 @@ jobs:
         run: |
           mkdir -p build/logs
           swift test --parallel 2>&1 | tee build/logs/core-tests.log
+      - name: Validate real RDR2 data with native SQLite without publishing localization
+        run: python3 tools/pack_converter/validate-real-rdr2.py
       - name: Prepare pinned dependencies and native iPhone libraries
         run: bash iOS/Scripts/prepare.sh 2>&1 | tee prepare.log
       - name: Compare bounded maintenance tracker with accepted baseline

@@ -55,7 +55,8 @@ enum PackLookupKey {
 
 struct PackMatch {
     enum Kind: String { case exact, normalized, missing, ambiguous, unsupported, unavailable }
-    var text: String?, kind: Kind
+    var text: String?
+    var kind: Kind
 }
 
 /// One read-only connection, two prepared lookup statements, bounded page cache.
