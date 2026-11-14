@@ -72,31 +72,40 @@ final class LocalizationPickerUITests: XCTestCase {
         try waitForNativePicker()
         // Tap the status-bar clock to return the provider's scroll view to top.
         screenCoordinate(CGPoint(x:0.15,y:0.025)).tap()
-        Thread.sleep(forTimeInterval:0.3)
+        Thread.sleep(forTimeInterval:1.0)
         let aliases: [String]
         switch ext {
         case "": aliases = ["extension"]
         case "po": aliases = ["popo","glpickerpo"]
         case "7z": aliases = ["7z","72"]
         case "glpack": aliases = ["glpack","gipack"]
-        case "unknownformat": aliases = ["unknownformat","unknownforrnat"]
+        case "unknownformat": aliases = ["unknownformat","unknownforrnat","unknoformat"]
         default: aliases = [ext]
         }
-        for _ in 0..<12 {
+        func target(_ rows: [(String,CGRect)]) -> CGRect? {
+            rows.first(where:{ row in row.1.midY < 0.80 && row.1.midY > 0.11 && aliases.contains(where:{row.0.contains($0)}) })?.1
+        }
+        for _ in 0..<20 {
             let text = try visiblePickerText()
             print("PICKER_VISIBLE_LABELS "+text.map{$0.0}.joined(separator:" | "))
-            if let item = text.first(where:{ row in row.1.midY < 0.80 && row.1.midY > 0.11 && aliases.contains(where:{row.0.contains($0)}) }) {
+            if let first = target(text) {
+                // AUT idle does not include the remote provider's deceleration.
+                // Confirm a stable label in a second screen frame before tapping.
+                Thread.sleep(forTimeInterval:0.35)
+                guard let box = target(try visiblePickerText()), abs(first.midY-box.midY) < 0.006, abs(first.midX-box.midX) < 0.01 else { continue }
                 // Files' grid caption is not the primary hit region. Tap the
                 // thumbnail above the recognized caption, never an AUT element.
-                let point = CGPoint(x:item.1.midX,y:1-item.1.midY-60/screenHeight)
+                let point = CGPoint(x:box.midX,y:1-box.midY-60/screenHeight)
                 if point.y < 0.21 {
                     screenCoordinate(CGPoint(x:0.5,y:0.35)).press(forDuration:0.05,thenDragTo:screenCoordinate(CGPoint(x:0.5,y:0.52)))
+                    Thread.sleep(forTimeInterval:1.0)
                     continue
                 }
                 print("PICKER_THUMBNAIL_TAP \(ext) \(point)")
                 return point
             }
             screenCoordinate(CGPoint(x:0.5,y:0.74)).press(forDuration:0.05,thenDragTo:screenCoordinate(CGPoint(x:0.5,y:0.40)))
+            Thread.sleep(forTimeInterval:1.0)
         }
         XCTFail("Visible picker label not found: "+ext)
         return CGPoint(x:0.5,y:0.5)
@@ -108,6 +117,7 @@ final class LocalizationPickerUITests: XCTestCase {
             let point = try pickerFilePoint(ext)
             let screenshot = XCTAttachment(screenshot:app.screenshot()); screenshot.name = "Picker-"+name; screenshot.lifetime = .keepAlways; add(screenshot)
             screenCoordinate(point).tap()
+            Thread.sleep(forTimeInterval:1.0)
             waitFinished(filename:ext.isEmpty ? name : name+"."+ext)
             print("PICKER_SELECTION_VERIFIED "+(ext.isEmpty ? "extensionless" : ext))
         }
