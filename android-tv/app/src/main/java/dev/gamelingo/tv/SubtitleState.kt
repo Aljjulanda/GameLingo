@@ -34,6 +34,16 @@ class SubtitleState {
         fun names(text:String)=Regex("[A-Za-z]+").findAll(text).drop(1).map {it.value}.filter {Regex("[A-Z][a-z]{2,}").matches(it)}.toList()
         if(names(entry.source)!=names(source))return false
         if(semanticMarkers(entry.source)!=semanticMarkers(source))return false
+        fun target(text:String):List<String> {
+            val words=sourceWords(text)
+            val anchors=setOf("to","toward","towards","at","near","through","into","inside","outside","behind","follow","reach","find","visit","enter","exit","open","close")
+            val at=words.indexOfLast {it in anchors}
+            return if(at<0) emptyList() else words.drop(at+1).filter {it !in setOf("the","a","an","me","him","her","us","them")}.take(12)
+        }
+        val destinationA=target(entry.source);val destinationB=target(source)
+        if(destinationA.isNotEmpty() && destinationB.isNotEmpty() && destinationA!=destinationB && !extension(entry.source,source) && !extension(source,entry.source))return false
+        val locationsA=a.filter {it in setOf("here","there")};val locationsB=b.filter {it in setOf("here","there")}
+        if(locationsA.isNotEmpty() && locationsB.isNotEmpty() && locationsA!=locationsB)return false
         if(entry.box!=null && box!=null) {
             val p=entry.box!!
             if(kotlin.math.abs(p.x+p.w/2-box.x-box.w/2)>.2 || kotlin.math.abs(p.y-box.y)>.12)return false

@@ -32,7 +32,7 @@ struct DialogueContent {
             return DialogueContent(text:DialogueText.normalized(lines.dropFirst().joined(separator:" ")),speaker:first.trimmingCharacters(in:.whitespaces))
         }
         // An ordinary word, uncertain OCR or uppercase alone is not a speaker.
-        return DialogueContent(text:DialogueText.normalized(text),speaker:nil,uncertainSpeaker:first.contains(":") && first.prefix(while:{$0 != ":"}).count <= 40)
+        return DialogueContent(text:DialogueText.normalized(text),speaker:nil,uncertainSpeaker:(first.contains(":") && first.prefix(while:{$0 != ":"}).count <= 40) || (separateLabel && lines.count > 1 && first.count <= 40))
     }
 }
 

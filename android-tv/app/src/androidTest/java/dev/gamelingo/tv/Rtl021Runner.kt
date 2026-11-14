@@ -66,7 +66,7 @@ class Rtl021Runner:Instrumentation() {
                 val alternative=formatter.unicodeWrap("Arthur",TextDirectionHeuristics.LTR,true)+": $arabic"
                 canvas.drawText("BidiFormatter alternative evaluated",40f,y+20,heading);y+=45
                 canvas.save();canvas.translate(40f,y);layout(alternative).draw(canvas);canvas.restore();y+=110
-                for(body in listOf("(تحرك الآن) [صوت إطلاق نار] لماذا؟","اذهب إلى (Old Gate) واجمع [11] قطعة، ثم اسأل: أين John؟","قال: «لن نذهب» وكتب \"John\".\n[نص متعدد الأسطر]")) {
+                for(body in listOf("(تحرك الآن) [صوت إطلاق نار] لماذا؟","اذهب إلى (Old Gate) واجمع [11] قطعة، ثم اسأل: أين John؟","قال: «لن نذهب» وكتب \"John\".\n[نص متعدد الأسطر]","خسرت -11 نقطة ثم قابلت García قرب البوابة.")) {
                     val formatted=TextPresentation.body(body)
                     check(TextPresentation.clean(formatted)==body) {"Meaningful punctuation changed"}
                     val bodyLayout=layout(formatted)
@@ -76,6 +76,10 @@ class Rtl021Runner:Instrumentation() {
                         val a=bounds(bodyLayout,open,open+1);val b=bounds(bodyLayout,close,close+1)
                         val word=formatted.indexOf("Old Gate");val inner=bounds(bodyLayout,word,word+8)
                         check(minOf(a.centerX(),b.centerX())<inner.centerX() && maxOf(a.centerX(),b.centerX())>inner.centerX())
+                    }
+                    if(body.contains("-11")) {
+                        val minus=formatted.indexOf("-11")
+                        check(bounds(bodyLayout,minus,minus+1).centerX()<bounds(bodyLayout,minus+1,minus+3).centerX()) {"Numeric minus changed sides"}
                     }
                     canvas.save();canvas.translate(40f,y);bodyLayout.draw(canvas);canvas.restore();y+=110
                 }

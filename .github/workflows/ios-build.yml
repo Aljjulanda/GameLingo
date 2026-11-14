@@ -58,6 +58,10 @@ jobs:
           swift test --parallel 2>&1 | tee build/logs/core-tests.log
       - name: Prepare pinned dependencies and native iPhone libraries
         run: bash iOS/Scripts/prepare.sh 2>&1 | tee prepare.log
+      - name: Compare bounded maintenance tracker with accepted baseline
+        run: |
+          git fetch --depth=1 origin tag stable/real-device-0.2.0
+          python3 iOS/Benchmarks/benchmark-maintenance.py
       - name: Validate Apple project
         run: |
           plutil -lint iOS/GameLingo/Resources/Info.plist

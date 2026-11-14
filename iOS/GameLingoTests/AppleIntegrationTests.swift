@@ -10,6 +10,35 @@ import AVFAudio
 @testable import GameLingo
 
 final class AppleIntegrationTests: XCTestCase {
+    private func visionFixture(_ draw: (UIGraphicsImageRendererContext) -> Void) throws -> CVPixelBuffer {
+        let image = UIGraphicsImageRenderer(size:CGSize(width:1280,height:720)).image { context in
+            UIColor.black.setFill();context.fill(CGRect(x:0,y:0,width:1280,height:720));draw(context)
+        }
+        var value: CVPixelBuffer?
+        XCTAssertEqual(CVPixelBufferCreate(kCFAllocatorDefault,1280,720,kCVPixelFormatType_32BGRA,[kCVPixelBufferCGImageCompatibilityKey:true,kCVPixelBufferCGBitmapContextCompatibilityKey:true] as CFDictionary,&value),kCVReturnSuccess)
+        let buffer = try XCTUnwrap(value)
+        CVPixelBufferLockBaseAddress(buffer,[]);defer { CVPixelBufferUnlockBaseAddress(buffer,[]) }
+        let bitmap = try XCTUnwrap(CGContext(data:CVPixelBufferGetBaseAddress(buffer),width:1280,height:720,bitsPerComponent:8,bytesPerRow:CVPixelBufferGetBytesPerRow(buffer),space:CGColorSpaceCreateDeviceRGB(),bitmapInfo:CGImageAlphaInfo.premultipliedFirst.rawValue|CGBitmapInfo.byteOrder32Little.rawValue))
+        bitmap.translateBy(x:0,y:720);bitmap.scaleBy(x:1,y:-1)
+        UIGraphicsPushContext(bitmap);image.draw(in:CGRect(x:0,y:0,width:1280,height:720));UIGraphicsPopContext();bitmap.flush()
+        return buffer
+    }
+    func testVisionStructuredSpeakerAboveAndOnBothSides() throws {
+        for layout in ["above","left","right"] {
+            let pixels = try visionFixture { _ in
+                let body = "We need to leave now."
+                let bodyX: CGFloat = layout == "left" ? 370 : 270
+                (body as NSString).draw(at:CGPoint(x:bodyX,y:530),withAttributes:[.font:UIFont.systemFont(ofSize:34),.foregroundColor:UIColor.white])
+                let point = layout == "above" ? CGPoint(x:420,y:485) : layout == "left" ? CGPoint(x:225,y:533) : CGPoint(x:770,y:533)
+                ("Arthur" as NSString).draw(at:point,withAttributes:[.font:UIFont.systemFont(ofSize:25),.foregroundColor:UIColor.white])
+            }
+            let ocr = VisionDialogueOCR()
+            _ = try ocr.recognize(pixels,roi:.dialogue,knownNames:"Arthur")
+            XCTAssertEqual(ocr.content.speaker?.lowercased(),"arthur",layout+": "+ocr.content.text)
+            XCTAssertTrue(ocr.content.text.lowercased().contains("we need to leave"),layout+": "+ocr.content.text)
+            XCTAssertFalse(ocr.content.text.lowercased().contains("arthur"),layout)
+        }
+    }
     func testNativeArgosAndContextRuleBenchmarkOnSyntheticDialogue() throws {
         let folder = try XCTUnwrap(Bundle(for:Self.self).url(forResource:"en_ar",withExtension:nil))
         var error: NSError?

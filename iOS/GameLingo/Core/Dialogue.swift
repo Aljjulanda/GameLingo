@@ -53,6 +53,12 @@ enum DialogueText {
             matches(text,"[A-Za-z]+").dropFirst().filter { $0.count >= 3 && $0.first?.isUppercase == true && $0.dropFirst().allSatisfy(\.isLowercase) }
         }
         guard names(before) == names(after) else { return false }
+        let destinationsA = destination(before), destinationsB = destination(after)
+        if !destinationsA.isEmpty && !destinationsB.isEmpty && destinationsA != destinationsB && !prefix(before,after) && !prefix(after,before) { return false }
+        let locations: Set<String> = ["here","there"]
+        let locationA = matches(before.lowercased(),"[a-z]+").filter { locations.contains($0) }
+        let locationB = matches(after.lowercased(),"[a-z]+").filter { locations.contains($0) }
+        if !locationA.isEmpty && !locationB.isEmpty && locationA != locationB { return false }
         if a == b || a.joined() == b.joined() { return true }
         guard semanticMarkers(before) == semanticMarkers(after) else { return false }
         guard matches(before, "[+-]?\\d+(?:[.,]\\d+)*") == matches(after, "[+-]?\\d+(?:[.,]\\d+)*") else { return false }
@@ -75,6 +81,13 @@ enum DialogueText {
         let plain = text.lowercased().replacingOccurrences(of:"['’`]",with:"",options:.regularExpression)
         let protected: Set<String> = ["no","not","never","dont","cannot","cant","wont","without","isnt","wasnt","didnt","shouldnt","wouldnt","couldnt","he","she","they","we","you","i","left","right","north","south","east","west","open","close","enter","exit","attack","defend","take","drop","give","keep","stop","start","push","pull","save","kill","follow","stay","leave","collect"]
         return matches(plain,"[+-]?\\d+(?:[.,]\\d+)*|[a-z]+").filter { protected.contains($0) || $0.contains(where:\.isNumber) }
+    }
+    static func destination(_ text: String) -> [String] {
+        let tokens = matches(text.lowercased(),"[a-z]+")
+        let anchors: Set<String> = ["to","toward","towards","at","near","through","into","inside","outside","behind","follow","reach","find","visit","enter","exit","open","close"]
+        guard let at = tokens.lastIndex(where:{ anchors.contains($0) }) else { return [] }
+        let ignored: Set<String> = ["the","a","an","me","him","her","us","them"]
+        return Array(tokens.dropFirst(at+1).filter { !ignored.contains($0) }.prefix(12))
     }
 }
 

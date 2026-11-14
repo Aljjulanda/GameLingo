@@ -19,7 +19,7 @@ enum StructuredDialogue {
         return SourceBox(x:x,y:y,w:lines.map { $0.box.x+$0.box.w }.max()!-x,h:lines.map { $0.box.y+$0.box.h }.max()!-y)
     }
     static func resolve(_ lines: [OCRLine], roi: SourceBox, knownNames: String) -> Reading? {
-        guard !lines.isEmpty, lines.count < 5 else { return nil }
+        guard !lines.isEmpty, lines.count <= 8 else { return nil }
         let menu = Set(["settings","options","inventory","resume game","main menu","objectives","equipment","skills","map"])
         guard lines.filter({menu.contains(DialogueText.normalized($0.text).lowercased())}).count < 2 else { return nil }
         let safe = lines.filter {
@@ -45,6 +45,7 @@ enum StructuredDialogue {
             }
         }
         for label in safe where DialogueContent.isName(label.text,knownNames:knownNames,confidence:label.confidence) {
+            let known = knownNames.split(separator:",").contains { $0.trimmingCharacters(in:.whitespacesAndNewlines).lowercased() == label.text.lowercased() }
             let matches = safe.filter { line in
                 guard line != label, DialogueText.words(line.text).count >= 2,
                       !DialogueContent.isName(line.text,knownNames:knownNames,confidence:line.confidence) else { return false }
@@ -53,7 +54,7 @@ enum StructuredDialogue {
                 let overlap = min(a.x+a.w,b.x+b.w)-max(a.x,b.x)
                 let above = verticalGap >= -0.2*min(a.h,b.h) && verticalGap <= max(0.05*roi.h,1.8*max(a.h,b.h)) && overlap > min(a.w,b.w)*0.25 && a.h <= b.h*1.2 && (a.w <= b.w*0.7 || a.h <= b.h*0.8)
                 let horizontalGap = max(a.x-b.x-b.w,b.x-a.x-a.w,0)
-                let side = abs(a.y+a.h/2-b.y-b.h/2)<=0.6*max(a.h,b.h) && horizontalGap<=0.12*roi.w && a.w<=b.w*0.55 && a.h<=b.h*1.2 && overlap<=0
+                let side = abs(a.y+a.h/2-b.y-b.h/2)<=0.6*max(a.h,b.h) && horizontalGap<=(known ? 0.2 : 0.12)*roi.w && a.w<=b.w*0.55 && a.h<=b.h*1.2 && overlap<=0
                 return above || side
             }
             guard let anchor = matches.max(by: { $0.box.w < $1.box.w }) else { continue }

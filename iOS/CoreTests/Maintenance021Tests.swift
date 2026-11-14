@@ -68,15 +68,15 @@ final class Maintenance021Tests: XCTestCase {
     }
     func testMissingWordsAndWrappingRetainBestReference() {
         var t = DialogueTracker()
-        guard case .dialogue(let a,_) = t.observe(text:"Something happened near the old gate.",box:.dialogue,now:0,frameMilliseconds:0) else { return XCTFail() }
-        for (i,text) in ["Something happened near the gate.","Something happened\nnear the old gate!","Somethlng happened near the old gate."].enumerated() {
+        guard case .dialogue(let a,_) = t.observe(text:"Something happened near the gate.",box:.dialogue,now:0,frameMilliseconds:0) else { return XCTFail() }
+        for (i,text) in ["Something happened near gate.","Something happened\nnear the gate!","Somethlng happened near the gate."].enumerated() {
             _ = t.observe(text:text,box:.dialogue,now:Double(i+1)*0.2,frameMilliseconds:0,confidence:0.6)
             XCTAssertEqual(t.current?.id,a.id)
         }
-        XCTAssertEqual(t.current?.text,"Something happened near the old gate.")
+        XCTAssertEqual(t.current?.text,"Something happened near the gate.")
     }
     func testHighConfidenceDifferentInstructionsAreNewEvenDuringAcquisition() {
-        for (a,b) in [("We will go","We will not go"),("Go left","Go right"),("Collect 10 coins","Collect 11 coins"),("He is coming","She is coming"),("Open the door","Close the door")] {
+        for (a,b) in [("We will go","We will not go"),("Go left","Go right"),("Collect 10 coins","Collect 11 coins"),("He is coming","She is coming"),("Open the door","Close the door"),("Follow the trail","Follow the train"),("Wait here","Wait there")] {
             XCTAssertFalse(DialogueText.same(a,b))
             var t = DialogueTracker()
             guard case .dialogue(let old,_) = t.observe(text:a,box:.dialogue,now:0,frameMilliseconds:0) else { return XCTFail() }

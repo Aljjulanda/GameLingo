@@ -24,7 +24,8 @@ final class AppModel: ObservableObject {
     @Published var streamConnected = false
     @Published var recoveryAttempts = 0
     @Published var remoteMetrics = RemoteMetrics()
-    @Published var audioInterruptions = 0, networkInterruptions = 0
+    @Published var audioInterruptions = 0
+    @Published var networkInterruptions = 0
     @Published var sessionDiagnostics: [String] = []
     @Published var sessionStarted = Date()
     @Published var backgroundDeliveries: UInt64 = 0

@@ -10,6 +10,8 @@ class Maintenance021Test {
             assertEquals(text,TextPresentation.clean(TextPresentation.body(text)))
         }
         assertEquals("(نص)",TextPresentation.clean("\u202e(نص)\u2069"))
+        val signed=TextPresentation.body("خسرت -11 نقطة ثم قابلت García")
+        assertTrue(signed.contains("\u2066-11\u2069"));assertTrue(signed.contains("\u2066García\u2069"))
         assertEquals("Arthur\u200f:\u00a0",TextPresentation.prefix("Arthur").replace("\u2066","").replace("\u2069",""))
     }
     @Test fun freshIdWithoutBoundaryEvidenceCannotStackSameLatestSource() {
@@ -31,7 +33,7 @@ class Maintenance021Test {
         assertEquals(listOf("b","c"),s.visibleEntries().map {it.id});assertEquals(1000L,s.entries.last().shownAt)
     }
     @Test fun highValueInstructionsCannotCoalesce() {
-        for(pair in listOf("We will go" to "We will not go","Go left" to "Go right","Collect 10 coins" to "Collect 11 coins","He is coming" to "She is coming","Open the door" to "Close the door")) {
+        for(pair in listOf("We will go" to "We will not go","Go left" to "Go right","Collect 10 coins" to "Collect 11 coins","He is coming" to "She is coming","Open the door" to "Close the door","Follow the trail" to "Follow the train","Wait here" to "Wait there")) {
             val s=SubtitleState();s.show("a","تعليمات",0,4000,3,pair.first,box)
             s.show("b","تعليمات",200,4000,3,pair.second,box,freshEvent=true,boundary="dialogue_change")
             assertEquals(pair.toString(),2,s.entries.size);assertEquals(2,s.visibleEntries().size)

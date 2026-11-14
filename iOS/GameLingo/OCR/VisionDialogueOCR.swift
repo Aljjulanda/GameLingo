@@ -15,6 +15,33 @@ final class VisionDialogueOCR {
     private(set) var separateSpeakerLabel = false
     private(set) var content = DialogueContent(text:"",speaker:nil)
     private(set) var punctuationTrace = ""
+    private func project(_ b: CGRect, roi: SourceBox) -> SourceBox {
+        SourceBox(x:roi.x+Double(b.minX)*roi.w,y:roi.y+Double(1-b.maxY)*roi.h,w:Double(b.width)*roi.w,h:Double(b.height)*roi.h)
+    }
+    /// Vision may merge a side label and dialogue into one observation. Split
+    /// only when character boxes prove a gap much larger than a normal space.
+    private func visualLines(_ candidate: VNRecognizedText, box: CGRect, roi: SourceBox, knownNames: String) -> [OCRLine] {
+        let text = candidate.string, confidence = Double(candidate.confidence)
+        let original = OCRLine(text:text,box:project(box,roi:roi),confidence:confidence)
+        if DialogueContent.parse(text,knownNames:knownNames,confidence:confidence).speaker != nil { return [original] }
+        let words = text.split(whereSeparator:\.isWhitespace)
+        guard words.count >= 3 else { return [original] }
+        for leading in [true,false] {
+            for count in (1...min(3,words.count-2)).reversed() {
+                let names = leading ? Array(words.prefix(count)) : Array(words.suffix(count))
+                let body = leading ? Array(words.dropFirst(count)) : Array(words.dropLast(count))
+                let nameRange = names.first!.startIndex..<names.last!.endIndex
+                guard DialogueContent.isName(String(text[nameRange]),knownNames:knownNames,confidence:confidence) else { continue }
+                let bodyRange = body.first!.startIndex..<body.last!.endIndex
+                guard let a = try? candidate.boundingBox(for:nameRange), let b = try? candidate.boundingBox(for:bodyRange) else { continue }
+                let gap = max(a.boundingBox.minX-b.boundingBox.maxX,b.boundingBox.minX-a.boundingBox.maxX)
+                guard gap > max(0.012,0.6*max(a.boundingBox.height,b.boundingBox.height)) else { continue }
+                return [OCRLine(text:String(text[nameRange]),box:project(a.boundingBox,roi:roi),confidence:confidence),
+                        OCRLine(text:String(text[bodyRange]),box:project(b.boundingBox,roi:roi),confidence:confidence)]
+            }
+        }
+        return [original]
+    }
     func setBackground(_ background: Bool) { request.usesCPUOnly = background }
     func document(_ buffer: CVPixelBuffer) throws -> [String] {
         let document = VNRecognizeTextRequest()
@@ -35,15 +62,12 @@ final class VisionDialogueOCR {
         // Vision's ROI is lower-left origin. The shared TV protocol uses top-left origin.
         request.regionOfInterest = CGRect(x:roi.x,y:1-roi.y-roi.h,width:roi.w,height:roi.h)
         try VNImageRequestHandler(cvPixelBuffer:buffer,orientation:.up,options:[:]).perform([request])
-        let lines: [OCRLine] = (request.results ?? []).compactMap { observation in
-            guard let candidate = observation.topCandidates(1).first, candidate.confidence >= 0.2 else { return nil }
+        let lines: [OCRLine] = (request.results ?? []).flatMap { observation -> [OCRLine] in
+            guard let candidate = observation.topCandidates(1).first, candidate.confidence >= 0.2 else { return [] }
             let b = observation.boundingBox
             // Vision reports observations relative to the request's ROI. Project
             // into the full frame before applying dialogue geometry or event IDs.
-            let box = SourceBox(x:roi.x+Double(b.minX)*roi.w,
-                                y:roi.y+Double(1-b.maxY)*roi.h,
-                                w:Double(b.width)*roi.w,h:Double(b.height)*roi.h)
-            return OCRLine(text:candidate.string,box:box,confidence:Double(candidate.confidence))
+            return visualLines(candidate,box:b,roi:roi,knownNames:knownNames)
         }
         punctuationTrace = SubtitlePresentation.punctuation(lines.map(\.text).joined(separator:" "))
         if let reading = StructuredDialogue.resolve(lines,roi:roi,knownNames:knownNames) {
