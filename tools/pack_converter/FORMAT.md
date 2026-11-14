@@ -30,6 +30,7 @@ UTF-8 JSON, at most 64 KiB. Required keys:
 | `arabic_order` | Must be `logical` |
 | `database_sha256` | Lower-case SHA-256 of the database |
 | `speaker_names` | Optional list, at most 64 names of at most 40 characters; no comma/newline. Hints, never executable behavior |
+| `coverage` | Optional `partial` or `unspecified`; this converter emits `partial`. Record eligibility is not proof of full-game coverage |
 
 The imported file is at most 128 MiB. The database is at most 256 MiB; checksums JSON at most 2 KiB. Each member must have a compression ratio at most 100:1. Extraction streams 64 KiB chunks to generated paths and verifies CRC and SHA-256 before activation. Checksums JSON contains exactly SHA-256 entries for `manifest.json` and `translations.sqlite`.
 
@@ -54,7 +55,7 @@ Connections are read-only/immutable, with trusted schema disabled, query-only mo
 
 Search only the selected, enabled, validated game's database. First try exact source and then a normalized key: NFKC, removal of incoming directional format controls, consistent curly apostrophes/quotes, whitespace/line wrapping, lower case and terminal `.`/`!` cosmetics. Questions, numbers/signs, actions, negation, directions and name text are not removed or fuzzily aliased. All target variants are considered, including blocked rows. Conflicting translations, unsupported rows or more than 32 matching records cause fallback. Equal translations associated with multiple IDs are safe only within that bound.
 
-Dialogue searches `dialogue` plus `general`. On-demand Smart Reading searches `document` plus `general` using its existing complete chunks. It never replaces a paragraph with a substring match. Categories without reliable game-format evidence stay `general`; do not invent separate menu/document coverage counts. Approximate matching is intentionally disabled in the first version. A missing OCR character may reduce hit rate and correctly falls back to Argos.
+Dialogue searches `dialogue` plus `general`. On-demand Smart Reading searches `document`, `menu` and `general` using its existing complete chunks. It never replaces a paragraph with a substring match. Categories without reliable game-format evidence stay `general`; do not invent separate menu/document coverage counts. Approximate matching is intentionally disabled in the first version. A missing OCR character may reduce hit rate and correctly falls back to Argos.
 
 ## Installation and lifecycle
 

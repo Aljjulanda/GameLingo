@@ -226,7 +226,7 @@ def build(args):
         db.close()
         data=dbpath.read_bytes()
         if not 0<count<=500000 or len(data)>256*1024*1024:raise ValueError('Package outside import limits')
-        manifest={'format_version':1,'schema_version':1,'game_id':args.game_id,'game_title':args.title,'source_language':'en','target_language':'ar','pack_version':args.pack_version,'record_count':count,'usable_count':usable,'categories':sorted(categories),'attribution':args.attribution,'permission':args.permission,'built_at':args.timestamp,'arabic_order':'logical','database_sha256':digest(data),'speaker_names':[]}
+        manifest={'format_version':1,'schema_version':1,'game_id':args.game_id,'game_title':args.title,'source_language':'en','target_language':'ar','pack_version':args.pack_version,'record_count':count,'usable_count':usable,'categories':sorted(categories),'attribution':args.attribution,'permission':args.permission,'built_at':args.timestamp,'arabic_order':'logical','database_sha256':digest(data),'speaker_names':[],'coverage':'partial'}
         raw_manifest=(json.dumps(manifest,ensure_ascii=False,sort_keys=True,separators=(',',':'))+'\n').encode()
         checksums=json.dumps({'manifest.json':digest(raw_manifest),'translations.sqlite':digest(data)},sort_keys=True).encode()
         temporary=output.with_suffix('.glpack-stage')

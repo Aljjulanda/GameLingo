@@ -28,13 +28,15 @@ final class PackDatabaseTests: XCTestCase {
         return (file,manifest)
     }
     func testIndexedExactNormalizedAndIdentifierLookup() throws {
-        let (file,manifest) = try fixture([("Move now.","تحرك الآن.","dialogue"),("Read the letter.","اقرأ الرسالة.","general")])
+        let (file,manifest) = try fixture([("Move now.","تحرك الآن.","dialogue"),("Read the letter.","اقرأ الرسالة.","general"),("Open inventory.","افتح الحقيبة.","menu")])
         let db = try PackDatabase(url:file); try db.validateContents(manifest:manifest)
         XCTAssertEqual(try db.lookup("Move now.",category:"dialogue").kind,.exact)
         XCTAssertEqual(try db.lookup("  MOVE\nnow!",category:"dialogue").text,"تحرك الآن.")
         XCTAssertEqual(try db.lookup("Move now.",category:"document").kind,.missing)
         XCTAssertEqual(try db.lookup("Read the letter.",category:"document").text,"اقرأ الرسالة.")
         XCTAssertEqual(try db.lookupIdentifier("0x0"),["تحرك الآن."])
+        XCTAssertEqual(try db.lookup("Open inventory.",category:"document").text,"افتح الحقيبة.")
+        XCTAssertNil(try db.lookup("Open inventory.",category:"dialogue").text)
     }
     func testAmbiguityRejectsAllDifferentTranslations() throws {
         let (file,_) = try fixture([("Move now.","تحرك الآن.","dialogue"),("Move now.","انطلق الآن.","dialogue")])

@@ -60,6 +60,7 @@ struct GamePackLibraryView: View {
                                 Text(pack.manifest.gameTitle).font(.headline)
                                 LabeledContent("اللغات",value:"English → العربية")
                                 LabeledContent("نسخة الحزمة",value:pack.manifest.packVersion)
+                                LabeledContent("التغطية",value:pack.manifest.coverage == "partial" ? "جزئية" : "غير مقاسة")
                                 LabeledContent("المداخل القابلة للبحث",value:"\(pack.manifest.usableCount)")
                                 LabeledContent("إجمالي المداخل",value:"\(pack.manifest.recordCount)")
                                 LabeledContent("الحجم المثبت",value:ByteCountFormatter.string(fromByteCount:pack.bytes,countStyle:.file))

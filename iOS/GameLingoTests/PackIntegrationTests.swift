@@ -11,7 +11,7 @@ final class PackIntegrationTests: XCTestCase {
         try FileManager.default.createDirectory(at:url,withIntermediateDirectories:true)
         addTeardownBlock { try? FileManager.default.removeItem(at:url) }; return url
     }
-    private func pack(game: String = "fixture", target: String = "تحرك الآن.", version: String = "1", corruption: String = "") throws -> URL {
+    private func pack(game: String = "fixture", target: String = "تحرك الآن.", version: String = "1", corruption: String = "", ambiguous: Bool = false) throws -> URL {
         let root = try folder(), file = root.appendingPathComponent("translations.sqlite")
         var db: OpaquePointer?; XCTAssertEqual(sqlite3_open(file.path,&db),SQLITE_OK)
         XCTAssertEqual(sqlite3_exec(db,PackDatabase.table,nil,nil,nil),SQLITE_OK)
@@ -22,11 +22,13 @@ final class PackIntegrationTests: XCTestCase {
         for (i,value) in ["0x00000001","FIXTURE","Move now.","move now",target,"general","synthetic","[]"].enumerated() {
             value.withCString { _ = sqlite3_bind_text(statement,Int32(i+1),$0,-1,unsafeBitCast(-1,to:sqlite3_destructor_type.self)) }
         }
-        XCTAssertEqual(sqlite3_step(statement),SQLITE_DONE); sqlite3_finalize(statement); sqlite3_close(db)
+        XCTAssertEqual(sqlite3_step(statement),SQLITE_DONE); sqlite3_finalize(statement)
+        if ambiguous { XCTAssertEqual(sqlite3_exec(db,"INSERT INTO entries SELECT '0x00000002', 'ALT', source, normalized, 'انطلق الآن.', category, source_file, flags, usable FROM entries",nil,nil,nil),SQLITE_OK) }
+        sqlite3_close(db)
         if corruption == "database" { try Data("not SQLite".utf8).write(to:file) }
         if corruption == "bomb" { try Data(repeating:0,count:1024*1024).write(to:file) }
         let hash = try TranslationPackStore.hash(file)
-        let manifest: [String:Any] = ["format_version":corruption == "version" ? 99 : 1,"schema_version":1,"game_id":game,"game_title":"Synthetic game","source_language":"en","target_language":"ar","pack_version":version,"record_count":1,"usable_count":1,"categories":["general"],"attribution":"Original synthetic tests","permission":"Synthetic fixture only","built_at":"2026-11-14","arabic_order":"logical","database_sha256":hash,"speaker_names":["Arthur"]]
+        let manifest: [String:Any] = ["format_version":corruption == "version" ? 99 : 1,"schema_version":1,"game_id":game,"game_title":"Synthetic game","source_language":"en","target_language":"ar","pack_version":version,"record_count":ambiguous ? 2 : 1,"usable_count":ambiguous ? 2 : 1,"categories":["general"],"attribution":"Original synthetic tests","permission":"Synthetic fixture only","built_at":"2026-11-14","arabic_order":"logical","database_sha256":hash,"speaker_names":["Arthur"]]
         let raw = try JSONSerialization.data(withJSONObject:manifest,options:[.sortedKeys])
         try raw.write(to:root.appendingPathComponent("manifest.json"))
         let hashes = ["manifest.json":corruption == "checksum" ? String(repeating:"0",count:64) : SHA256.hash(data:raw).map{String(format:"%02x",$0)}.joined(),"translations.sqlite":hash]
@@ -57,6 +59,9 @@ final class PackIntegrationTests: XCTestCase {
         store.changeSelection(game:"fixture"); try await waitLoaded(store)
         XCTAssertEqual(store.lookup("Move now.",category:"dialogue",eventID:"a"),"تحرك الآن.")
         XCTAssertEqual(store.lookup("Move now.",category:"document",eventID:nil),"تحرك الآن.")
+        store.changeSelection(game:"other"); try await waitLoaded(store)
+        XCTAssertEqual(store.lookup("Move now.",category:"dialogue",eventID:"other"),"انطلق الآن.")
+        store.changeSelection(game:"fixture"); try await waitLoaded(store)
         let selectedState = await state(store)
         let fixtureID = try XCTUnwrap(selectedState.registry.packs.first{$0.manifest.gameId == "fixture"}?.id)
         store.enable(fixtureID,false)
@@ -98,5 +103,23 @@ final class PackIntegrationTests: XCTestCase {
         let fallback = try await translated("Collect 11 coins."); XCTAssertFalse(fallback.isEmpty)
         store.changeSelection(game:nil); _ = await state(store)
         let noPack = try await translated("Move now."); XCTAssertFalse(noPack.isEmpty)
+        store.changeSelection(game:"fixture"); try await waitLoaded(store)
+        try await importFile(pack(version:"2",ambiguous:true),to:store)
+        let ambiguous = try await translated("Move now."); XCTAssertEqual(ambiguous,noPack)
+        let metrics = await withCheckedContinuation { continuation in store.sampleMetrics { continuation.resume(returning:$0) } }
+        XCTAssertEqual(metrics.ambiguous,1); XCTAssertGreaterThan(metrics.argos,0)
+    }
+    func testCorruptionAfterRestartFallsBackWithoutClearingSelectedGame() async throws {
+        let root = try folder(), store = TranslationPackStore(root:root)
+        try await importFile(pack(),to:store); store.changeSelection(game:"fixture"); try await waitLoaded(store)
+        let saved = await state(store), item = try XCTUnwrap(saved.registry.packs.first)
+        try Data("corrupt database".utf8).write(to:root.appendingPathComponent(item.id).appendingPathComponent("translations.sqlite"))
+        let restarted = TranslationPackStore(root:root)
+        var observed = await state(restarted)
+        for _ in 0..<200 {
+            if observed.error != nil { break }; try await Task.sleep(nanoseconds:20_000_000); observed = await state(restarted)
+        }
+        XCTAssertNotNil(observed.error); XCTAssertFalse(observed.loaded); XCTAssertEqual(observed.registry.selectedGame,"fixture")
+        XCTAssertNil(restarted.lookup("Move now.",category:"dialogue",eventID:"after-restart"))
     }
 }

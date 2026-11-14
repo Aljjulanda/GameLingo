@@ -24,6 +24,7 @@ struct PackManifest: Codable, Equatable {
     var packVersion: String, recordCount: Int, usableCount: Int, categories: [String]
     var attribution: String, permission: String, builtAt: String, arabicOrder: String, databaseSha256: String
     var speakerNames: [String]?
+    var coverage: String?
     static let categories: Set<String> = ["dialogue","menu","document","general"]
     func validate() throws {
         guard formatVersion == 1, schemaVersion == 1, sourceLanguage == "en", targetLanguage == "ar", arabicOrder == "logical" else { throw PackFailure.unsupported }
@@ -33,6 +34,7 @@ struct PackManifest: Codable, Equatable {
               !categories.isEmpty, categories.count <= 4, Set(categories).isSubset(of:Self.categories), Set(categories).count == categories.count,
               attribution.count <= 4096, permission.count <= 2000, builtAt.count <= 64,
               databaseSha256.range(of:"^[0-9a-f]{64}$",options:.regularExpression) != nil,
+              coverage == nil || coverage == "partial" || coverage == "unspecified",
               (speakerNames?.count ?? 0) <= 64,
               speakerNames?.allSatisfy({ !$0.isEmpty && $0.count <= 40 && !$0.contains(",") && !$0.contains("\n") }) != false else { throw PackFailure.invalid }
     }
@@ -82,8 +84,8 @@ final class PackDatabase {
         try execute("PRAGMA trusted_schema=OFF"); try execute("PRAGMA query_only=ON")
         try execute("PRAGMA mmap_size=0"); try execute("PRAGMA cache_size=-2048")
         try validateSchema()
-        exact = try prepare("SELECT target, usable FROM entries WHERE source=? AND category IN (?, 'general') LIMIT 33")
-        normalized = try prepare("SELECT target, usable FROM entries WHERE normalized=? AND category IN (?, 'general') LIMIT 33")
+        exact = try prepare("SELECT target, usable FROM entries WHERE source=? AND category IN (?, ?, 'general') LIMIT 33")
+        normalized = try prepare("SELECT target, usable FROM entries WHERE normalized=? AND category IN (?, ?, 'general') LIMIT 33")
     }
     deinit {
         sqlite3_finalize(exact); sqlite3_finalize(normalized); sqlite3_close_v2(db)
@@ -152,6 +154,7 @@ final class PackDatabase {
         sqlite3_reset(statement); sqlite3_clear_bindings(statement)
         defer { sqlite3_reset(statement); sqlite3_clear_bindings(statement) }
         try bind(key,statement,1); try bind(category,statement,2)
+        try bind(category == "document" ? "menu" : category,statement,3)
         var values = Set<String>(), count = 0, blocked = false, code = sqlite3_step(statement)
         while code == SQLITE_ROW {
             count += 1; values.insert(try string(statement,0)); blocked = blocked || sqlite3_column_int(statement,1) != 1
