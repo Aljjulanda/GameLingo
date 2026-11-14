@@ -33,7 +33,7 @@ class Maintenance021Test {
         assertEquals(listOf("b","c"),s.visibleEntries().map {it.id});assertEquals(1000L,s.entries.last().shownAt)
     }
     @Test fun highValueInstructionsCannotCoalesce() {
-        for(pair in listOf("We will go" to "We will not go","Go left" to "Go right","Collect 10 coins" to "Collect 11 coins","He is coming" to "She is coming","Open the door" to "Close the door","Follow the trail" to "Follow the train","Wait here" to "Wait there")) {
+        for(pair in listOf("We will go" to "We will not go","Go left" to "Go right","Collect 10 coins" to "Collect 11 coins","He is coming" to "She is coming","Open the door" to "Close the door","Follow the trail" to "Follow the train","Wait here" to "Wait there","Get −10 coins" to "Get 10 coins")) {
             val s=SubtitleState();s.show("a","تعليمات",0,4000,3,pair.first,box)
             s.show("b","تعليمات",200,4000,3,pair.second,box,freshEvent=true,boundary="dialogue_change")
             assertEquals(pair.toString(),2,s.entries.size);assertEquals(2,s.visibleEntries().size)

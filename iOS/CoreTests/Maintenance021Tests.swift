@@ -104,7 +104,7 @@ final class Maintenance021Tests: XCTestCase {
         XCTAssertEqual(t.current?.text,"Something happened near the gate.")
     }
     func testHighConfidenceDifferentInstructionsAreNewEvenDuringAcquisition() {
-        for (a,b) in [("We will go","We will not go"),("Go left","Go right"),("Collect 10 coins","Collect 11 coins"),("He is coming","She is coming"),("Open the door","Close the door"),("Follow the trail","Follow the train"),("Wait here","Wait there")] {
+        for (a,b) in [("We will go","We will not go"),("Go left","Go right"),("Collect 10 coins","Collect 11 coins"),("He is coming","She is coming"),("Open the door","Close the door"),("Follow the trail","Follow the train"),("Wait here","Wait there"),("Get −10 coins","Get 10 coins")] {
             XCTAssertFalse(DialogueText.same(a,b))
             var t = DialogueTracker()
             guard case .dialogue(let old,_) = t.observe(text:a,box:.dialogue,now:0,frameMilliseconds:0) else { return XCTFail() }

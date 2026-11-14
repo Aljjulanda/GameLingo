@@ -13,7 +13,7 @@ struct SourceBox: Codable, Equatable {
 
 enum DialogueText {
     static func normalized(_ text: String) -> String {
-        SubtitlePresentation.clean(text).precomposedStringWithCompatibilityMapping.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+        SubtitlePresentation.clean(text).replacingOccurrences(of:"\u{2212}",with:"-").precomposedStringWithCompatibilityMapping.split(whereSeparator: \.isWhitespace).joined(separator: " ")
     }
     static func matches(_ text: String, _ pattern: String) -> [String] {
         let regex = try! NSRegularExpression(pattern: pattern)

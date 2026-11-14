@@ -17,7 +17,7 @@ class SubtitleState {
     var coalesced=0;private set
     private fun remember(id:String) {seen.add(id);if(seen.size>128)seen.remove(seen.first())}
     private fun sourceWords(s:String)=Regex("[+-]?\\d+(?:[.,]\\d+)*|\\p{L}+").findAll(
-        java.text.Normalizer.normalize(s,java.text.Normalizer.Form.NFKC).lowercase(java.util.Locale.ROOT).replace(Regex("['’`]"),""))
+        java.text.Normalizer.normalize(s,java.text.Normalizer.Form.NFKC).replace('\u2212','-').lowercase(java.util.Locale.ROOT).replace(Regex("['’`]"),""))
         .map {it.value}.toList()
     private fun arabicKey(s:String)=java.text.Normalizer.normalize(s,java.text.Normalizer.Form.NFKC)
         .replace(Regex("[\\u064B-\\u065F\\u0670\\u0640]"),"").replace(Regex("[أإآٱ]"),"ا")
