@@ -26,6 +26,7 @@ fixtures = {
     'xml': '<localization game_id="picker-xml"><entry><source>Move now.</source><target>تحرك الآن.</target></entry></localization>'.encode(),
     'csv': 'source,target\nMove now.,تحرك الآن.\n'.encode(),
     'txt': 'source\ttarget\nMove now.\tتحرك الآن.\n'.encode(),
+    'po': 'msgid "Move now."\nmsgstr "تحرك الآن."\n'.encode(),
     'rar': bytes.fromhex('526172211a070100'), '7z': bytes.fromhex('377abcaf271c'),
 }
 pe = bytearray(68)
@@ -33,6 +34,7 @@ pe[:2] = b'MZ'
 pe[60] = 64
 pe[64:68] = b'PE\0\0'
 fixtures['exe'] = bytes(pe)
+fixtures[''] = raw
 with tempfile.TemporaryDirectory() as temporary:
     folder = pathlib.Path(temporary)
     db = folder / 'translations.sqlite'
@@ -55,5 +57,11 @@ with tempfile.TemporaryDirectory() as temporary:
     zipped = folder / 'fixture.zip'
     with zipfile.ZipFile(zipped, 'w') as archive: archive.writestr('content.custom', raw)
     fixtures['zip'] = zipped.read_bytes()
-for ext, data in fixtures.items(): (documents / f'GLPicker-{ext}.{ext}').write_bytes(data)
+names = {ext: f'GLPicker-{ext}.{ext}' if ext else 'GLPicker-no-extension' for ext in fixtures}
+for ext, data in fixtures.items(): (documents / names[ext]).write_bytes(data)
+output = root / 'build/logs/picker-fixtures.zip'
+output.parent.mkdir(parents=True, exist_ok=True)
+with zipfile.ZipFile(output, 'w', compression=zipfile.ZIP_DEFLATED) as archive:
+    for ext, data in fixtures.items(): archive.writestr(names[ext], data)
+    archive.writestr('README-AR.txt', 'ملفات اختبار صناعية صغيرة؛ ليست تعريب Red Dead. فك ZIP في تطبيق الملفات، ثم جرّب اختيار EXE وZIP وGLPACK والامتداد المجهول داخل مكتبة GameLingo. اختيار الملف يبدأ فحصه فقط؛ EXE وRAR و7Z متوقع أن تُعرَف دون تحويل. GLPACK والملفات النصية المتقابلة تُنتج حزمة اختبار صغيرة.\n')
 print(json.dumps({'synthetic_fixture_extensions': sorted(fixtures), 'device': device}))

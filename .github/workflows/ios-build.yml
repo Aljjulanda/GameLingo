@@ -83,6 +83,8 @@ jobs:
         env:
           SKIP_CORE_TESTS: '1'
         run: bash iOS/Scripts/test.sh
+      - name: Native Files picker selection and sandbox import
+        run: bash iOS/Scripts/test-picker-ui.sh
       - name: Save compiled native dependencies
         if: always() && steps.native-cache.outputs.cache-hit != 'true' && hashFiles('iOS/.build/native/iphoneos-arm64/prefix/lib/libcrypto.a') != ''
         uses: actions/cache/save@v5

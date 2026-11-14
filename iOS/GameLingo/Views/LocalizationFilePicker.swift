@@ -15,7 +15,7 @@ struct LocalizationFilePicker: UIViewControllerRepresentable {
     static func controller(directory: URL?, delegate: UIDocumentPickerDelegate?) -> UIDocumentPickerViewController {
         let controller = UIDocumentPickerViewController(forOpeningContentTypes:GamePackDocument.pickerTypes,asCopy:true)
         controller.delegate = delegate; controller.allowsMultipleSelection = false
-        controller.shouldShowFileExtensions = true; controller.directoryURL = directory
+        controller.directoryURL = directory; controller.shouldShowFileExtensions = true
         controller.title = "إضافة ملف تعريب"
         return controller
     }

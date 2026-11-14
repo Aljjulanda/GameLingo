@@ -7,6 +7,8 @@ struct LocalizationInspection {
     var filename: String, bytes: Int64 = 0, format = "جارٍ الفحص"
     var localization: Bool?, supported: Bool?, mapping: Bool?, usable: Int?, rejected = 0
     var declaredUsable: Int?
+    var progressDone: Int64?, progressTotal: Int64?
+    var progressUnit = "بايت"
     var stage = "جارٍ فحص الملف", result = "", requirement = ""
 }
 
@@ -39,20 +41,24 @@ final class GameTranslationImporter {
                         guard let size = values.fileSize, size >= 0 else { throw LocalizationImportFailure.malformed }
                         report.bytes = Int64(size)
                         guard size <= 128*1024*1024 else { throw LocalizationImportFailure.limit }
+                        report.stage = "جارٍ نسخ الملف للفحص"; report.progressDone = 0; report.progressTotal = Int64(size); publish(report)
                         let sourceHandle = try FileHandle(forReadingFrom:source); defer { try? sourceHandle.close() }
                         guard FileManager.default.createFile(atPath:input.path,contents:nil) else { throw PackFailure.unavailable }
                         let output = try FileHandle(forWritingTo:input); defer { try? output.close() }
                         var count = 0
                         while let chunk = try sourceHandle.read(upToCount:65536), !chunk.isEmpty {
-                            try control.check(); count += chunk.count; guard count <= 128*1024*1024 else { throw LocalizationImportFailure.limit }; try output.write(contentsOf:chunk)
+                            try control.check(); count += chunk.count
+                            guard count <= size, count <= 128*1024*1024 else { throw LocalizationImportFailure.limit }; try output.write(contentsOf:chunk)
+                            if count % (1024*1024) == 0 || count == size { report.progressDone = Int64(count); publish(report) }
                         }
+                        guard count == size else { throw LocalizationImportFailure.malformed }
                         report.bytes = Int64(count)
                     } catch { copyError = error }
                 }
                 control.onCancellation(nil); try control.check()
                 if let error = coordinationError { throw error }; if let error = copyError { throw error }
                 let package = try prepare(input,in:stage,depth:0,report:&report,control:control,publish:publish)
-                try control.check(); report.stage = "جارٍ التحقق من حزمة الترجمة وتثبيتها"; publish(report)
+                try control.check(); report.stage = "جارٍ التحقق من حزمة الترجمة وتثبيتها"; report.progressDone = nil; report.progressTotal = nil; publish(report)
                 let preparedReport = report
                 DispatchQueue.main.async {
                     store.importPack(package,check:control.check) { result in
@@ -69,6 +75,7 @@ final class GameTranslationImporter {
                 }
             } catch {
                 try? FileManager.default.removeItem(at:stage)
+                if report.format == "جارٍ الفحص" { report.format = "لم يكتمل الفحص" }
                 report.result = Self.message(error); report.stage = "لم تُثبّت حزمة"
                 let value = report; DispatchQueue.main.async { completion(.failure(error),value) }
             }
@@ -87,6 +94,7 @@ final class GameTranslationImporter {
                          control: LocalizationImportControl, publish: (LocalizationInspection) -> Void) throws -> URL {
         try control.check()
         let format = LocalizationFormatDetector.detect(try prefix(file))
+        report.progressDone = nil; report.progressTotal = nil
         report.format = format.rawValue; report.stage = "تم التعرف على نوع الملف: "+format.rawValue
         publish(report)
         switch format {
@@ -143,7 +151,9 @@ final class GameTranslationImporter {
             report.mapping = true; report.usable = matched.records.count; report.rejected = matched.rejected
             report.stage = "جارٍ تجهيز حزمة الترجمة"
             publish(report)
-            return try LocalizationPackBuilder.build(matched,sourceName:report.filename,sourceHash:TranslationPackStore.hash(file,check:control.check),in:stage,control:control)
+            return try LocalizationPackBuilder.build(matched,sourceName:report.filename,sourceHash:TranslationPackStore.hash(file,check:control.check),in:stage,control:control) { done,total in
+                report.progressDone = Int64(done); report.progressTotal = Int64(total); report.progressUnit = "مدخل"; publish(report)
+            }
         case .pe:
             report.supported = false; report.mapping = false
             report.requirement = "يتطلب محوّل GameLingo الخارجي؛ لا يُنفّذ أي كود Windows على iPhone"
@@ -192,7 +202,7 @@ final class GameTranslationImporter {
 }
 
 enum LocalizationPackBuilder {
-    static func build(_ parsed: ParsedLocalization, sourceName: String, sourceHash: String, in stage: URL, control: LocalizationImportControl) throws -> URL {
+    static func build(_ parsed: ParsedLocalization, sourceName: String, sourceHash: String, in stage: URL, control: LocalizationImportControl, progress: (Int,Int) -> Void = {_,_ in}) throws -> URL {
         let folder = stage.appendingPathComponent(UUID().uuidString,isDirectory:true)
         try FileManager.default.createDirectory(at:folder,withIntermediateDirectories:true)
         let database = folder.appendingPathComponent("translations.sqlite")
@@ -204,12 +214,14 @@ enum LocalizationPackBuilder {
         }
         guard sqlite3_prepare_v2(db,"INSERT INTO entries VALUES (?,?,?,?,?,?,?,?,1)",-1,&statement,nil) == SQLITE_OK else { throw PackFailure.damaged }
         for (index,record) in parsed.records.enumerated() {
+            if index % 1024 == 0 { progress(index,parsed.records.count) }
             try control.check(); sqlite3_reset(statement); sqlite3_clear_bindings(statement)
             let fields = ["raw-\(index)",record.id,record.source,PackLookupKey.normalized(record.source),record.target,record.category,sourceName,"[]"]
             for (column,value) in fields.enumerated() { guard value.withCString({sqlite3_bind_text(statement,Int32(column+1),$0,-1,unsafeBitCast(-1,to:sqlite3_destructor_type.self))}) == SQLITE_OK else { throw PackFailure.damaged } }
             guard sqlite3_step(statement) == SQLITE_DONE else { throw PackFailure.damaged }
         }
         guard sqlite3_exec(db,"COMMIT",nil,nil,nil) == SQLITE_OK else { throw PackFailure.damaged }
+        progress(parsed.records.count,parsed.records.count)
         sqlite3_finalize(statement); statement = nil
         guard sqlite3_close(db) == SQLITE_OK else { throw PackFailure.damaged }; db = nil
         let metadata = parsed.metadata

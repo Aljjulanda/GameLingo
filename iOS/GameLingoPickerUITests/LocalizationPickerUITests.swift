@@ -32,22 +32,34 @@ final class LocalizationPickerUITests: XCTestCase {
         expectation(for:finished,evaluatedWith:app); waitForExpectations(timeout:40)
         XCTAssertFalse(app.staticTexts["gamePacks.importStatus"].label.isEmpty)
     }
+    private func pickerFile(_ name: String) -> XCUIElement {
+        let matches = app.staticTexts.matching(NSPredicate(format:"label CONTAINS %@",name))
+        _ = matches.firstMatch.waitForExistence(timeout:5)
+        for _ in 0..<8 {
+            if let file = matches.allElementsBoundByIndex.first(where:{$0.isHittable}) { return file }
+            app.swipeUp()
+        }
+        return matches.firstMatch
+    }
     func testNativePickerSelectsAllFixtureExtensionsAndCanCancel() {
-        for ext in ["exe","zip","glpack","rar","7z","xml","json","csv","txt","unknownformat"] {
+        for ext in ["exe","zip","glpack","rar","7z","xml","json","csv","txt","po","unknownformat",""] {
             importButton().tap()
-            let name = "GLPicker-"+ext
-            let file = app.staticTexts.matching(NSPredicate(format:"label CONTAINS %@",name)).firstMatch
+            let name = ext.isEmpty ? "GLPicker-no-extension" : "GLPicker-"+ext
+            let file = pickerFile(name)
             XCTAssertTrue(file.waitForExistence(timeout:30),"Missing picker file: "+name)
             XCTAssertTrue(file.isEnabled,"Picker disabled arbitrary extension: "+ext)
+            let screenshot = XCTAttachment(screenshot:app.screenshot()); screenshot.name = "Picker-"+name; screenshot.lifetime = .keepAlways; add(screenshot)
             file.tap()
-            waitFinished(filename:name+"."+ext)
+            waitFinished(filename:ext.isEmpty ? name : name+"."+ext)
         }
         let previous = app.staticTexts["gamePacks.fileSummary"].label
         importButton().tap()
         let cancel = app.buttons.matching(NSPredicate(format:"label IN %@",["Cancel","إلغاء"])).firstMatch
         XCTAssertTrue(cancel.waitForExistence(timeout:15)); cancel.tap()
-        XCTAssertTrue(importButton().waitForExistence(timeout:15))
+        expectation(for:NSPredicate { [self] _,_ in app.buttons["gamePacks.import"].isHittable },evaluatedWith:app)
+        waitForExpectations(timeout:15)
         XCTAssertEqual(app.staticTexts["gamePacks.fileSummary"].label,previous)
+        XCTAssertTrue(app.staticTexts["gamePacks.importStatus"].label.hasPrefix("أُلغي اختيار"))
     }
     func testSandboxFolderImportsWithoutSystemPicker() {
         let file = app.buttons["gamePacks.inbox.GLPicker-json.json"]

@@ -69,7 +69,12 @@ struct GamePackLibraryView: View {
             }
             Section("الحزم") {
                 Button("إضافة ملف تعريب") { importing = true }.disabled(model.running || library.busy).accessibilityIdentifier("gamePacks.import")
-                if library.busy { ProgressView() }
+                if library.busy {
+                    if let done = library.inspection?.progressDone, let total = library.inspection?.progressTotal, total > 0 {
+                        ProgressView(value:Double(done),total:Double(total))
+                        Text("\(done) / \(total) \(library.inspection?.progressUnit ?? "")").font(.caption)
+                    } else { ProgressView() }
+                }
                 if let report = library.inspection { Text(report.filename+" · "+report.format).font(.caption).accessibilityIdentifier("gamePacks.fileSummary") }
                 if !library.message.isEmpty { Text(library.message).accessibilityIdentifier("gamePacks.importStatus") }
                 if library.busy { Button("إلغاء الاستيراد",role:.cancel) { library.cancelImport() }.accessibilityIdentifier("gamePacks.cancelImport") }
