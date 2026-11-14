@@ -97,6 +97,7 @@ final class PackDatabase {
         normalized = try prepare("SELECT target, usable FROM entries WHERE normalized=? AND category IN (?, ?, 'general') LIMIT 33")
         } catch {
             sqlite3_finalize(exact); sqlite3_finalize(normalized)
+            exact = nil; normalized = nil
             sqlite3_progress_handler(db,0,nil,nil); sqlite3_close_v2(db); db = nil
             throw error
         }

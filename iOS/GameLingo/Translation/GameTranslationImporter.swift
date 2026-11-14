@@ -36,7 +36,9 @@ final class GameTranslationImporter {
                     do {
                         let values = try source.resourceValues(forKeys:[.isRegularFileKey,.isSymbolicLinkKey,.fileSizeKey])
                         guard values.isRegularFile == true, values.isSymbolicLink != true else { throw LocalizationImportFailure.unsafe }
-                        guard let size = values.fileSize, size <= 128*1024*1024 else { throw LocalizationImportFailure.limit }
+                        guard let size = values.fileSize, size >= 0 else { throw LocalizationImportFailure.malformed }
+                        report.bytes = Int64(size)
+                        guard size <= 128*1024*1024 else { throw LocalizationImportFailure.limit }
                         let sourceHandle = try FileHandle(forReadingFrom:source); defer { try? sourceHandle.close() }
                         guard FileManager.default.createFile(atPath:input.path,contents:nil) else { throw PackFailure.unavailable }
                         let output = try FileHandle(forWritingTo:input); defer { try? output.close() }

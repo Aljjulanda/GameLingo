@@ -8,6 +8,30 @@ import UIKit
 @testable import GameLingo
 
 final class PackIntegrationTests: XCTestCase {
+    func testOversizedSparseInputIsRejectedAndTemporaryFilesAreRemoved() async throws {
+        let root = try folder(), file = root.appendingPathComponent("oversized.unknown"), temporary = try folder()
+        XCTAssertTrue(FileManager.default.createFile(atPath:file.path,contents:nil))
+        let handle = try FileHandle(forWritingTo:file); try handle.truncate(atOffset:129*1024*1024); try handle.close()
+        let (result,report) = await inspect(file,store:TranslationPackStore(root:try folder()),temporaryRoot:temporary)
+        XCTAssertThrowsError(try result.get()); XCTAssertEqual(report.bytes,129*1024*1024)
+        XCTAssertTrue(try FileManager.default.contentsOfDirectory(atPath:temporary.path).isEmpty)
+    }
+    @MainActor
+    func testCancellationAfterParsingBeforeAtomicInstallation() async throws {
+        let root = try folder(), file = root.appendingPathComponent("source.json"), temporary = try folder(), store = TranslationPackStore(root:try folder())
+        try Data(#"[{"en":"Move now.","ar":"تحرك الآن."}]"#.utf8).write(to:file)
+        let result: Result<Void,Error> = await withCheckedContinuation { continuation in
+            var control: LocalizationImportControl?
+            control = GameTranslationImporter(temporaryRoot:temporary).start(file,store:store,update:{ report in
+                if report.stage == "جارٍ تجهيز حزمة الترجمة" { control?.cancel() }
+            }) { result,report in
+                XCTAssertTrue(report.result.contains("أُلغي")); continuation.resume(returning:result)
+            }
+        }
+        XCTAssertThrowsError(try result.get())
+        let saved = await state(store); XCTAssertTrue(saved.registry.packs.isEmpty)
+        XCTAssertTrue(try FileManager.default.contentsOfDirectory(atPath:temporary.path).isEmpty)
+    }
     private func inspect(_ file: URL, store: TranslationPackStore, temporaryRoot: URL? = nil, cancel: Bool = false) async -> (Result<Void,Error>,LocalizationInspection) {
         await withCheckedContinuation { continuation in
             let importer = temporaryRoot.map{GameTranslationImporter(temporaryRoot:$0)} ?? GameTranslationImporter()

@@ -5,6 +5,7 @@ import hashlib
 import json
 import pathlib
 import plistlib
+import re
 import runpy
 import subprocess
 import sys
@@ -20,7 +21,8 @@ def main():
     for path in (ROOT / 'GameLingo' / 'Resources').iterdir():
         if path.suffix in ('.plist', '.xcprivacy', '.entitlements'):
             plistlib.loads(path.read_bytes())
-    ET.parse(ROOT / 'GameLingo.xcodeproj/xcshareddata/xcschemes/GameLingo.xcscheme')
+    for scheme in (ROOT / 'GameLingo.xcodeproj/xcshareddata/xcschemes').glob('*.xcscheme'):
+        ET.parse(scheme)
     schema = json.loads((ROOT / 'GameLingo/Core/Resources/tv-display-schema.json').read_text(encoding='utf-8'))
     existing = runpy.run_path(str(REPO / 'desktop/gamelingo/display_settings.py'))
     assert schema['defaults'] == existing['DEFAULTS'], 'Display defaults diverged from Windows'
@@ -46,6 +48,7 @@ def main():
         assert hashlib.sha256(data).hexdigest() == digest, f'Existing platform changed: {name}'
     project = ROOT / 'GameLingo.xcodeproj/project.pbxproj'
     original = project.read_bytes()
+    assert not re.search(rb'=\s*\(\s*,',original), 'Invalid leading comma in Xcode project array'
     subprocess.run([sys.executable, str(ROOT / 'Scripts/generate-project.py')], check=True)
     assert project.read_bytes() == original, 'Xcode project must be regenerated after source changes'
     swift_sources = list((ROOT / 'GameLingo').rglob('*.swift'))

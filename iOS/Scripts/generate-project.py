@@ -51,7 +51,8 @@ def main():
     obj('group:root', f'isa = PBXGroup; children = ({", ".join(file_ids)}, {uid("group:products")},); sourceTree = "<group>";')
 
     for name, isa, files in [('app:sources', 'PBXSourcesBuildPhase', sources), ('app:resources', 'PBXResourcesBuildPhase', resources), ('test:sources', 'PBXSourcesBuildPhase', tests), ('test:resources', 'PBXResourcesBuildPhase', test_resources), ('ui:sources', 'PBXSourcesBuildPhase', ui_tests), ('ui:resources', 'PBXResourcesBuildPhase', [])]:
-        obj(name, f'isa = {isa}; buildActionMask = 2147483647; files = ({", ".join(files)},); runOnlyForDeploymentPostprocessing = 0;')
+        file_list = ', '.join(files) + (',' if files else '')
+        obj(name, f'isa = {isa}; buildActionMask = 2147483647; files = ({file_list}); runOnlyForDeploymentPostprocessing = 0;')
 
     obj('package:zip', 'isa = XCRemoteSwiftPackageReference; repositoryURL = "https://github.com/weichsel/ZIPFoundation.git"; requirement = { kind = exactVersion; version = 0.9.19; };')
     obj('package:product', f'isa = XCSwiftPackageProductDependency; package = {uid("package:zip")}; productName = ZIPFoundation;')

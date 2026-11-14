@@ -101,7 +101,7 @@
 		4AC6D2D3EB3B918C36F7C620 = { isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (F5A755B4A5FBE3AFA205F82E, 292F0AC4088CFE25595AE9DE,); runOnlyForDeploymentPostprocessing = 0; };
 		2CD23D4E9F652F294AA4A1FA = { isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (7C1D0FC3C15DEAD47D4EED12,); runOnlyForDeploymentPostprocessing = 0; };
 		FDEC60263CB0CE9AD178A59A = { isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (76755381BDB506E9E000FE52,); runOnlyForDeploymentPostprocessing = 0; };
-		20FA5C961AA16C9B681BBB6C = { isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (,); runOnlyForDeploymentPostprocessing = 0; };
+		20FA5C961AA16C9B681BBB6C = { isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 		4B7E288A0B0EB35A56D96790 = { isa = XCRemoteSwiftPackageReference; repositoryURL = "https://github.com/weichsel/ZIPFoundation.git"; requirement = { kind = exactVersion; version = 0.9.19; }; };
 		A3BE178D11034185CA60B575 = { isa = XCSwiftPackageProductDependency; package = 4B7E288A0B0EB35A56D96790; productName = ZIPFoundation; };
 		A132C5649EE081CF51D69497 = { isa = PBXBuildFile; productRef = A3BE178D11034185CA60B575; };
