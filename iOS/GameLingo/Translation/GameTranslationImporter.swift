@@ -6,6 +6,7 @@ import ZIPFoundation
 struct LocalizationInspection {
     var filename: String, bytes: Int64 = 0, format = "جارٍ الفحص"
     var localization: Bool?, supported: Bool?, mapping: Bool?, usable: Int?, rejected = 0
+    var declaredUsable: Int?
     var stage = "جارٍ فحص الملف", result = "", requirement = ""
 }
 
@@ -57,7 +58,7 @@ final class GameTranslationImporter {
                             try? FileManager.default.removeItem(at:stage)
                             var final = preparedReport
                             switch result {
-                            case .success: final.result = "تم استيراد الترجمة بنجاح؛ اختر اللعبة لتفعيلها"; final.stage = "اكتمل الاستيراد"
+                            case .success: final.usable = final.usable ?? final.declaredUsable; final.result = "تم استيراد الترجمة بنجاح؛ اختر اللعبة لتفعيلها"; final.stage = "اكتمل الاستيراد"
                             case .failure(let error): final.result = Self.message(error); final.stage = "لم تُثبّت حزمة"
                             }
                             DispatchQueue.main.async { completion(result,final) }
@@ -97,7 +98,7 @@ final class GameTranslationImporter {
                 let entry = try required(archive["manifest.json"])
                 let manifest = try PackManifest.decode(extractData(archive,entry:entry,limit:65536,control:control))
                 report.format = LocalizationFileFormat.glpack.rawValue; report.localization = true; report.supported = true
-                report.mapping = manifest.sourceLanguage == "en" && manifest.targetLanguage == "ar"; report.usable = manifest.usableCount
+                report.mapping = manifest.usableCount > 0; report.declaredUsable = manifest.usableCount
                 return file
             }
             if paths.contains("translations.sqlite") || paths.contains("manifest.json") && paths.contains("checksums.json") { throw LocalizationImportFailure.malformed }

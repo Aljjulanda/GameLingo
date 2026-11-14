@@ -54,7 +54,7 @@ enum LocalizationFormatDetector {
         if bytes.starts(with:Array("TKEY".utf8)) { return .gxt2 }
         // Inspection uses a bounded prefix, which may end inside a UTF-8/16 scalar.
         let text = (0...min(3,data.count)).lazy.compactMap { try? decodeText(data.dropLast($0)) }.first
-        guard let text else { return .binary }
+        guard let text, !text.isEmpty else { return .binary }
         let prefix = text.trimmingCharacters(in:.whitespacesAndNewlines)
         if prefix.hasPrefix("{") || prefix.hasPrefix("[") { return .json }
         if prefix.hasPrefix("<") { return .xml }

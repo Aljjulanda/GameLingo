@@ -13,7 +13,7 @@ final class LocalizationImportTests: XCTestCase {
             (Data("UnityFS\0".utf8),.unity),(Data("TKEY".utf8),.gxt2),
             (Data("{broken json".utf8),.json),(Data("<broken xml".utf8),.xml),
             (Data("msgid \"Hi\"\nmsgstr \"مرحبا\"".utf8),.po),
-            (Data("source,target\nHello,مرحبا".utf8),.csv),(Data([0xff,0,0xff]),.binary),(Data(),.empty)]
+            (Data("source,target\nHello,مرحبا".utf8),.csv),(Data([0xff,0,0xff]),.binary),(Data([0xff]),.binary),(Data(),.empty)]
         for (data,expected) in samples { XCTAssertEqual(LocalizationFormatDetector.detect(data),expected) }
     }
     func testJSONExplicitPairsAndParallelLanguageMaps() throws {
