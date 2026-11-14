@@ -9,6 +9,8 @@ final class LocalizationImportTests: XCTestCase {
         XCTAssertThrowsError(try parsed(#"{"license":{"url":"https://example.com"},"entries":[{"en":"Move now.","ar":"تحرك الآن."}]}"#,.json))
         let value = try parsed("source,target,attribution,license\nMove now.,تحرك الآن.,Original Team,Original Terms\n",.csv)
         XCTAssertEqual(value.metadata["attribution"],"Original Team"); XCTAssertEqual(value.metadata["license"],"Original Terms")
+        let json = try parsed(#"{"entries":[{"en":"Move now.","ar":"تحرك الآن.","license":"Record license"}]}"#,.json)
+        XCTAssertEqual(json.metadata["license"],"Record license")
     }
     private func parsed(_ text: String, _ format: LocalizationFileFormat) throws -> ParsedLocalization {
         let control = LocalizationImportControl()

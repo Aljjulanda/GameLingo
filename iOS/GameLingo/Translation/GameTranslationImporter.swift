@@ -134,7 +134,7 @@ final class GameTranslationImporter {
             }
             guard candidates.count == 1 else {
                 if candidates.count > 1 { throw LocalizationImportFailure.unsupported("الأرشيف يحتوي عدة مصادر قابلة للتحويل؛ استخدم محوّل GameLingo لدمجها مع تحديد اللعبة دون خلط النصوص") }
-                report.localization = mappingMissing ? true : nil; report.mapping = false; report.supported = false
+                report.localization = nil; report.mapping = false; report.supported = false
                 if mappingMissing { throw LocalizationImportFailure.mapping }
                 throw LocalizationImportFailure.unsupported("أرشيف ZIP معروف، لكن محتواه لا يتضمن صيغة تعريب قابلة للتحويل حاليًا؛ استخدم المحوّل الخارجي")
             }

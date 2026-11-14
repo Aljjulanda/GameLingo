@@ -69,6 +69,11 @@ final class PackIntegrationTests: XCTestCase {
         let bad = try pack(corruption:"traversal"), (rejected,_) = await inspect(bad,store:store)
         XCTAssertThrowsError(try rejected.get())
         let saved = await state(store); XCTAssertEqual(saved.registry.packs.count,1)
+        let text = root.appendingPathComponent("readme.txt"), textZip = root.appendingPathComponent("readme.zip")
+        try Data("No translated records here.".utf8).write(to:text)
+        let plainArchive = try Archive(url:textZip,accessMode:.create); try plainArchive.addEntry(with:"readme.txt",fileURL:text)
+        let (noRecords,noRecordsReport) = await inspect(textZip,store:store)
+        XCTAssertThrowsError(try noRecords.get()); XCTAssertNil(noRecordsReport.localization)
     }
     func testUnsupportedContainersAndCancellationPreserveWorkingPack() async throws {
         let root = try folder(), store = TranslationPackStore(root:try folder())

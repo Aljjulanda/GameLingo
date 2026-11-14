@@ -147,7 +147,7 @@ struct JSONLocalizationAdapter: LocalizationFormatAdapter {
             }
         } else if let array = object as? [[String:Any]] { rows = array }
         guard rows.count <= 50000 else { throw LocalizationImportFailure.limit }
-        for (index,row) in rows.enumerated() { try control.check(); if let record = LocalizationAdapters.record(row,index:index) { result.records.append(record) } else { result.rejected += 1 } }
+        for (index,row) in rows.enumerated() { try control.check(); try LocalizationAdapters.metadata(row,into:&result); if let record = LocalizationAdapters.record(row,index:index) { result.records.append(record) } else { result.rejected += 1 } }
         return result
     }
 }
