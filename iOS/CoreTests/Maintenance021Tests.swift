@@ -53,8 +53,8 @@ final class Maintenance021Tests: XCTestCase {
         for time in [0.2,0.4] { _ = t.observe(text:"",box:.dialogue,now:time,frameMilliseconds:0) }
         guard case .unchanged = t.observe(text:"Wait here.",box:.dialogue,now:0.5,frameMilliseconds:500) else { return XCTFail() }
         _ = t.observe(text:"",box:.dialogue,now:0.7,frameMilliseconds:700)
-        guard case .gone = t.observe(text:"",box:.dialogue,now:1.4,frameMilliseconds:1400) else { return XCTFail() }
-        guard case .dialogue(let b,_) = t.observe(text:"Wait here.",box:.dialogue,now:1.5,frameMilliseconds:1500) else { return XCTFail() }
+        guard case .gone = t.observe(text:"",box:.dialogue,now:1.5,frameMilliseconds:1500) else { return XCTFail() }
+        guard case .dialogue(let b,_) = t.observe(text:"Wait here.",box:.dialogue,now:1.6,frameMilliseconds:1600) else { return XCTFail() }
         XCTAssertNotEqual(a.id,b.id); XCTAssertEqual(b.eventBoundary,"source_gap"); XCTAssertGreaterThanOrEqual(b.sourceGapMilliseconds,750)
     }
     func testSpeakerEnrichmentAndInterveningDialoguePreserveRealRepetition() {
@@ -65,6 +65,15 @@ final class Maintenance021Tests: XCTestCase {
         _ = t.observe(text:"What happened?",box:.dialogue,now:0.4,frameMilliseconds:400,speaker:"John")
         guard case .dialogue(let again,_) = t.observe(text:"Wait here.",box:.dialogue,now:0.6,frameMilliseconds:600,speaker:"Arthur") else { return XCTFail() }
         XCTAssertNotEqual(again.id,first.id)
+    }
+    func testCallbackGapIsNotAConfirmedBlankSourceInterval() {
+        var t = DialogueTracker()
+        guard case .dialogue(let a,_) = t.observe(text:"Wait here.",box:.dialogue,now:0,frameMilliseconds:0) else { return XCTFail() }
+        t.markInterrupted()
+        _ = t.observe(text:"",box:.dialogue,now:20,frameMilliseconds:20000)
+        _ = t.observe(text:"",box:.dialogue,now:20.3,frameMilliseconds:20300)
+        guard case .unchanged = t.observe(text:"Wait here.",box:.dialogue,now:20.4,frameMilliseconds:20400) else { return XCTFail() }
+        XCTAssertEqual(a.id,t.current?.id)
     }
     func testCaseOnlySpeakerChangeAndLateEnrichmentCannotReplayAfterInterruption() {
         var t = DialogueTracker()

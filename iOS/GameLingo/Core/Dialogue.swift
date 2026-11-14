@@ -117,23 +117,25 @@ struct DialogueTracker {
     private(set) var current: DialogueJob?
     private var lastSeen: TimeInterval = 0
     private var empty = 0
+    private var emptySince: TimeInterval?
     private var suppressContinuingCurrent = false
     private var firstSeen: TimeInterval = 0
     private var confirmedGap: Int64 = 0
     private(set) var duplicatesSuppressed = 0
     private(set) var correctionsMerged = 0
     static let dropoutGrace: TimeInterval = 0.75
-    mutating func markInterrupted() { suppressContinuingCurrent = current != nil }
+    mutating func markInterrupted() { suppressContinuingCurrent = current != nil; empty = 0; emptySince = nil }
     mutating func observe(text raw: String, box: SourceBox, now: TimeInterval, frameMilliseconds: Int64, speaker: String? = nil, confidence: Double = 1) -> Observation {
         let text = String(DialogueText.normalized(raw).prefix(1800))
         guard !text.isEmpty else {
+            if emptySince == nil { emptySince = now }
             empty += 1
-            guard empty >= 2, let old = current, now-lastSeen >= Self.dropoutGrace else { return .unchanged }
-            confirmedGap = Int64((now-lastSeen)*1000)
+            guard empty >= 2, let old = current, let emptySince, now-emptySince >= Self.dropoutGrace else { return .unchanged }
+            confirmedGap = Int64((now-emptySince)*1000)
             current = nil; generation &+= 1
             return .gone(old.id)
         }
-        empty = 0
+        empty = 0; emptySince = nil
         func speakerKey(_ name: String?) -> String? { name.map { DialogueText.exactWords($0).joined(separator:" ") } }
         if let old = current, suppressContinuingCurrent, box.isAdjacent(to:old.box), speaker == nil || old.speaker == nil || speakerKey(speaker) == speakerKey(old.speaker) {
             let oldWords = DialogueText.exactWords(old.text), newWords = DialogueText.exactWords(text)
@@ -180,7 +182,7 @@ struct DialogueTracker {
         guard let current, current.id == result.id else { return false }
         return current.generation == result.generation || (DialogueText.semanticMarkers(result.text) == DialogueText.semanticMarkers(current.text) && (DialogueText.exactWords(result.text) == DialogueText.exactWords(current.text) || DialogueText.prefix(result.text,current.text)))
     }
-    mutating func reset() { current = nil; empty = 0; suppressContinuingCurrent = false; confirmedGap = 0; duplicatesSuppressed = 0; correctionsMerged = 0; generation &+= 1 }
+    mutating func reset() { current = nil; empty = 0; emptySince = nil; suppressContinuingCurrent = false; confirmedGap = 0; duplicatesSuppressed = 0; correctionsMerged = 0; generation &+= 1 }
 }
 
 /// All access must be serialized by the owner. There is never a dialogue history.
