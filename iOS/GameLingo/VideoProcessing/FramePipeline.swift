@@ -45,6 +45,7 @@ final class FramePipeline {
     private var namesStore: GameNamesStore?
     private var namesSnapshot = GameNamesSnapshot(game:"general")
     private var namesWords = ""
+    private var speakerWords = ""
     private var namesByKey: [String:String] = [:]
     private var namesConfigured = false
     private var namesCacheKey: String { namesSnapshot.outputKey }
@@ -54,7 +55,7 @@ final class FramePipeline {
     } }
     private func applyNames(_ snapshot: GameNamesSnapshot) {
         if !namesConfigured || namesSnapshot.outputKey != snapshot.outputKey {
-            translations = BoundedLRU(capacity:8); namesWords = snapshot.words
+            translations = BoundedLRU(capacity:8); namesWords = snapshot.words; speakerWords = snapshot.speakerWords
             namesByKey = Dictionary(uniqueKeysWithValues:snapshot.entries.map{($0.id,$0.arabic)})
             namesConfigured = true
         }
@@ -210,7 +211,7 @@ final class FramePipeline {
         guard signature.shouldRecognize(buffer,roi:roi,now:now,hasText:tracker.current != nil) else { return }
         do {
             let names = advanced.speakerNames+","+packSpeakerNames
-            let storedNames = quality[.learnNames] ? namesWords : ""
+            let storedNames = quality[.learnNames] ? speakerWords : ""
             let (_,box) = try autoreleasepool { try ocr.recognize(buffer,roi:roi,knownNames:names+","+storedNames,dictionaryNames:names+","+namesWords) }
             guard isActive() else { return }
             let content = ocr.content

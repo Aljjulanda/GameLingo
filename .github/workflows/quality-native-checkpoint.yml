@@ -1,10 +1,12 @@
 name: GameLingo focused native quality tests
 on:
-  push:
-    branches: ['codex/quality-fixes-1']
-    paths: ['.github/workflows/quality-native-checkpoint.yml']
   workflow_dispatch:
     inputs:
+      runner:
+        description: 'Available Mac architecture; Xcode remains 16.4 on both'
+        type: choice
+        default: macos-15-intel
+        options: ['macos-15-intel', 'macos-15']
       test_filters:
         description: 'XCTest class/method identifiers, one per line; focused checks are NOT the release gate'
         type: string
@@ -19,7 +21,7 @@ defaults:
     shell: bash
 jobs:
   native:
-    runs-on: macos-15-intel
+    runs-on: ${{ inputs.runner || 'macos-15-intel' }}
     timeout-minutes: 60
     env:
       DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer

@@ -64,6 +64,8 @@ final class GameNamesTests: XCTestCase {
         _ = try store.learn("Arthur",form:.colon,confidence:1,eventID:"1")
         XCTAssertEqual(store.snapshot.version,version)
         try store.upsert(name("Arthur","آرثر آخر"),explicit:true); XCTAssertGreaterThan(store.snapshot.version,version)
+        try store.upsert(GameName(english:"Valentine",type:.place,arabic:"فالنتاين",source:.manual,count:1),explicit:true)
+        XCTAssertTrue(store.snapshot.words.contains("Valentine")); XCTAssertFalse(store.snapshot.speakerWords.contains("Valentine"))
     }
     func testGeneralNamespaceCannotCollideWithAGameNamedGeneral() throws {
         let root = root(); defer { try? FileManager.default.removeItem(at:root) }

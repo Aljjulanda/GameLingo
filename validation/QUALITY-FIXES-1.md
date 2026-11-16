@@ -373,3 +373,11 @@ into video-range luma/neutral chroma. No production decoder, GPU selection, ROI,
 sampling or assertions are changed. Native recheck is required; not a claimed
 fix yet. Also preserve legacy suppression of a confident Name: with no body,
 while unknown bracket-only narrative and ordinary prefixes stay readable.
+
+Native79374d4 remained queued on Intel for over15minutes, with no other repository
+run in progress. Add a manual checkpoint runner choice (Intel/default or Apple
+Silicon macos-15), keep Xcode16.4 and every test unchanged, and try ARM capacity.
+The full release workflow is unchanged. Remove checkpoint push activation to
+avoid an accidental duplicate expensive job; manual tests remain available.
+Names typed place/term remain in Vision words but are not added as trusted
+PERSON speaker identities. New source still needs Core/native revalidation.

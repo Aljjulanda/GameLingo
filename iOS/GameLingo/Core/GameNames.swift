@@ -26,7 +26,9 @@ struct GameNamesSnapshot: Codable, Equatable {
     var entries: [GameName] = []
     var blocked: [String] = []
     var userDeletions = 0
-    var words: String { entries.sorted { $0.source.priority == $1.source.priority ? $0.id < $1.id : $0.source.priority > $1.source.priority }.prefix(200).map(\.english).joined(separator:",") }
+    private func dictionary(_ names: [GameName]) -> String { names.sorted { $0.source.priority == $1.source.priority ? $0.id < $1.id : $0.source.priority > $1.source.priority }.prefix(200).map(\.english).joined(separator:",") }
+    var words: String { dictionary(entries) }
+    var speakerWords: String { dictionary(entries.filter{$0.type == .person}) }
     var scopeKey: String { (general == true ? "general/" : "game/")+game }
     var outputKey: String { scopeKey+"/"+String(version) }
     func validate() throws {
