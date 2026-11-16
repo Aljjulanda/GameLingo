@@ -142,6 +142,6 @@ enum VisionNameDictionary {
     static func words(_ groups: [String]) -> [String] {
         var seen = Set<String>()
         return groups.flatMap { $0.split(separator:",").map { $0.trimmingCharacters(in:.whitespacesAndNewlines) } }
-            .filter { SpeakerEvidence.shape($0) && !SpeakerEvidence.excluded($0) && seen.insert($0.lowercased()).inserted }.prefix(200).map { $0 }
+            .filter { SpeakerEvidence.isName($0,knownNames:$0,confidence:1) && seen.insert($0.lowercased()).inserted }.prefix(200).map { $0 }
     }
 }

@@ -85,8 +85,8 @@ final class SpeakerQualityTests: XCTestCase {
         XCTAssertNil(DialogueContent.parse("The Stranger: Come here.",knownNames:"",quality:q).speaker)
     }
     func testDictionaryCapDedupExclusionsAndConfidenceCountsAreContentFree() {
-        let names = (0..<250).map { "Name"+String($0) }.joined(separator:",")
-        let words = VisionNameDictionary.words(["Arthur,arthur,Wait,music",names])
+        let names = (0..<250).map { "Name"+String(UnicodeScalar(97+$0/26)!)+String(UnicodeScalar(97+$0%26)!) }.joined(separator:",")
+        let words = VisionNameDictionary.words(["Arthur,arthur,Wait,music,2026,PS5",names])
         XCTAssertEqual(words.count,200); XCTAssertEqual(words.first,"Arthur"); XCTAssertFalse(words.contains("Wait"))
         var counts = NameConfidenceCounts()
         counts.observe([OCRLine(text:"Arthur",box:.dialogue,confidence:0.3),OCRLine(text:"Dutch",box:.dialogue,confidence:0.7),OCRLine(text:"John",box:.dialogue,confidence:0.9),OCRLine(text:"Health",box:.dialogue)])
