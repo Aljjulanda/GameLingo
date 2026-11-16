@@ -15,6 +15,7 @@ struct QualityCaptureRecord: Codable {
     var timestamp: Double? = nil
     var segments: [CaptureLine]? = nil
     var basis: TranslationOrigin? = nil
+    var finalOutput: String? = nil
 }
 /// Explicit local consent only. Fixed filename, bounded session, no uploader.
 /// All methods confined to the pipeline queue (UI actions use that queue too).

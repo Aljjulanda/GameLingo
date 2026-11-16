@@ -38,6 +38,10 @@ struct TranslationDecision {
     var game: String?
     var pack: String?
     var basis: TranslationOrigin? = nil
+    // Present only for opt-in capture/trace; stripped before the RAM reuse cache.
+    var engineInput: String? = nil
+    var rawOutput: String? = nil
+    var withoutEngineTrace: Self { var copy = self; copy.engineInput = nil; copy.rawOutput = nil; return copy }
 }
 struct PackLookupOutcome {
     var text: String?

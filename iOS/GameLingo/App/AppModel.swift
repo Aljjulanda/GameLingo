@@ -17,6 +17,7 @@ final class AppModel: ObservableObject {
         didSet {
             quality.save(); pipeline.configureQuality(quality)
             if oldValue[.measurement] != quality[.measurement] { packLibrary.metrics = HybridMetrics(); packLibrary.store.resetMetrics() }
+            if !oldValue[.learnNames] && quality[.learnNames] { refreshPackNamePairs() }
         }
     }
     @Published var qualityCaptureActive = false
@@ -64,6 +65,16 @@ final class AppModel: ObservableObject {
     @Published var pairing = false
     @Published var addresses: [String] = []
     let packLibrary = GamePackLibrary()
+    let namesLibrary = GameNamesLibrary()
+    private func refreshPackNamePairs() {
+        guard quality[.learnNames] else { return }
+        packLibrary.store.alignedNamePairs { [weak self] game,pack,pairs in
+            guard let self, self.quality[.learnNames], game == self.packLibrary.state.registry.selectedGame,
+                  pack != nil, pack == self.packLibrary.state.registry.packs.first(where:{$0.manifest.gameId == game && $0.enabled})?.id,
+                  self.packLibrary.state.loaded, self.namesLibrary.snapshot.game == (game ?? "general") else { return }
+            self.namesLibrary.seed(pairs)
+        }
+    }
     lazy var translator = OfflineTranslator(packs:packLibrary.store)
     let hub = TVHub()
     let remote = RemotePlayService()
@@ -122,7 +133,13 @@ final class AppModel: ObservableObject {
         pipeline.configureQuality(quality)
         pipeline.onCaptureState = { [weak self] active,file in self?.qualityCaptureActive = active; self?.qualityCaptureFile = file }
         pipeline.captureAction()
-        packLibrary.onNamesChanged = { [weak self] names in self?.pipeline.configurePackNames(names) }
+        namesLibrary.onChange = { [weak self] store,snapshot in self?.pipeline.configureNames(store,snapshot:snapshot) }
+        pipeline.configureNames(namesLibrary.store,snapshot:namesLibrary.snapshot)
+        packLibrary.onNamesChanged = { [weak self] names in
+            guard let self else { return }
+            self.namesLibrary.select(self.packLibrary.state.registry.selectedGame ?? "general")
+            self.pipeline.configurePackNames(names); self.refreshPackNamePairs()
+        }
         do {
             if let data = try KeychainStore.read("consoles.v1") {
                 consoles = try JSONDecoder().decode([ConsoleCredentials].self,from:data)

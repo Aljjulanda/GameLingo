@@ -14,6 +14,7 @@ final class VisionDialogueOCR {
     var captureLines = false
     var quality = QualitySettings()
     private(set) var nameConfidence = NameConfidenceCounts()
+    private var dictionaryKey: String?
     var configuredCustomWords: [String] { request.customWords }
     var usesLanguageCorrection: Bool { request.usesLanguageCorrection }
     private var selector = DialogueSelection()
@@ -68,11 +69,14 @@ final class VisionDialogueOCR {
         }
         return DocumentText.paragraphs(lines)
     }
-    func recognize(_ buffer: CVPixelBuffer, roi: SourceBox, knownNames: String = "") throws -> (String,SourceBox) {
+    func recognize(_ buffer: CVPixelBuffer, roi: SourceBox, knownNames: String = "", dictionaryNames: String? = nil) throws -> (String,SourceBox) {
         guard roi.isValid else { throw LingoError.invalid("منطقة الحوار غير صالحة") }
         // Vision's ROI is lower-left origin. The shared TV protocol uses top-left origin.
         request.regionOfInterest = CGRect(x:roi.x,y:1-roi.y-roi.h,width:roi.w,height:roi.h)
-        request.customWords = quality[.visionNames] ? VisionNameDictionary.words([knownNames]) : []
+        let dictionary = quality[.visionNames] ? (dictionaryNames ?? knownNames) : nil
+        if dictionary != dictionaryKey {
+            request.customWords = dictionary.map { VisionNameDictionary.words([$0]) } ?? []; dictionaryKey = dictionary
+        }
         try VNImageRequestHandler(cvPixelBuffer:buffer,orientation:.up,options:[:]).perform([request])
         var lines: [OCRLine] = [], raw: [OCRLine] = []
         for observation in request.results ?? [] {

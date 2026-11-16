@@ -278,3 +278,59 @@ inside the existing conservative dialogue gate. Center synthetic samples, assert
 raw Vision words separately from selected dialogue, and rerun. Production ROI,
 sampling, selector thresholds and model paths remain unchanged. These failures
 are not waived and B is not yet accepted for progression to C.
+
+### Unit B actual native results and Simulator crash
+
+Run 43866560622 (8874bf6) passed the actual no-model cue/body-rule pipeline,
+raw Vision dictionary controls (names 2/2 and ordinary words 2/2 in both OFF/ON
+modes), direct cue recognition, and original above/side speaker layouts. The
+last original wrapped-speaker case aborted inside Apple's Simulator Metal XPC
+stack, not an XCTest mismatch. Exported crash attachment SHA-verified ZIP:
+12ea8279188de4f0124f8ea7c43023201f47a5e2aad71ab63535fb1192934d69.
+Backtrace: MTLSimDriver sendXPCMessageWithReplySync -> Metal command queue ->
+VideoToolbox pixel transfer -> TextRecognition -> VNCRImageReaderDetector.
+Assertion: an NSString received `bytes`. The same old case passed in the first
+focused attempt. Do not suppress it or count the incomplete run as green.
+Retry the unchanged five-case job on another hosted VM, same Xcode16.4/iOS18.5,
+foreground Vision path and all assertions. Core100 on this source passed in
+43866275783. Production GPU/background/decoder settings remain unchanged.
+
+### Unit B repeated Simulator-only crash; provisional unit C
+
+The unchanged retry on job 133346296709 again passed raw Vision name/ordinary
+controls, direct cue and above/side layouts, but hit the same MTLSimDriver XPC
+assertion in the old wrapped-label case. Its very first cold Vision call also
+exceeded the synthetic pipeline fixture's 45-second deadline. Production already
+uses an autorelease pool per sampled frame. Test image/request loops now match
+that lifetime instead of retaining autoreleased Vision/Metal resources across
+many reads. Cold Vision initialization is logged separately before the unchanged
+45-second publication assertion; no foreground/GPU/ROI/rate setting is changed.
+All five cases are retained. Unit C's dictionary configuration also avoids
+setting empty customWords on untouched OFF requests, while explicitly clearing
+it on ON-to-OFF rollback. Fresh native B+C verification remains mandatory.
+
+Unit C is provisional until its portable and native tests pass. Added bounded
+per-game/general names JSON (protected until first unlock for background access,
+backup excluded), manual/pack/auto priority, explicit deletion blocklist, counts,
+manual editing and JSON import/export. Only actual accepted speaker evidence
+learns: high-confidence colon once; bracket/separate twice on DISTINCT stable
+event IDs. Pending IDs are RAM-only. Separate-label confidence is retained
+independently from body confidence. Thresholds are persisted in Advanced. No
+sentence text is inferred as a name or written as automatic history.
+
+Only active validated exact name->Arabic pack pairs seed the store. Cache versions
+change on output-affecting name changes, not count-only updates; translator and
+frame reuse invalidate safely without resetting tracker/display clocks. Delayed
+old-name results cannot refill the new-version frame cache. Vision dictionaries
+update only on change, cap200 and clear on rollback; dictionary-only names do not
+silently become known speaker identities when learning/store use is OFF.
+
+The four-form placeholder experiment runs REAL Argos on authored synthetic
+fixtures, reports exact form/count/order survival AND comparison of surrounding
+words with unprotected output. Changed markers automatically retry unprotected.
+No production form is selected yet (`NameProtectionPolicy.form=nil`), so there is
+no dead protection switch. Selection/unsupported status follows observed native
+results. Default learning/store-output flag remains OFF. Transliteration uses
+explicit conventional examples plus documented digraph/vowel approximations and
+is editable, not linguistically authoritative. Capture/trace can show the actual
+engine input/raw output only with opt-in diagnostics; reuse caches strip them.

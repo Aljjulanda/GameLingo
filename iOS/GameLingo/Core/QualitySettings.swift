@@ -39,6 +39,7 @@ struct QualitySettings: Equatable {
     var settleSeconds = 3.0
     var nameHeightRatio = 1.4, nameGapRatio = 2.0, nameOverlap = 0.15
     var nameLeftOffset = 0.18
+    var colonNameThreshold = 1, otherNameThreshold = 2
     subscript(_ flag: QualityFlag) -> Bool {
         get { enabled.contains(flag) }
         set { if newValue { enabled.insert(flag) } else { enabled.remove(flag) } }
@@ -58,6 +59,8 @@ struct QualitySettings: Equatable {
         value.nameGapRatio = bounded("quality.nameGapRatio",2,0.5...3)
         value.nameOverlap = bounded("quality.nameOverlap",0.15,0...0.75)
         value.nameLeftOffset = bounded("quality.nameLeftOffset",0.18,0...0.3)
+        if let n = defaults.object(forKey:"quality.colonNameThreshold") as? Int { value.colonNameThreshold = max(1,min(10,n)) }
+        if let n = defaults.object(forKey:"quality.otherNameThreshold") as? Int { value.otherNameThreshold = max(1,min(10,n)) }
         return value
     }
     func save(_ defaults: UserDefaults = .standard) {
@@ -66,5 +69,6 @@ struct QualitySettings: Equatable {
         defaults.set(settleSeconds,forKey:"quality.settleSeconds")
         defaults.set(nameHeightRatio,forKey:"quality.nameHeightRatio"); defaults.set(nameGapRatio,forKey:"quality.nameGapRatio")
         defaults.set(nameOverlap,forKey:"quality.nameOverlap"); defaults.set(nameLeftOffset,forKey:"quality.nameLeftOffset")
+        defaults.set(colonNameThreshold,forKey:"quality.colonNameThreshold"); defaults.set(otherNameThreshold,forKey:"quality.otherNameThreshold")
     }
 }

@@ -42,13 +42,29 @@ final class FramePipeline {
     private var tracker = DialogueTracker()
     private var advanced = AdvancedSettings()
     private var quality = QualitySettings()
+    private var namesStore: GameNamesStore?
+    private var namesSnapshot = GameNamesSnapshot(game:"general")
+    private var namesWords = ""
+    private var namesCacheKey: String { namesSnapshot.outputKey+"/protect="+String(quality[.protectNames]) }
+    func configureNames(_ store: GameNamesStore?, snapshot: GameNamesSnapshot) { queue.async {
+        self.namesStore = store
+        self.applyNames(snapshot)
+    } }
+    private func applyNames(_ snapshot: GameNamesSnapshot) {
+        if namesSnapshot.outputKey != snapshot.outputKey { translations = BoundedLRU(capacity:8) }
+        namesSnapshot = snapshot; namesWords = snapshot.words
+        translator.configureNames(snapshot,protection:quality[.protectNames])
+    }
     private let capture = QualityCapture(folder:FileManager.default.urls(for:.cachesDirectory,in:.userDomainMask)[0].appendingPathComponent("QualityCapture",isDirectory:true))
     var onCaptureState: ((Bool,URL?) -> Void)?
     private var captureGeneration = UUID()
     private var pendingCapture: [CaptureLine] = []
     private var pendingSegments: [CaptureLine] = []
     func configureQuality(_ value: QualitySettings) { queue.async {
+        if self.quality[.protectNames] != value[.protectNames] { self.translations = BoundedLRU(capacity:8) }
         self.quality = value; self.ocr.quality = value; self.ocr.qualityTrace = value[.punctuationTrace]
+        self.translator.configureNames(self.namesSnapshot,protection:value[.protectNames])
+        self.translator.configureEngineDiagnostics(value[.punctuationTrace] || self.capture.active)
         if !value[.sessionCapture] { self.capture.stop(); self.ocr.captureLines = false; self.reportCapture() }
     } }
     func captureAction(start: Bool = false, delete: Bool = false) {
@@ -57,6 +73,7 @@ final class FramePipeline {
             do { if delete { try capture.delete() } else if start && quality[.sessionCapture] { try capture.start(consent:true) } else { capture.stop() } }
             catch { DispatchQueue.main.async { self.onError?("تعذر حفظ تسجيل الاختبار المحلي") } }
             ocr.captureLines = capture.active
+            translator.configureEngineDiagnostics(quality[.punctuationTrace] || capture.active)
             reportCapture()
             if capture.active { queue.asyncAfter(deadline:.now()+1800) { [weak self] in
                 guard let self, self.captureGeneration == ticket else { return }
@@ -65,6 +82,7 @@ final class FramePipeline {
         }
     }
     private func reportCapture() {
+        translator.configureEngineDiagnostics(quality[.punctuationTrace] || capture.active)
         let active = capture.active, file = capture.export()
         DispatchQueue.main.async { self.onCaptureState?(active,file) }
     }
@@ -186,7 +204,9 @@ final class FramePipeline {
         }
         guard signature.shouldRecognize(buffer,roi:roi,now:now,hasText:tracker.current != nil) else { return }
         do {
-            let (_,box) = try autoreleasepool { try ocr.recognize(buffer,roi:roi,knownNames:advanced.speakerNames+","+packSpeakerNames) }
+            let names = advanced.speakerNames+","+packSpeakerNames
+            let storedNames = quality[.learnNames] ? namesWords : ""
+            let (_,box) = try autoreleasepool { try ocr.recognize(buffer,roi:roi,knownNames:names+","+storedNames,dictionaryNames:names+","+namesWords) }
             guard isActive() else { return }
             let content = ocr.content
             if capture.active {
@@ -212,6 +232,12 @@ final class FramePipeline {
                 translator.cancel(); pending = nil; publish(TVProtocol.envelope("subtitle_source_gone",fields:["id":id])); lastTextChange = now
             case .dialogue(var job,let previous):
                 job.engineText = content.engineText; job.cue = content.cue
+                if quality[.learnNames], let speaker = content.speaker, let form = content.labelForm, let namesStore {
+                    do {
+                        if try namesStore.learn(speaker,form:form,confidence:content.speakerConfidence ?? ocr.confidence,eventID:job.id,colonThreshold:quality.colonNameThreshold,otherThreshold:quality.otherNameThreshold) { applyNames(namesStore.snapshot) }
+                    } catch { DispatchQueue.main.async { self.onError?("تعذر حفظ الاسم المتعلّم؛ يستمر الحوار دون تغيير") } }
+                }
+                if quality[.learnNames], let speaker = job.speaker { job.speakerArabic = namesSnapshot.entries.first{$0.id == GameName.key(speaker)}?.arabic }
                 translator.packs?.recordDialogue(job.id)
                 if let previous { publish(TVProtocol.envelope("subtitle_source_gone",fields:["id":previous])) }
                 guard stability.shouldPublish(job) else { memory.observe(job,now:now); break }
@@ -231,6 +257,7 @@ final class FramePipeline {
         guard isActive(), !reading, !translating, let job = pending else { return }
         pending = nil; translating = true
         let epoch = runID
+        let namesKey = namesCacheKey
         memory.prune(now:ProcessInfo.processInfo.systemUptime)
         let cached = translations.get(job.id)
         let engineInput = job.engineText ?? job.text
@@ -247,13 +274,14 @@ final class FramePipeline {
                 if self.isActive() && epoch == self.runID && self.tracker.accepts(job) {
                     var delivered = job
                     if let current = self.tracker.current, DialogueText.exactWords(current.text) == DialogueText.exactWords(job.text) { delivered.speaker = current.speaker }
+                    delivered.speakerArabic = self.quality[.learnNames] ? delivered.speaker.flatMap { name in self.namesSnapshot.entries.first{$0.id == GameName.key(name)}?.arabic } : nil
                     switch result {
                     case .success(let decision):
                         let text = decision.text
                         if self.stability.shouldPublish(delivered) {
                             if !reusable { self.metrics.translationMilliseconds = latency; self.translationSamples.record(latency); self.metrics.translationP95 = self.translationSamples.p95 }
                             self.stability.didPublish(delivered)
-                            self.translations.put((job.text,text,decision),for:job.id)
+                            if namesKey == self.namesCacheKey { self.translations.put((job.text,text,decision.withoutEngineTrace),for:job.id) }
                             self.memory.observe(job,now:ProcessInfo.processInfo.systemUptime)
                             var message = TVProtocol.qualityFields(TVProtocol.subtitle(delivered,arabic:text,now:TVHub.now()),settings:self.quality,origin:decision.origin,basis:decision.basis)
                             if self.quality[.stageCues], let cue = job.cue { message["cue"] = cue; if cueOnly { message["cue_only"] = true } }
@@ -261,10 +289,10 @@ final class FramePipeline {
                                 self.translator.packs?.recordPublished(PublishedTranslation(eventID:delivered.id,game:decision.game,pack:decision.pack,origin:decision.origin,fallback:decision.fallback,basis:decision.basis))
                             }
                             if self.quality[.punctuationTrace] {
-                                self.metrics.punctuationTrace = punctuationTrace + " | input " + SubtitlePresentation.punctuation(engineInput) + " | raw " + SubtitlePresentation.punctuation(text) + " | repair " + SubtitlePresentation.punctuation(text) + " | wire " + SubtitlePresentation.punctuation(message["translated"] as? String ?? "")
+                                self.metrics.punctuationTrace = punctuationTrace + " | input " + SubtitlePresentation.punctuation(decision.engineInput ?? engineInput) + " | raw " + SubtitlePresentation.punctuation(decision.rawOutput ?? text) + " | repair " + SubtitlePresentation.punctuation(text) + " | wire " + SubtitlePresentation.punctuation(message["translated"] as? String ?? "")
                             }
                             if self.capture.active {
-                                do { try self.capture.append(QualityCaptureRecord(eventID:delivered.id,lines:captureLines,parsed:job.text,engineInput:engineInput,engineOutput:text,origin:decision.origin,stage:.published,timestamp:self.capture.elapsed,segments:captureSegments,basis:decision.basis)) }
+                                do { try self.capture.append(QualityCaptureRecord(eventID:delivered.id,lines:captureLines,parsed:job.text,engineInput:decision.engineInput ?? engineInput,engineOutput:decision.rawOutput ?? text,origin:decision.origin,stage:.published,timestamp:self.capture.elapsed,segments:captureSegments,basis:decision.basis,finalOutput:text)) }
                                 catch { self.capture.stop() }
                                 self.reportCapture()
                             }

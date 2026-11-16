@@ -103,6 +103,7 @@ struct DialogueJob: Equatable {
     var sourceGapMilliseconds: Int64 = 0
     var engineText: String? = nil
     var cue: String? = nil
+    var speakerArabic: String? = nil
 }
 
 enum Observation {

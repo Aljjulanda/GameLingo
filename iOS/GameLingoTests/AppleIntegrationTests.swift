@@ -25,6 +25,7 @@ final class AppleIntegrationTests: XCTestCase {
     }
     func testVisionStructuredSpeakerAboveAndOnBothSides() throws {
         for layout in ["above","left","right"] {
+            try autoreleasepool {
             let pixels = try visionFixture { _ in
                 let body = "We need to leave now."
                 let bodyX: CGFloat = layout == "left" ? 370 : 270
@@ -37,10 +38,12 @@ final class AppleIntegrationTests: XCTestCase {
             XCTAssertEqual(ocr.content.speaker?.lowercased(),"arthur",layout+": "+ocr.content.text)
             XCTAssertTrue(ocr.content.text.lowercased().contains("we need to leave"),layout+": "+ocr.content.text)
             XCTAssertFalse(ocr.content.text.lowercased().contains("arthur"),layout)
+            }
         }
     }
     func testVisionWrappedSpeakerIsExcludedFromEngineSource() throws {
         for label in ["(Arthur)","[Arthur]"] {
+            try autoreleasepool {
             let pixels = try visionFixture { _ in
                 (label+" We need to leave now." as NSString).draw(at:CGPoint(x:250,y:530),withAttributes:[.font:UIFont.systemFont(ofSize:32),.foregroundColor:UIColor.white])
             }
@@ -48,17 +51,20 @@ final class AppleIntegrationTests: XCTestCase {
             XCTAssertEqual(ocr.content.speaker?.lowercased(),"arthur")
             XCTAssertTrue(ocr.content.text.lowercased().contains("we need to leave"))
             XCTAssertFalse(ocr.content.text.lowercased().contains("arthur"))
+            }
         }
     }
     func testQualityVisionNamesDictionaryDoesNotDegradeOrdinaryWords() throws {
         var nameCorrect = [0,0], ordinaryCorrect = [0,0]
         for source in ["Quillan: We should leave now.","The Stranger: We should leave now.","Wait: do not open the door.","Look: the river is deep."] {
+            try autoreleasepool {
             let pixels = try visionFixture { _ in
                 let font = UIFont.systemFont(ofSize:30)
                 let width = (source as NSString).size(withAttributes:[.font:font]).width
                 (source as NSString).draw(at:CGPoint(x:(1280-width)/2,y:530),withAttributes:[.font:font,.foregroundColor:UIColor.white])
             }
             for enabled in [false,true] {
+                try autoreleasepool {
                 let ocr = VisionDialogueOCR(); ocr.quality[.visionNames] = enabled
                 ocr.quality[.speakerClassification] = true
                 ocr.captureLines = true // Synthetic fixture observations only; no file recorder.
@@ -76,6 +82,8 @@ final class AppleIntegrationTests: XCTestCase {
                     XCTAssertEqual(DialogueText.exactWords(text),DialogueText.exactWords(source))
                     XCTAssertNil(ocr.content.speaker,"Ordinary prefix must remain dialogue")
                 }
+                }
+            }
             }
         }
         XCTAssertGreaterThanOrEqual(nameCorrect[1],nameCorrect[0]); XCTAssertEqual(nameCorrect[1],2)
@@ -95,10 +103,18 @@ final class AppleIntegrationTests: XCTestCase {
     }
     func testQualityPipelineCueBypassAndBodyRuleWorkWithoutAModel() throws {
         for only in [false,true] {
+            try autoreleasepool {
             let pixels = try visionFixture { _ in
                 ((only ? "[laughs]" : "[laughs] We should leave now.") as NSString).draw(at:CGPoint(x:only ? 550 : 350,y:530),withAttributes:[.font:UIFont.systemFont(ofSize:31),.foregroundColor:UIColor.white])
             }
             let translator = OfflineTranslator(folder:FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString))
+            // The production sample() already drains an autorelease pool per
+            // OCR frame. Match that lifetime here; keep foreground/GPU settings.
+            // Measure cold host initialization separately from the existing
+            // 45-second publication assertion, as in the Smart Reading fixture.
+            let cold = ProcessInfo.processInfo.systemUptime
+            try autoreleasepool { _ = try VisionDialogueOCR().recognize(pixels,roi:.dialogue) }
+            print("SYNTHETIC_VISION_COLD_HOST_MS \((ProcessInfo.processInfo.systemUptime-cold)*1000)")
             XCTAssertFalse(translator.installed)
             let published = expectation(description:"Cue and body bypass require no model")
             let pipeline = FramePipeline(translator:translator) { message in
@@ -114,6 +130,25 @@ final class AppleIntegrationTests: XCTestCase {
             pipeline.configureAdvanced(advanced); pipeline.start(roi:.dialogue,mode:.balanced)
             DispatchQueue.global().asyncAfter(deadline:.now()+0.5) { pipeline.offer(pixels) }
             wait(for:[published],timeout:45); pipeline.stop()
+            }
+        }
+    }
+    func testQualityVisionStoredDictionaryRefreshAndRollback() throws {
+        let source = "We should leave now."
+        let pixels = try visionFixture { _ in
+            let font = UIFont.systemFont(ofSize:31), text = source as NSString
+            let width = text.size(withAttributes:[.font:font]).width
+            text.draw(at:CGPoint(x:(1280-width)/2,y:530),withAttributes:[.font:font,.foregroundColor:UIColor.white])
+        }
+        let ocr = VisionDialogueOCR()
+        for (enabled,word) in [(true,"Arthur"),(true,"John"),(false,"John")] {
+            try autoreleasepool {
+                ocr.quality[.visionNames] = enabled
+                let (text,_) = try ocr.recognize(pixels,roi:.dialogue,knownNames:"",dictionaryNames:word)
+                XCTAssertEqual(ocr.configuredCustomWords,enabled ? [word] : [])
+                XCTAssertEqual(DialogueText.exactWords(text),DialogueText.exactWords(source))
+                XCTAssertNil(ocr.content.speaker)
+            }
         }
     }
     func testNativeArgosAndContextRuleBenchmarkOnSyntheticDialogue() throws {

@@ -29,7 +29,11 @@ enum TVProtocol {
         fields["event_fresh"] = !job.correction
         fields["meaningful_correction"] = job.meaningfulCorrection
         if !job.eventBoundary.isEmpty { fields["event_boundary"] = job.eventBoundary; fields["source_gap_ms"] = job.sourceGapMilliseconds }
-        if let speaker = job.speaker { fields["speaker"] = ["name":String(speaker.prefix(40))] }
+        if let speaker = job.speaker {
+            var label = ["name":String(speaker.prefix(40))]
+            if let arabic = job.speakerArabic { label["arabic"] = String(arabic.prefix(100)) }
+            fields["speaker"] = label
+        }
         return envelope(job.correction ? "subtitle_update" : "subtitle_show",fields:fields)
     }
     static func qualityFields(_ message: [String:Any], settings: QualitySettings, origin: TranslationOrigin, basis: TranslationOrigin? = nil) -> [String:Any] {

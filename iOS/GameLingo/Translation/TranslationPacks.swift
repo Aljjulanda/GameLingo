@@ -25,6 +25,20 @@ final class TranslationPackStore {
     private var activation = 0
     private var metrics = HybridMetrics()
     private var eventIDs = BoundedLRU<String,Bool>(capacity:64)
+    func alignedNamePairs(_ completion: @escaping (String?,String?,[(String,String)]) -> Void) {
+        queue.async { [self] in
+            let item = state.loaded ? state.registry.packs.first{$0.manifest.gameId == state.registry.selectedGame && $0.enabled} : nil
+            var pairs: [(String,String)] = []
+            if let item, let database {
+                for name in item.manifest.speakerNames ?? [] where SpeakerEvidence.isName(name,knownNames:"",confidence:1) {
+                    if let match = try? database.lookup(name,category:"dialogue"), match.kind == .exact, let arabic = match.text,
+                       GameName(english:name,type:.person,arabic:arabic,source:.pack,count:0).valid { pairs.append((name,arabic)) }
+                }
+            }
+            let game = state.registry.selectedGame, pack = item?.id, result = pairs
+            DispatchQueue.main.async { completion(game,pack,result) }
+        }
+    }
     init(root: URL? = nil) {
         self.root = root ?? FileManager.default.urls(for:.applicationSupportDirectory,in:.userDomainMask)[0].appendingPathComponent("GameTranslationLibrary",isDirectory:true)
         queue.async { [self] in

@@ -42,7 +42,7 @@ enum StructuredDialogue {
                 let body = group(line,excluding:nil)
                 let text = body.map { $0 == line ? parsed.text : $0.text }.joined(separator:" ")
                 var content = parsed
-                content = DialogueContent(text:DialogueText.normalized(text),speaker:speaker,uncertainSpeaker:parsed.uncertainSpeaker,engineText:parsed.engineText.map { _ in ([parsed.engineText ?? ""]+body.filter{$0 != line}.map(\.text)).joined(separator:" ") },cue:parsed.cue,speakerHidden:parsed.speakerHidden,labelForm:parsed.labelForm)
+                content = DialogueContent(text:DialogueText.normalized(text),speaker:speaker,uncertainSpeaker:parsed.uncertainSpeaker,engineText:parsed.engineText.map { _ in ([parsed.engineText ?? ""]+body.filter{$0 != line}.map(\.text)).joined(separator:" ") },cue:parsed.cue,speakerHidden:parsed.speakerHidden,labelForm:parsed.labelForm,speakerConfidence:parsed.speakerConfidence)
                 return Reading(content:content,box:union(body),confidence:body.map(\.confidence).min() ?? 0)
             }
         }
@@ -66,10 +66,11 @@ enum StructuredDialogue {
             guard let anchor = matches.max(by: { $0.box.w < $1.box.w }) else { continue }
             let body = group(anchor,excluding:label)
             guard !body.isEmpty else { continue }
-            let content: DialogueContent
+            var content: DialogueContent
             if quality[.speakerClassification] || quality[.stageCues] {
                 content = DialogueContent.parse(label.text+"\n"+body.map(\.text).joined(separator:" "),knownNames:knownNames,separateLabel:true,confidence:min(label.confidence,body.map(\.confidence).min() ?? 0),quality:quality)
-            } else { content = DialogueContent(text:DialogueText.normalized(body.map(\.text).joined(separator:" ")),speaker:DialogueContent.speakerLabel(label.text)) }
+            } else { content = DialogueContent(text:DialogueText.normalized(body.map(\.text).joined(separator:" ")),speaker:DialogueContent.speakerLabel(label.text),labelForm:.separate) }
+            content.speakerConfidence = label.confidence
             return Reading(content:content,box:union(body),confidence:body.map(\.confidence).min() ?? 0)
         }
         return nil

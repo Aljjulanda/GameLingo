@@ -102,7 +102,7 @@ enum SpeakerEvidence {
                (separateLabel && confidence >= 0.35 && DialogueText.words(body).count >= 2 &&
                 (known(label,knownNames) || DialogueContent.speakerLabel(label).first?.isUppercase == true)) {
                 let confident = isName(label,knownNames:knownNames,confidence:confidence)
-                content = DialogueContent(text:DialogueText.normalized(body),speaker:confident ? DialogueContent.speakerLabel(label) : nil,uncertainSpeaker:!confident,speakerHidden:!confident,labelForm:form)
+                content = DialogueContent(text:DialogueText.normalized(body),speaker:confident ? DialogueContent.speakerLabel(label) : nil,uncertainSpeaker:!confident,speakerHidden:!confident,labelForm:form,speakerConfidence:confidence)
             } else { content = DialogueContent(text:DialogueText.normalized(text),speaker:nil,uncertainSpeaker:candidate != nil) }
         } else {
             content = DialogueContent.parse(text,knownNames:knownNames,separateLabel:separateLabel,confidence:confidence)
@@ -113,7 +113,7 @@ enum SpeakerEvidence {
         if !cues.isEmpty {
             content.engineText = DialogueText.normalized(text)
             content.cue = cues.map(\.1).joined(separator:" ")
-            content = DialogueContent(text:DialogueText.normalized(cues.map(\.0).joined(separator:" ")+" "+text),speaker:content.speaker,uncertainSpeaker:content.uncertainSpeaker,engineText:content.engineText,cue:content.cue,speakerHidden:content.speakerHidden,labelForm:content.labelForm)
+            content = DialogueContent(text:DialogueText.normalized(cues.map(\.0).joined(separator:" ")+" "+text),speaker:content.speaker,uncertainSpeaker:content.uncertainSpeaker,engineText:content.engineText,cue:content.cue,speakerHidden:content.speakerHidden,labelForm:content.labelForm,speakerConfidence:content.speakerConfidence)
         }
         return content
     }
