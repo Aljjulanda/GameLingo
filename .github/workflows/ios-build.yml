@@ -23,7 +23,7 @@ jobs:
   ios:
     # Quality branch pushes use the focused workflow; manual dispatch executes
     # every archive/native/GUI step below. Checkpoints cannot cancel that run.
-    runs-on: macos-15
+    runs-on: macos-15-intel
     timeout-minutes: 90
     env:
       DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer

@@ -60,9 +60,17 @@ final class QualityCapture {
 enum QualityReplay {
     static func run(_ data: Data, translate: (String) -> String) throws -> [String] {
         guard data.count <= 4*1024*1024 else { throw LingoError.invalid("ملف الاختبار كبير") }
-        return try data.split(separator:10).map { line in
+        var selector = DialogueSelection(), tracker = DialogueTracker(), stability = PublicationStability()
+        var result: [String] = [], clock = 0.0
+        for line in data.split(separator:10) {
+            clock += 0.6
             let record = try JSONDecoder().decode(QualityCaptureRecord.self,from:Data(line))
-            return translate(record.engineInput)
+            let lines = record.lines.map{OCRLine(text:$0.text,box:$0.box,confidence:$0.confidence)}
+            let reading = DialogueObservation.resolve(lines,roi:.dialogue,knownNames:"",selector:&selector)
+            if case .dialogue(let job,_) = tracker.observe(text:reading.content.text,box:reading.box,now:clock,frameMilliseconds:Int64(clock*1000),speaker:reading.content.speaker,confidence:reading.confidence), stability.shouldPublish(job) {
+                result.append(translate(job.text)); stability.didPublish(job)
+            }
         }
+        return result
     }
 }

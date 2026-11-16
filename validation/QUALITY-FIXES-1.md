@@ -104,3 +104,30 @@ No unit is certified yet and no release was published.
   patterns, waits for provider dismissal before querying AUT accessibility,
   and still verifies the delegate-delivered filename. These test-only changes
   remain unverified until the actual native GUI run passes.
+
+### Native environment blocker and authorized retry
+
+Full Apple run https://github.com/Aljjulanda/GameLingo/actions/runs/43841413404
+never acquired a runner and failed before any build/test step. GitHub's exact
+annotation: "The job was not acquired by Runner of type hosted even after
+multiple attempts", plus an explicit macOS ARM64 capacity notice. This is not a
+compiler/test failure and produced no IPA. Latest portable run
+https://github.com/Aljjulanda/GameLingo/actions/runs/43843783626 passed 87 XCTest
+cases at `d54e9eb`; native integration/GUI checks remain pending.
+
+The user was informed and replied "نفذ اللي تشوفه مناسب" to the runner choice.
+Use macos-15-intel with **the same Xcode 16.4 and all existing build/test gates**.
+The archive destination remains generic physical iOS/ARM64. Simulator native
+inference on Intel uses the existing FLOAT32 branch, so timings/model results
+must be identified as Intel Simulator, not phone/ARM64 measurements. No signing,
+security or mandatory test bypass is introduced.
+
+Replay now calls the same production post-OCR selector/parser and the existing
+tracker/publication gate with an explicit synchronous stub. The selector was
+extracted verbatim from Vision into existing Core/OCRDialogue.swift, verified by
+literal function-body comparison; Vision delegates to it. Original fallback
+box arithmetic is retained, including floating-point representation. Sampling,
+ROI and duplicate algorithms are unchanged. Added real replay fixtures for
+speaker segmentation, duplicate suppression and negative menu selection.
+Unit A is still awaiting native verification. Units B–I have not started, and
+there is no new release.

@@ -77,7 +77,7 @@ final class QualityMeasurementTests: XCTestCase {
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at:folder) }
         let capture = QualityCapture(folder:folder,byteLimit:1800,retention:60)
-        let record = QualityCaptureRecord(eventID:"synthetic",lines:[CaptureLine(text:"Move now.",box:.dialogue,confidence:0.9)],parsed:"Move now.",engineInput:"Move now.",engineOutput:"تحرك الآن.",origin:.argosInference)
+        let record = QualityCaptureRecord(eventID:"synthetic",lines:[CaptureLine(text:"Move now.",box:SourceBox(x:0.25,y:0.78,w:0.5,h:0.04),confidence:0.9)],parsed:"Move now.",engineInput:"Move now.",engineOutput:"تحرك الآن.",origin:.argosInference)
         try capture.start(consent:false); try capture.append(record)
         XCTAssertNil(capture.export())
         let now = Date(); try capture.start(consent:true,now:now)
@@ -113,5 +113,16 @@ final class QualityMeasurementTests: XCTestCase {
         XCTAssertEqual(first,records.map(\.engineOutput))
         XCTAssertEqual(first,try QualityReplay.run(data,translate:{authored[$0] ?? "MISSING STUB"}))
         XCTAssertEqual(records.count,6)
+    }
+    func testReplayRunsRealPostOCRSelectionParsingAndDuplicateGate() throws {
+        let line = CaptureLine(text:"Alex: Move now.",box:SourceBox(x:0.25,y:0.78,w:0.5,h:0.04),confidence:0.95)
+        let record = QualityCaptureRecord(eventID:"original",lines:[line],parsed:"Move now.",engineInput:"Move now.",engineOutput:"",origin:.argosInference)
+        var data = try JSONEncoder().encode(record); data.append(10)
+        data.append(try JSONEncoder().encode(record)); data.append(10)
+        let menu = QualityCaptureRecord(eventID:"menu",lines:[CaptureLine(text:"Settings",box:line.box,confidence:1),CaptureLine(text:"Options",box:SourceBox(x:0.25,y:0.84,w:0.5,h:0.04),confidence:1)],parsed:"",engineInput:"",engineOutput:"",origin:.argosInference)
+        data.append(try JSONEncoder().encode(menu))
+        var requests: [String] = []
+        let result = try QualityReplay.run(data,translate:{ requests.append($0); return "stub" })
+        XCTAssertEqual(requests,["Move now."]); XCTAssertEqual(result,["stub"])
     }
 }
