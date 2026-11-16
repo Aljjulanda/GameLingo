@@ -87,6 +87,29 @@ final class AppleIntegrationTests: XCTestCase {
         XCTAssertEqual(ocr.content.engineText,"We should leave now.")
         XCTAssertEqual(ocr.content.cue,"(ضحك)"); XCTAssertNil(ocr.content.speaker)
     }
+    func testQualityPipelineCueBypassAndBodyRuleWorkWithoutAModel() throws {
+        for only in [false,true] {
+            let pixels = try visionFixture { _ in
+                ((only ? "[laughs]" : "[laughs] We should leave now.") as NSString).draw(at:CGPoint(x:350,y:530),withAttributes:[.font:UIFont.systemFont(ofSize:31),.foregroundColor:UIColor.white])
+            }
+            let translator = OfflineTranslator(folder:FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString))
+            XCTAssertFalse(translator.installed)
+            let published = expectation(description:"Cue and body bypass require no model")
+            let pipeline = FramePipeline(translator:translator) { message in
+                guard message["type"] as? String == "subtitle_show" else { return }
+                XCTAssertEqual(message["translated"] as? String,only ? "(ضحك)" : "علينا المغادرة الآن.")
+                XCTAssertEqual(message["cue"] as? String,"(ضحك)")
+                XCTAssertEqual(message["cue_only"] as? Bool,only ? true : nil)
+                published.fulfill()
+            }
+            var q = QualitySettings(); q[.stageCues] = true; q[.speakerClassification] = true
+            pipeline.configureQuality(q)
+            var advanced = AdvancedSettings(); advanced.terminology = "We should leave now.=علينا المغادرة الآن."
+            pipeline.configureAdvanced(advanced); pipeline.start(roi:.dialogue,mode:.balanced)
+            DispatchQueue.global().asyncAfter(deadline:.now()+0.5) { pipeline.offer(pixels) }
+            wait(for:[published],timeout:45); pipeline.stop()
+        }
+    }
     func testNativeArgosAndContextRuleBenchmarkOnSyntheticDialogue() throws {
         let folder = try XCTUnwrap(Bundle(for:Self.self).url(forResource:"en_ar",withExtension:nil))
         var error: NSError?

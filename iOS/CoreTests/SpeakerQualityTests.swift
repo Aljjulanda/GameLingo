@@ -20,6 +20,8 @@ final class SpeakerQualityTests: XCTestCase {
         let combined = DialogueContent.parse("Arthur: [laughs] Go now.",knownNames:"",quality:q)
         XCTAssertEqual(combined.speaker,"Arthur"); XCTAssertEqual(combined.engineText,"Go now.")
         XCTAssertEqual(combined.cue,"(ضحك)")
+        let multiple = DialogueContent.parse("[laughs] [coughs] Arthur: (sighs) Go now.",knownNames:"",quality:q)
+        XCTAssertEqual(multiple.engineText,"Go now."); XCTAssertEqual(multiple.cue,"(ضحك) (سعال) (تنهّد)"); XCTAssertEqual(multiple.speaker,"Arthur")
     }
     func testMiddleBracketsNarrativeAndOrdinaryPrefixesSurvive() {
         let q = flags(.stageCues,.speakerClassification)

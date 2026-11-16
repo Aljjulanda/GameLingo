@@ -69,8 +69,10 @@ enum SpeakerEvidence {
     static func parse(_ input: String, knownNames: String, separateLabel: Bool, confidence: Double, quality: QualitySettings) -> DialogueContent {
         var text = SubtitlePresentation.clean(input), cues: [(String,String)] = []
         func takeCue() {
-            guard quality[.stageCues], let cue = StageDirections.leading(text) else { return }
-            cues.append((cue.raw,cue.arabic)); text = cue.rest
+            guard quality[.stageCues] else { return }
+            while let cue = StageDirections.leading(text) {
+                cues.append((cue.raw,cue.arabic)); text = cue.rest
+            }
         }
         takeCue()
         if quality[.stageCues], cues.isEmpty, let arabic = StageDirections.arabic(text),
