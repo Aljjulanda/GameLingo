@@ -8,6 +8,16 @@ enum SubtitlePresentation {
     }
     /// Content-free stage trace: diagnose bracket origin without logging dialogue.
     static func punctuation(_ text: String) -> String {
-        "()[]:\"؟?".map { mark in "\(mark)=\(text.filter{$0==mark}.count)" }.joined(separator:" ")
+        let marks = Set("()[]:\"'?؟!.…،؛«»-—")
+        let characters = Array(text)
+        let first = text.unicodeScalars.first { CharacterSet.letters.contains($0) }
+        let direction: String
+        if let first { direction = (0x0590...0x08ff).contains(first.value) ? "R" : "L" } else { direction = "none" }
+        let positions = characters.enumerated().compactMap { index, mark -> String? in
+            guard marks.contains(mark) else { return nil }
+            let location = index == 0 ? "start" : index == characters.count-1 ? "end" : "middle"
+            return "\(mark):\(location)"
+        }
+        return "logical first=\(direction); " + positions.joined(separator:" ")
     }
 }

@@ -32,6 +32,11 @@ enum TVProtocol {
         if let speaker = job.speaker { fields["speaker"] = ["name":String(speaker.prefix(40))] }
         return envelope(job.correction ? "subtitle_update" : "subtitle_show",fields:fields)
     }
+    static func qualityFields(_ message: [String:Any], settings: QualitySettings, origin: TranslationOrigin) -> [String:Any] {
+        var message = message
+        if settings[.provenanceMarker] { message["provenance"] = origin.rawValue }
+        return message
+    }
 }
 
 struct TVSequence {

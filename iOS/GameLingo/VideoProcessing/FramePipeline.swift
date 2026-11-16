@@ -39,6 +39,22 @@ final class FramePipeline {
     private var signature = FrameSignature()
     private var tracker = DialogueTracker()
     private var advanced = AdvancedSettings()
+    private var quality = QualitySettings()
+    private let capture = QualityCapture(folder:FileManager.default.urls(for:.cachesDirectory,in:.userDomainMask)[0].appendingPathComponent("QualityCapture",isDirectory:true))
+    var onCaptureState: ((Bool,URL?) -> Void)?
+    private var pendingCapture: [CaptureLine] = []
+    func configureQuality(_ value: QualitySettings) { queue.async { self.quality = value } }
+    func captureAction(start: Bool = false, delete: Bool = false) {
+        queue.async { [self] in
+            do { if delete { try capture.delete() } else if start { try capture.start(consent:true) } else { capture.stop() } }
+            catch { DispatchQueue.main.async { self.onError?("تعذر حفظ تسجيل الاختبار المحلي") } }
+            reportCapture()
+        }
+    }
+    private func reportCapture() {
+        let active = capture.active, file = capture.export()
+        DispatchQueue.main.async { self.onCaptureState?(active,file) }
+    }
     private var packSpeakerNames = ""
     private var memory = DialogueMemory()
     private var stability = PublicationStability()
@@ -107,6 +123,7 @@ final class FramePipeline {
         tracker.markInterrupted()
     } }
     func stop() {
+        queue.async { self.capture.stop(); self.reportCapture() }
         translator.cancel()
         slotLock.lock(); active = false; latest = nil; slotLock.unlock()
         queue.async { [self] in reset(); publish(TVProtocol.envelope("subtitle_clear")) }
@@ -175,6 +192,7 @@ final class FramePipeline {
                 if let previous { publish(TVProtocol.envelope("subtitle_source_gone",fields:["id":previous])) }
                 guard stability.shouldPublish(job) else { memory.observe(job,now:now); break }
                 if !job.correction { translator.cancel() }
+                pendingCapture = capture.active ? ocr.lastLines.map{ CaptureLine(text:$0.text,box:$0.box,confidence:$0.confidence) } : []
                 pending = job; lastTextChange = now; submit()
             }
             metrics.duplicatesSuppressed = tracker.duplicatesSuppressed
@@ -193,7 +211,9 @@ final class FramePipeline {
         let reusable = !job.meaningfulCorrection && cached.map { DialogueText.same($0.0,job.text) && !DialogueText.prefix($0.0,job.text) } == true
         let override = reusable ? cached?.1 : Terminology.resolve(job.text,rules:advanced.terminology,context:memory.entries.filter { $0.id != job.id })
         let punctuationTrace = metrics.punctuationTrace
-        let completion: (Result<String,Error>,Double) -> Void = { [weak self] result,latency in
+        let captureLines = pendingCapture
+        let selection = translator.packs?.publication(job.id,origin:reusable ? .reuse : .rule)
+        let completion: (Result<TranslationDecision,Error>,Double) -> Void = { [weak self] result,latency in
             guard let self else { return }
             self.queue.async {
                 self.translating = false
@@ -201,14 +221,27 @@ final class FramePipeline {
                     var delivered = job
                     if let current = self.tracker.current, DialogueText.exactWords(current.text) == DialogueText.exactWords(job.text) { delivered.speaker = current.speaker }
                     switch result {
-                    case .success(let text):
+                    case .success(let decision):
+                        let text = decision.text
                         if self.stability.shouldPublish(delivered) {
                             if !reusable { self.metrics.translationMilliseconds = latency; self.translationSamples.record(latency); self.metrics.translationP95 = self.translationSamples.p95 }
                             self.stability.didPublish(delivered)
                             self.translations.put((job.text,text),for:job.id)
                             self.metrics.punctuationTrace = punctuationTrace + " | model " + SubtitlePresentation.punctuation(text) + " | wire " + SubtitlePresentation.punctuation(SubtitlePresentation.clean(text))
                             self.memory.observe(job,now:ProcessInfo.processInfo.systemUptime)
-                            self.publish(TVProtocol.subtitle(delivered,arabic:text,now:TVHub.now()))
+                            let message = TVProtocol.qualityFields(TVProtocol.subtitle(delivered,arabic:text,now:TVHub.now()),settings:self.quality,origin:decision.origin)
+                            if self.quality[.measurement] {
+                                self.translator.packs?.recordPublished(PublishedTranslation(eventID:delivered.id,game:decision.game,pack:decision.pack,origin:decision.origin,fallback:decision.fallback))
+                            }
+                            if self.quality[.punctuationTrace] {
+                                self.metrics.punctuationTrace = punctuationTrace + " | input " + SubtitlePresentation.punctuation(job.text) + " | raw " + SubtitlePresentation.punctuation(text) + " | repair " + SubtitlePresentation.punctuation(text) + " | wire " + SubtitlePresentation.punctuation(message["translated"] as? String ?? "")
+                            }
+                            if self.capture.active {
+                                do { try self.capture.append(QualityCaptureRecord(eventID:delivered.id,lines:captureLines,parsed:job.text,engineInput:job.text,engineOutput:text,origin:decision.origin)) }
+                                catch { self.capture.stop() }
+                                self.reportCapture()
+                            }
+                            self.publish(message)
                         }
                     case .failure(let error): if !(error is CancellationError) { DispatchQueue.main.async { self.onError?(error.localizedDescription) } }
                     }
@@ -216,8 +249,13 @@ final class FramePipeline {
                 self.submit()
             }
         }
-        if let override { completion(.success(override),0) }
-        else { translator.translate(job.text,eventID:job.id,completion:completion) }
+        if let override {
+            if quality[.measurement] { translator.packs?.recordAttempt(reusable ? .reuse : .rule) }
+            completion(.success(TranslationDecision(text:override,origin:reusable ? .reuse : .rule,fallback:nil,game:selection?.game,pack:selection?.pack)),0)
+        } else { translator.translateDetailed(job.text,eventID:job.id) { result,latency in
+            if let origin = try? result.get().origin { self.translator.packs?.recordAttempt(origin) }
+            completion(result,latency)
+        } }
     }
     func requestReading(ticket: UUID) {
         translator.cancel()

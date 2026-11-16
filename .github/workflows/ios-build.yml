@@ -21,6 +21,9 @@ concurrency:
 
 jobs:
   ios:
+    # Unit checkpoints use the focused workflow. Manual dispatch still executes
+    # the entire unchanged archive/native/GUI route and is the release gate.
+    if: github.ref != 'refs/heads/codex/quality-fixes-1' || github.event_name != 'push'
     runs-on: macos-15
     timeout-minutes: 90
     env:

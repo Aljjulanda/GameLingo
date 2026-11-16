@@ -122,6 +122,7 @@ struct TranslationView: View {
                 Section("حزم الألعاب") {
                     NavigationLink("مكتبة ترجمات الألعاب") { GamePackLibraryView(library:model.packLibrary) }.accessibilityIdentifier("gamePacks.library")
                 }
+                QualitySettingsSection()
                 Section("تشغيل الجلسة والخلفية") {
                     Toggle("تجربة الصوت الصامت في الخلفية",isOn:$model.settings.advanced.backgroundAudio)
                         .onChange(of:model.settings.advanced.backgroundAudio) { _ in model.updateBackgroundExperiment() }

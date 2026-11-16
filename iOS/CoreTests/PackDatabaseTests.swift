@@ -27,6 +27,14 @@ final class PackDatabaseTests: XCTestCase {
         let manifest = PackManifest(formatVersion:1,schemaVersion:1,gameId:"fixture",gameTitle:"Synthetic fixture",sourceLanguage:"en",targetLanguage:"ar",packVersion:"1",recordCount:rows.count,usableCount:rows.count,categories:Array(Set(rows.map{$0.2})),attribution:"Synthetic tests",permission:"Original synthetic tests",builtAt:"2026-11-14",arabicOrder:"logical",databaseSha256:String(repeating:"0",count:64),speakerNames:[])
         return (file,manifest)
     }
+    func testSeededSamplesUseValidatedSourcesAndExistingLookup() throws {
+        let (file,_) = try fixture([("Move now.","تحرك الآن.","dialogue"),("Read it.","اقرأها.","general"),("Options","الخيارات","menu")])
+        let db = try PackDatabase(url:file)
+        let first = try db.sampleSources()
+        XCTAssertEqual(first,try db.sampleSources()); XCTAssertEqual(first.count,2)
+        XCTAssertFalse(first.contains("Options"))
+        for source in first { XCTAssertNotNil(try db.lookup(source,category:"dialogue").text) }
+    }
     func testIndexedExactNormalizedAndIdentifierLookup() throws {
         let (file,manifest) = try fixture([("Move now.","تحرك الآن.","dialogue"),("Read the letter.","اقرأ الرسالة.","general"),("Open inventory.","افتح الحقيبة.","menu")])
         let db = try PackDatabase(url:file); try db.validateContents(manifest:manifest)

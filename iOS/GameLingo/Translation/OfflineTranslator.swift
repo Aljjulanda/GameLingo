@@ -37,16 +37,23 @@ final class OfflineTranslator {
         lock.lock(); defer { lock.unlock() }; return cancellationGeneration == generation
     }
     func translate(_ text: String, category: String = "dialogue", eventID: String? = nil, completion: @escaping (Result<String,Error>,Double) -> Void) {
+        translateDetailed(text,category:category,eventID:eventID) { result,latency in completion(result.map(\.text),latency) }
+    }
+    func translateDetailed(_ text: String, category: String = "dialogue", eventID: String? = nil, completion: @escaping (Result<TranslationDecision,Error>,Double) -> Void) {
         lock.lock(); let generation = cancellationGeneration; lock.unlock()
         queue.async { [self] in
             let start = ProcessInfo.processInfo.systemUptime
-            let result: Result<String,Error>
+            let result: Result<TranslationDecision,Error>
             do {
                 guard isCurrent(generation) else { throw CancellationError() }
                 let normalized = DialogueText.normalized(text)
                 let key = Self.modelID+"/commands-v2/en/ar/"+normalized
-                if let localized = packs?.lookup(text,category:category,eventID:eventID) { result = .success(localized) }
-                else if let cached = cache.get(key) { packs?.recordArgos(); result = .success(cached) }
+                let lookup = packs?.lookupDetailed(text,category:category,eventID:eventID) ?? PackLookupOutcome(fallback:.noDatabase)
+                func decision(_ value: String, _ origin: TranslationOrigin) -> TranslationDecision {
+                    TranslationDecision(text:value,origin:origin,fallback:lookup.fallback,game:lookup.game,pack:lookup.pack)
+                }
+                if let localized = lookup.text { result = .success(decision(localized,lookup.origin)) }
+                else if let cached = cache.get(key) { packs?.recordArgos(); result = .success(decision(cached,.argosCache)) }
                 else {
                     packs?.recordArgos()
                     lock.lock()
@@ -61,7 +68,7 @@ final class OfflineTranslator {
                     guard let value = commands[command] ?? current.translate(normalized,error:&error), !value.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty else {
                         throw error ?? LingoError.invalid("الترجمة فارغة") as NSError
                     }
-                    cache.put(value,for:key); result = .success(value)
+                    cache.put(value,for:key); result = .success(decision(value,commands[command] == nil ? .argosInference : .command))
                 }
             } catch { result = .failure(isCurrent(generation) ? error : CancellationError()) }
             let final = isCurrent(generation) ? result : .failure(CancellationError())

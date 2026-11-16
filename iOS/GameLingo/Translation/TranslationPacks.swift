@@ -14,18 +14,6 @@ struct GamePackState {
     var loaded = false
     var error: String?
 }
-struct HybridMetrics {
-    var dialogueEvents = 0, lookups = 0, matches = 0, fallbacks = 0, ambiguous = 0
-    var argos = 0, exact = 0, normalized = 0
-    var approximate = 0 // Deliberately disabled until a labeled OCR corpus validates it.
-    var lookupTotal = 0.0
-    var samples = LatencySamples()
-    var average: Double { lookups == 0 ? 0 : lookupTotal/Double(lookups) }
-    var summary: String {
-        "Dialogue events: \(dialogueEvents) | Pack lookups: \(lookups) | Matches: \(matches) | Fallbacks: \(fallbacks) | Ambiguous rejected: \(ambiguous) | Argos requests: \(argos) | Exact: \(exact) | Normalized: \(normalized) | Approximate: \(approximate) | Lookup avg/p95 ms: \(NumericInput.format(average))/\(NumericInput.format(samples.p95))"
-    }
-}
-
 /// Import validation never owns the runtime lookup queue. All paths are generated.
 final class TranslationPackStore {
     let root: URL
@@ -70,6 +58,7 @@ final class TranslationPackStore {
     }
     private func activate() {
         activation += 1; let epoch = activation
+        metrics = HybridMetrics(); eventIDs = BoundedLRU(capacity:64)
         database = nil; state.loaded = false; state.error = nil; notify()
         guard let game = state.registry.selectedGame, let item = state.registry.packs.first(where:{ $0.manifest.gameId == game && $0.enabled }) else { return }
         importer.async { [self] in
@@ -129,10 +118,29 @@ final class TranslationPackStore {
     func recordDialogue(_ id: String) {
         queue.async { [self] in if eventIDs.get(id) == nil { eventIDs.put(true,for:id); metrics.dialogueEvents += 1 } }
     }
+    func recordPublished(_ event: PublishedTranslation) {
+        queue.async { [self] in
+            // A completed request from an earlier selection cannot contaminate
+            // this game's denominator or display a false active-pack status.
+            guard event.game == state.registry.selectedGame else { return }
+            metrics.recordPublished(event)
+        }
+    }
+    func recordAttempt(_ origin: TranslationOrigin) { queue.async { self.metrics.recordAttempt(origin) } }
+    func publication(_ id: String, origin: TranslationOrigin, fallback: TranslationFallback? = nil) -> PublishedTranslation {
+        queue.sync { PublishedTranslation(eventID:id,game:state.registry.selectedGame,
+            pack:state.loaded ? state.registry.packs.first{$0.manifest.gameId == state.registry.selectedGame && $0.enabled}?.id : nil,
+            origin:origin,fallback:fallback) }
+    }
     func lookup(_ source: String, category: String, eventID: String?) -> String? {
+        lookupDetailed(source,category:category,eventID:eventID).text
+    }
+    func lookupDetailed(_ source: String, category: String, eventID: String?) -> PackLookupOutcome {
         queue.sync { [self] in
             if category == "dialogue", let eventID, eventIDs.get(eventID) == nil { eventIDs.put(true,for:eventID); metrics.dialogueEvents += 1 }
-            guard let database else { return nil }
+            var outcome = PackLookupOutcome(game:state.registry.selectedGame,
+                pack:state.loaded ? state.registry.packs.first{$0.manifest.gameId == state.registry.selectedGame && $0.enabled}?.id : nil)
+            guard let database else { outcome.fallback = .noDatabase; return outcome }
             let start = ProcessInfo.processInfo.systemUptime; metrics.lookups += 1
             defer { let ms = (ProcessInfo.processInfo.systemUptime-start)*1000; metrics.lookupTotal += ms; metrics.samples.record(ms) }
             do {
@@ -140,13 +148,41 @@ final class TranslationPackStore {
                 if let text = result.text {
                     metrics.matches += 1
                     if result.kind == .exact { metrics.exact += 1 } else { metrics.normalized += 1 }
-                    return text
+                    outcome.text = text; outcome.origin = result.kind == .exact ? .packExact : .packNormalized
+                } else {
+                    metrics.fallbacks += 1; if result.kind == .ambiguous { metrics.ambiguous += 1 }
+                    outcome.fallback = TranslationFallback(rawValue:result.kind.rawValue) ?? .unsupported
                 }
-                metrics.fallbacks += 1; if result.kind == .ambiguous { metrics.ambiguous += 1 }; return nil
             } catch {
                 metrics.fallbacks += 1; self.database = nil; state.loaded = false
-                state.error = "تعذر قراءة الحزمة؛ يستمر استخدام Argos"; notify(); return nil
+                state.error = "تعذر قراءة الحزمة؛ يستمر استخدام Argos"; outcome.fallback = .unsupported; notify()
             }
+            return outcome
+        }
+    }
+    func selfTest(_ completion: @escaping (PackSelfTest) -> Void) {
+        queue.async { [self] in
+            var report = PackSelfTest()
+            report.active = state.loaded
+            report.usablePairs = state.registry.packs.first{$0.manifest.gameId == state.registry.selectedGame && $0.enabled}?.manifest.usableCount ?? 0
+            if let database {
+                do {
+                    for (index,source) in try database.sampleSources().enumerated() {
+                        let perturbed: String
+                        switch index % 4 {
+                        case 0: perturbed = source.trimmingCharacters(in:CharacterSet(charactersIn:".!?"))
+                        case 1: perturbed = source.replacingOccurrences(of:"'",with:"’").replacingOccurrences(of:"\"",with:"“")
+                        case 2: perturbed = source.replacingOccurrences(of:" ",with:"  ")
+                        default: perturbed = source.replacingOccurrences(of:" ",with:"\n")
+                        }
+                        let match = try database.lookup(perturbed,category:"dialogue")
+                        report.count += 1
+                        if match.text != nil { report.matched += 1 } else { report.reasons[match.kind.rawValue,default:0] += 1 }
+                    }
+                } catch { report.reasons["damaged",default:0] += 1 }
+            } else { report.reasons["noDatabase",default:0] += 1 }
+            // Deliberately does not change attempts or published metrics.
+            let value = report; DispatchQueue.main.async { completion(value) }
         }
     }
     /// Copies a scoped Files URL into managed storage, validates before registry commit.

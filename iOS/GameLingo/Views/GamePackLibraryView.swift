@@ -15,6 +15,8 @@ final class GamePackLibrary: ObservableObject {
     let store: TranslationPackStore
     @Published var state = GamePackState()
     @Published var metrics = HybridMetrics()
+    @Published var selfTestReport = ""
+    func testPack() { store.selfTest { [weak self] in self?.selfTestReport = $0.summary } }
     @Published var busy = false
     @Published var message = ""
     @Published var inspection: LocalizationInspection?
@@ -61,6 +63,15 @@ struct GamePackLibraryView: View {
         Form {
             Section("طريقة الترجمة") {
                 Text(library.method)
+            if model.quality[.measurement] {
+                Text(library.metrics.status(active:library.state.loaded,damaged:library.state.error != nil,threshold:model.quality.noHitThreshold))
+                Text("المقام هو عدد معرّفات الحوار التي نُشرت للمرة الأولى منذ تفعيل اللعبة؛ لا يشمل محاولات OCR أو الاختبار الاصطناعي.").font(.footnote)
+                ForEach(TranslationOrigin.allCases,id:\.rawValue) { origin in
+                    LabeledContent(origin.rawValue,value:String(library.metrics.origins[origin,default:0]))
+                }
+                Button("اختبار الحزمة · اصطناعي") { library.testPack() }.disabled(!library.state.loaded)
+                if !library.selfTestReport.isEmpty { Text(library.selfTestReport).font(.footnote) }
+            }
                 if let game = library.state.registry.packs.first(where:{ $0.manifest.gameId == library.state.registry.selectedGame }) { LabeledContent("اللعبة المختارة",value:game.manifest.gameTitle) }
                 else { Text("لم تُختر لعبة") }
                 Button("Argos فقط / إلغاء اختيار اللعبة") { library.store.changeSelection(game:nil) }
@@ -157,9 +168,19 @@ struct GamePackLibraryView: View {
 
 struct HybridStatisticsView: View {
     @ObservedObject var library: GamePackLibrary
+    @EnvironmentObject var model: AppModel
     var body: some View {
         Section("حزمة اللعبة وArgos") {
             Text(library.method)
+            if model.quality[.measurement] {
+                Text(library.metrics.status(active:library.state.loaded,damaged:library.state.error != nil,threshold:model.quality.noHitThreshold))
+                Text("المقام هو عدد معرّفات الحوار التي نُشرت للمرة الأولى منذ تفعيل اللعبة؛ لا يشمل محاولات OCR أو الاختبار الاصطناعي.").font(.footnote)
+                ForEach(TranslationOrigin.allCases,id:\.rawValue) { origin in
+                    LabeledContent(origin.rawValue,value:String(library.metrics.origins[origin,default:0]))
+                }
+                Button("اختبار الحزمة · اصطناعي") { library.testPack() }.disabled(!library.state.loaded)
+                if !library.selfTestReport.isEmpty { Text(library.selfTestReport).font(.footnote) }
+            }
             LabeledContent("أحداث الحوار",value:String(library.metrics.dialogueEvents))
             LabeledContent("عمليات بحث الحزمة",value:String(library.metrics.lookups))
             LabeledContent("مطابقات / رجوع إلى Argos",value:"\(library.metrics.matches) / \(library.metrics.fallbacks)")

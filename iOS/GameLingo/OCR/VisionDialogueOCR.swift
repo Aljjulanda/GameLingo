@@ -11,6 +11,7 @@ final class VisionDialogueOCR {
         return request
     }()
     private var previousSignature: [String] = []
+    private(set) var lastLines: [OCRLine] = []
     private(set) var confidence: Double = 0
     private(set) var separateSpeakerLabel = false
     private(set) var content = DialogueContent(text:"",speaker:nil)
@@ -69,6 +70,7 @@ final class VisionDialogueOCR {
             // into the full frame before applying dialogue geometry or event IDs.
             return visualLines(candidate,box:b,roi:roi,knownNames:knownNames)
         }
+        lastLines = Array(lines.prefix(150))
         punctuationTrace = SubtitlePresentation.punctuation(lines.map(\.text).joined(separator:" "))
         if let reading = StructuredDialogue.resolve(lines,roi:roi,knownNames:knownNames) {
             confidence = reading.confidence; content = reading.content; separateSpeakerLabel = reading.content.speaker != nil

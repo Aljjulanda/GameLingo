@@ -13,6 +13,12 @@ final class AppModel: ObservableObject {
             if oldValue.display != settings.display || oldValue.advanced.showSpeakers != settings.advanced.showSpeakers || oldValue.advanced.speakerColor != settings.advanced.speakerColor { scheduleStyle() }
         }
     }
+    @Published var quality = QualitySettings.load() {
+        didSet { quality.save(); pipeline.configureQuality(quality) }
+    }
+    @Published var qualityCaptureActive = false
+    @Published var qualityCaptureFile: URL?
+    func qualityCapture(start: Bool = false, delete: Bool = false) { pipeline.captureAction(start:start,delete:delete) }
     @Published var consoles: [ConsoleCredentials] = []
     @Published var discovered: [DiscoveredConsole] = []
     @Published var remoteStatus = "البث متوقف"
@@ -91,7 +97,7 @@ final class AppModel: ObservableObject {
             "Speaker readings detected: \(metrics.speakersDetected)", "Speaker readings uncertain: \(metrics.speakersUncertain)",
             "Battery percentage change: \(batteryUsed.map(NumericInput.format) ?? "unavailable")",
             "Smart Reading: \(NumericInput.format(metrics.documentMilliseconds)) ms, sampled extra RSS \(NumericInput.format(metrics.documentExtraMegabytes)) MB",
-            "Punctuation stages (counts only): \(metrics.punctuationTrace)"
+            "Punctuation stages (logical order, no dialogue): \(metrics.punctuationTrace)"
         ]
         return (values+[packLibrary.metrics.summary]+sessionDiagnostics).joined(separator:"\n")
     }
@@ -107,6 +113,9 @@ final class AppModel: ObservableObject {
 
     init() {
         try? LocalizationInbox().prepare()
+        pipeline.configureQuality(quality)
+        pipeline.onCaptureState = { [weak self] active,file in self?.qualityCaptureActive = active; self?.qualityCaptureFile = file }
+        pipeline.captureAction()
         packLibrary.onNamesChanged = { [weak self] names in self?.pipeline.configurePackNames(names) }
         do {
             if let data = try KeychainStore.read("consoles.v1") {

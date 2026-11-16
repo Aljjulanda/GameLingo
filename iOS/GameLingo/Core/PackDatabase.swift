@@ -200,4 +200,19 @@ final class PackDatabase {
         while code == SQLITE_ROW { result.append(try string(statement,0)); code = sqlite3_step(statement) }
         guard code == SQLITE_DONE else { throw PackFailure.damaged }; return result
     }
+    /// Explicit synthetic compatibility check only, not gameplay provenance.
+    func sampleSources(seed: UInt64 = 0x474c, limit: Int = 20) throws -> [String] {
+        progress.deadline = ProcessInfo.processInfo.systemUptime+2
+        let statement = try prepare("SELECT source FROM entries WHERE usable=1 AND category IN ('dialogue','general') ORDER BY identifier LIMIT 20")
+        defer { sqlite3_finalize(statement) }
+        var result: [String] = [], code = sqlite3_step(statement)
+        while code == SQLITE_ROW { result.append(try string(statement,0)); code = sqlite3_step(statement) }
+        guard code == SQLITE_DONE else { throw PackFailure.damaged }
+        var state = seed
+        if result.count > 1 { for i in stride(from:result.count-1,through:1,by:-1) {
+            state = state &* 6364136223846793005 &+ 1
+            result.swapAt(i,Int(state % UInt64(i+1)))
+        } }
+        return Array(result.prefix(max(0,min(20,limit))))
+    }
 }
