@@ -427,3 +427,13 @@ NOT by an Intel capacity annotation. The old43894082288 eventually became pendin
 its normal cancel then succeeded (earlier409 requests had not been queued yet).
 New combined B/C/D native43904258846 oncd80f78 is queued on Intel, same Xcode16.4.
 ARM43897279214 remains the confirmed hosted-capacity failure.
+
+Latest D checkpoint43905093088/job133431678474 on60569e5 passed all114 Core
+cases plus full source/project/packaging/converter checks. The combined native
+request43905189703/job133432031866 on the SAME source is queued with all seven
+B/C/D Vision methods, NamesIntegrationTests, CorrectionsIntegrationTests, and
+the active-pack correction priority/rollback test. Preceding43904258846 was
+explicitly cancelled before acquiring a runner so the newer callback guard and
+pack-priority fixture are included; it is not a failed runtime result. Freeze
+production changes until this native checkpoint provides build/runtime evidence.
+The Arabic status document is provisional and does not advertise a new build.
