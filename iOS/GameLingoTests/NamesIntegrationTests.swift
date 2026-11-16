@@ -22,6 +22,7 @@ final class NamesIntegrationTests: XCTestCase {
         #endif
         XCTAssertEqual(actual,FileProtectionType.completeUntilFirstUserAuthentication.rawValue)
     }
+    #if DEBUG
     func testRealArgosFourPlaceholderFormsAndSurroundingWordControls() throws {
         let folder = try XCTUnwrap(Bundle(for:Self.self).url(forResource:"en_ar",withExtension:nil))
         var error: NSError?
@@ -52,6 +53,7 @@ final class NamesIntegrationTests: XCTestCase {
         XCTAssertEqual(probes,20)
         print("SYNTHETIC_NAME_FORMS survived=\(survival) context_unchanged=\(unchanged) unsafe_survivors=\(unsafe); Intel Simulator FLOAT32, not phone INT8")
     }
+    #endif
     func testNamesStoreBackupAndRealTranslatorCacheInvalidation() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at:root) }
@@ -65,13 +67,13 @@ final class NamesIntegrationTests: XCTestCase {
             let result: Result<TranslationDecision,Error> = await withCheckedContinuation { continuation in translator.translateDetailed("Where are you going?") { value,_ in continuation.resume(returning:value) } }
             return try result.get()
         }
-        translator.configureNames(store.snapshot,protection:false)
+        translator.configureNames(store.snapshot)
         let first = try await translate(), cached = try await translate()
         XCTAssertEqual(first.origin,.argosInference); XCTAssertEqual(cached.origin,.argosCache)
         try store.upsert(GameName(english:"Arthur",type:.person,arabic:"آرثر المعدّل",source:.manual,count:1),explicit:true)
-        translator.configureNames(store.snapshot,protection:false)
+        translator.configureNames(store.snapshot)
         let changed = try await translate(); XCTAssertEqual(changed.origin,.argosInference); XCTAssertEqual(changed.text,first.text)
-        translator.configureNames(GameNamesSnapshot(game:"synthetic-b"),protection:false)
+        translator.configureNames(GameNamesSnapshot(game:"synthetic-b"))
         let nextGame = try await translate(); XCTAssertEqual(nextGame.origin,.argosInference)
     }
     @MainActor func testNamesLibraryKeepsGamesManualEditsAndDeletedNamesSeparate() throws {

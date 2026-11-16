@@ -21,7 +21,27 @@ final class AppleIntegrationTests: XCTestCase {
         let bitmap = try XCTUnwrap(CGContext(data:CVPixelBufferGetBaseAddress(buffer),width:1280,height:720,bitsPerComponent:8,bytesPerRow:CVPixelBufferGetBytesPerRow(buffer),space:CGColorSpaceCreateDeviceRGB(),bitmapInfo:CGImageAlphaInfo.premultipliedFirst.rawValue|CGBitmapInfo.byteOrder32Little.rawValue))
         bitmap.translateBy(x:0,y:720);bitmap.scaleBy(x:1,y:-1)
         UIGraphicsPushContext(bitmap);image.draw(in:CGRect(x:0,y:0,width:1280,height:720));UIGraphicsPopContext();bitmap.flush()
-        return buffer
+        // Match VideoDecoder's actual 420v/IOSurface input. BGRA-only synthetic
+        // buffers repeatedly crashed MTLSimDriver while converting formats;
+        // production already supplies video-range NV12. Keep foreground Vision.
+        var video: CVPixelBuffer?
+        let attributes: [String:Any] = [kCVPixelBufferMetalCompatibilityKey as String:true,kCVPixelBufferIOSurfacePropertiesKey as String:[:]]
+        XCTAssertEqual(CVPixelBufferCreate(kCFAllocatorDefault,1280,720,kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange,attributes as CFDictionary,&video),kCVReturnSuccess)
+        let nv12 = try XCTUnwrap(video)
+        CVPixelBufferLockBaseAddress(nv12,[]); defer { CVPixelBufferUnlockBaseAddress(nv12,[]) }
+        let source = try XCTUnwrap(CVPixelBufferGetBaseAddress(buffer)).assumingMemoryBound(to:UInt8.self)
+        let luma = try XCTUnwrap(CVPixelBufferGetBaseAddressOfPlane(nv12,0)).assumingMemoryBound(to:UInt8.self)
+        let chroma = try XCTUnwrap(CVPixelBufferGetBaseAddressOfPlane(nv12,1))
+        let sourceStride = CVPixelBufferGetBytesPerRow(buffer), yStride = CVPixelBufferGetBytesPerRowOfPlane(nv12,0)
+        for y in 0..<720 { for x in 0..<1280 {
+            let offset = y*sourceStride+x*4
+            let gray = (29*Int(source[offset])+150*Int(source[offset+1])+77*Int(source[offset+2]))/256
+            luma[y*yStride+x] = UInt8(16+(219*gray+127)/255)
+        } }
+        // Every fixture here is white text on black: neutral chroma is exact.
+        memset(chroma,128,CVPixelBufferGetBytesPerRowOfPlane(nv12,1)*CVPixelBufferGetHeightOfPlane(nv12,1))
+        XCTAssertEqual(CVPixelBufferGetPixelFormatType(nv12),kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange)
+        return nv12
     }
     func testVisionStructuredSpeakerAboveAndOnBothSides() throws {
         for layout in ["above","left","right"] {

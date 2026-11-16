@@ -5,7 +5,7 @@ import Foundation
 enum QualityFlag: String, CaseIterable, Codable {
     case measurement, provenanceMarker, punctuationTrace, sessionCapture
     case stageCues, speakerClassification, speakerGeometry, visionNames
-    case learnNames, protectNames, corrections, packMarkup, packPunctuation
+    case learnNames, corrections, packMarkup, packPunctuation
     case packLabels, punctuationRepair, commandPunctuation, typewriter, lineLimits
     case arabicParagraphDirection
     var title: String {
@@ -19,7 +19,6 @@ enum QualityFlag: String, CaseIterable, Codable {
         case .speakerGeometry: return "تسمية المتحدث المنفصلة"
         case .visionNames: return "قاموس الأسماء للتعرف البصري"
         case .learnNames: return "تعلّم أسماء اللعبة"
-        case .protectNames: return "حماية الأسماء أثناء الترجمة · تجريبي"
         case .corrections: return "تصحيحاتي قبل الترجمة"
         case .packMarkup: return "تنظيف علامات اللعبة عند الاستيراد"
         case .packPunctuation: return "مطابقة كلمات الحزمة دون ترقيم"

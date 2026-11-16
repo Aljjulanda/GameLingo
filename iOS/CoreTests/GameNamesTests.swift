@@ -88,6 +88,7 @@ final class GameNamesTests: XCTestCase {
         XCTAssertFalse(try store.learn("Arthur",form:.separate,confidence:reading.content.speakerConfidence ?? 0,eventID:"1"))
         XCTAssertTrue(store.snapshot.entries.isEmpty)
     }
+    #if DEBUG
     func testChangedPlaceholderAutomaticallyUsesUnprotectedTranslation() throws {
         let source = "Arthur, wait.", names = [name()]
         for form in NamePlaceholderForm.allCases {
@@ -119,4 +120,5 @@ final class GameNamesTests: XCTestCase {
         }
         XCTAssertNil(NameProtectionPlan.make("GLNAME is a literal.",names:names,form:.letters))
     }
+    #endif
 }

@@ -45,15 +45,21 @@ final class FramePipeline {
     private var namesStore: GameNamesStore?
     private var namesSnapshot = GameNamesSnapshot(game:"general")
     private var namesWords = ""
-    private var namesCacheKey: String { namesSnapshot.outputKey+"/protect="+String(quality[.protectNames]) }
+    private var namesByKey: [String:String] = [:]
+    private var namesConfigured = false
+    private var namesCacheKey: String { namesSnapshot.outputKey }
     func configureNames(_ store: GameNamesStore?, snapshot: GameNamesSnapshot) { queue.async {
         self.namesStore = store
         self.applyNames(snapshot)
     } }
     private func applyNames(_ snapshot: GameNamesSnapshot) {
-        if namesSnapshot.outputKey != snapshot.outputKey { translations = BoundedLRU(capacity:8) }
-        namesSnapshot = snapshot; namesWords = snapshot.words
-        translator.configureNames(snapshot,protection:quality[.protectNames])
+        if !namesConfigured || namesSnapshot.outputKey != snapshot.outputKey {
+            translations = BoundedLRU(capacity:8); namesWords = snapshot.words
+            namesByKey = Dictionary(uniqueKeysWithValues:snapshot.entries.map{($0.id,$0.arabic)})
+            namesConfigured = true
+        }
+        namesSnapshot = snapshot
+        translator.configureNames(snapshot)
     }
     private let capture = QualityCapture(folder:FileManager.default.urls(for:.cachesDirectory,in:.userDomainMask)[0].appendingPathComponent("QualityCapture",isDirectory:true))
     var onCaptureState: ((Bool,URL?) -> Void)?
@@ -61,9 +67,8 @@ final class FramePipeline {
     private var pendingCapture: [CaptureLine] = []
     private var pendingSegments: [CaptureLine] = []
     func configureQuality(_ value: QualitySettings) { queue.async {
-        if self.quality[.protectNames] != value[.protectNames] { self.translations = BoundedLRU(capacity:8) }
         self.quality = value; self.ocr.quality = value; self.ocr.qualityTrace = value[.punctuationTrace]
-        self.translator.configureNames(self.namesSnapshot,protection:value[.protectNames])
+        self.translator.configureNames(self.namesSnapshot)
         self.translator.configureEngineDiagnostics(value[.punctuationTrace] || self.capture.active)
         if !value[.sessionCapture] { self.capture.stop(); self.ocr.captureLines = false; self.reportCapture() }
     } }
@@ -237,7 +242,7 @@ final class FramePipeline {
                         if try namesStore.learn(speaker,form:form,confidence:content.speakerConfidence ?? ocr.confidence,eventID:job.id,colonThreshold:quality.colonNameThreshold,otherThreshold:quality.otherNameThreshold) { applyNames(namesStore.snapshot) }
                     } catch { DispatchQueue.main.async { self.onError?("تعذر حفظ الاسم المتعلّم؛ يستمر الحوار دون تغيير") } }
                 }
-                if quality[.learnNames], let speaker = job.speaker { job.speakerArabic = namesSnapshot.entries.first{$0.id == GameName.key(speaker)}?.arabic }
+                if quality[.learnNames], let speaker = job.speaker { job.speakerArabic = namesByKey[GameName.key(speaker)] }
                 translator.packs?.recordDialogue(job.id)
                 if let previous { publish(TVProtocol.envelope("subtitle_source_gone",fields:["id":previous])) }
                 guard stability.shouldPublish(job) else { memory.observe(job,now:now); break }
@@ -274,7 +279,7 @@ final class FramePipeline {
                 if self.isActive() && epoch == self.runID && self.tracker.accepts(job) {
                     var delivered = job
                     if let current = self.tracker.current, DialogueText.exactWords(current.text) == DialogueText.exactWords(job.text) { delivered.speaker = current.speaker }
-                    delivered.speakerArabic = self.quality[.learnNames] ? delivered.speaker.flatMap { name in self.namesSnapshot.entries.first{$0.id == GameName.key(name)}?.arabic } : nil
+                    delivered.speakerArabic = self.quality[.learnNames] ? delivered.speaker.flatMap { self.namesByKey[GameName.key($0)] } : nil
                     switch result {
                     case .success(let decision):
                         let text = decision.text

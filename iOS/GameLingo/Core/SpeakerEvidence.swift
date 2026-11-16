@@ -94,7 +94,12 @@ enum SpeakerEvidence {
             } else if lines.count > 1 && separateLabel {
                 candidate = (first,lines.dropFirst().joined(separator:" "),.separate)
             }
-            if let (label,body,form) = candidate, !body.trimmingCharacters(in:.whitespaces).isEmpty,
+            if let (label,body,form) = candidate, body.trimmingCharacters(in:.whitespaces).isEmpty,
+               isName(label,knownNames:knownNames,confidence:confidence), form == .colon || known(label,knownNames) {
+                // A confident Name: or [Name] without a body is metadata, not
+                // a newly spoken line. Preserve ordinary/uncertain text below.
+                content = DialogueContent(text:"",speaker:DialogueContent.speakerLabel(label),labelForm:form,speakerConfidence:confidence)
+            } else if let (label,body,form) = candidate, !body.trimmingCharacters(in:.whitespaces).isEmpty,
                shape(label), !excluded(label),
                // Shape alone is insufficient: accepted identity, or spatial
                // evidence plus capitalized/known label and a real body.

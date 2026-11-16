@@ -344,3 +344,32 @@ literally named general), so a late result cannot apply to a different scope.
 The next focused native run retains all six Vision/production B+C methods and
 four names methods, including real Argos probes/cache controls and protection
 capability reporting. No optional protection form is selected until results.
+
+### Real unit C experiment: reject placeholder protection in production
+
+Run43887703263/job133370203726 compiled the names screen and executed the four
+names methods: UI scope/manual/deletion passed, actual Argos cache invalidation
+passed, all20 real four-form probes executed, hardware metadata-only assertion
+explicitly skipped after absent direct control metadata. Three of20 markers
+survived (letters2, brackets1); ZERO surrounding-word controls passed. Examples:
+markers survived while `follow` remained English, or an imperative became a
+present-tense verb. Underscore/guillemet forms were deleted or rewritten.
+Survival alone is demonstrably insufficient. No robust form was found.
+
+Isolate the experiment behind DEBUG, remove its production translator routing
+and unavailable flag/setting. Release keeps original Argos input/inference;
+names still support speaker identity, editable Arabic labels and Vision words.
+This conditional C sub-feature is explicitly unsupported, not presented as
+working or enabled merely because a flag is OFF. Research fixtures remain
+repeatable in Debug, including malformed-marker fallback controls.
+
+B's foreground Vision dictionary and cue methods passed again, but the repeated
+Simulator MTLSimDriver pixel-transfer crash now occurred in dictionary refresh.
+Autorelease lifetime matching alone did not resolve it. Test synthetic buffers
+were BGRA without IOSurface, whereas actual VideoDecoder input is 420v NV12 +
+Metal compatibility + IOSurface (VideoDecoder.swift294-296, unchanged). Match
+that actual format using a test-only CPU conversion of the monochrome fixture
+into video-range luma/neutral chroma. No production decoder, GPU selection, ROI,
+sampling or assertions are changed. Native recheck is required; not a claimed
+fix yet. Also preserve legacy suppression of a confident Name: with no body,
+while unknown bracket-only narrative and ordinary prefixes stay readable.

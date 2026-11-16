@@ -1,3 +1,4 @@
+#if DEBUG
 import Foundation
 
 enum NamePlaceholderForm: String, CaseIterable {
@@ -10,11 +11,6 @@ enum NamePlaceholderForm: String, CaseIterable {
         case .guillemets: return "«GLNAME\(index)»"
         }
     }
-}
-enum NameProtectionPolicy {
-    // Select only after the four-form native Argos/control experiment. A nil
-    // policy offers no dead setting and leaves the proven Argos route intact.
-    static let form: NamePlaceholderForm? = nil
 }
 enum ProtectedNameTranslation {
     static func run(_ source: String, names: [GameName], form: NamePlaceholderForm?, translate: (String) throws -> String) rethrows -> String {
@@ -102,3 +98,4 @@ private extension String {
         return result
     }
 }
+#endif

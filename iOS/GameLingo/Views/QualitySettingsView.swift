@@ -10,7 +10,6 @@ struct QualitySettingsSection: View {
             ForEach([QualityFlag.measurement,.provenanceMarker,.punctuationTrace,.sessionCapture,.stageCues,.speakerClassification,.speakerGeometry,.visionNames,.learnNames],id:\.rawValue) { flag in
                 Toggle(flag.title,isOn:Binding(get:{model.quality[flag]},set:{model.quality[flag] = $0}))
             }
-            if NameProtectionPolicy.form != nil { Toggle(QualityFlag.protectNames.title,isOn:Binding(get:{model.quality[.protectNames]},set:{model.quality[.protectNames] = $0})) }
             NavigationLink("أسماء اللعبة") { GameNamesView(library:model.namesLibrary) }
             DisclosureGroup("متقدم") {
                 Stepper("تنبيه غياب المطابقة: \(model.quality.noHitThreshold) حوار",value:$model.quality.noHitThreshold,in:1...1000)

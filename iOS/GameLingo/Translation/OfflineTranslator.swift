@@ -17,14 +17,12 @@ final class OfflineTranslator {
     private var cancellationGeneration: UInt64 = 0
     private var cache = BoundedLRU<String,String>(capacity:256)
     private var names = GameNamesSnapshot(game:"general")
-    private var nameForm: NamePlaceholderForm?
     private var engineDiagnostics = false
     func configureEngineDiagnostics(_ value: Bool) { queue.async { self.engineDiagnostics = value } }
-    func configureNames(_ snapshot: GameNamesSnapshot, protection: Bool, form: NamePlaceholderForm? = NameProtectionPolicy.form) {
+    func configureNames(_ snapshot: GameNamesSnapshot) {
         queue.async { [self] in
-            let next = protection ? form : nil
-            if names.outputKey != snapshot.outputKey || nameForm != next { cache = BoundedLRU(capacity:256) }
-            names = snapshot; nameForm = next
+            if names.outputKey != snapshot.outputKey { cache = BoundedLRU(capacity:256) }
+            names = snapshot
         }
     }
     init(folder: URL? = nil, packs: TranslationPackStore? = nil) {
@@ -58,8 +56,7 @@ final class OfflineTranslator {
             do {
                 guard isCurrent(generation) else { throw CancellationError() }
                 let normalized = DialogueText.normalized(text)
-                let namesKey = nameForm.map { "/names="+names.outputKey+"/"+$0.rawValue } ?? ""
-                let key = Self.modelID+"/commands-v2/en/ar"+namesKey+"/"+normalized
+                let key = Self.modelID+"/commands-v2/en/ar/"+normalized
                 let lookup = packs?.lookupDetailed(text,category:category,eventID:eventID) ?? PackLookupOutcome(fallback:.noDatabase)
                 let fallback = category == "dialogue" ? lookup.fallback : TranslationFallback.notDialogue
                 func decision(_ value: String, _ origin: TranslationOrigin) -> TranslationDecision {
@@ -88,11 +85,12 @@ final class OfflineTranslator {
                     let commands = DialogueCommands.legacy
                     var error: NSError?
                     var engineInput: String?, rawOutput: String?
-                    let value = try commands[command] ?? ProtectedNameTranslation.run(normalized,names:names.entries,form:nameForm) { input in
+                    func infer(_ input: String) throws -> String {
                         guard isCurrent(generation), let output = current.translate(input,error:&error), !output.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty else { throw error ?? LingoError.invalid("الترجمة فارغة") as NSError }
                         if engineDiagnostics { engineInput = input; rawOutput = output }
                         return output
                     }
+                    let value = try commands[command] ?? infer(normalized)
                     cache.put(value,for:key)
                     var chosen = decision(value,commands[command] == nil ? .argosInference : .command)
                     chosen.engineInput = engineInput; chosen.rawOutput = rawOutput; result = .success(chosen)

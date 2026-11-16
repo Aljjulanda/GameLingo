@@ -22,6 +22,11 @@ final class SpeakerQualityTests: XCTestCase {
         XCTAssertEqual(combined.cue,"(ضحك)")
         let multiple = DialogueContent.parse("[laughs] [coughs] Arthur: (sighs) Go now.",knownNames:"",quality:q)
         XCTAssertEqual(multiple.engineText,"Go now."); XCTAssertEqual(multiple.cue,"(ضحك) (سعال) (تنهّد)"); XCTAssertEqual(multiple.speaker,"Arthur")
+        for metadata in ["Arthur:","[Arthur]"] {
+            XCTAssertTrue(DialogueContent.parse(metadata,knownNames:"Arthur",quality:q).text.isEmpty)
+        }
+        XCTAssertEqual(DialogueContent.parse("Wait:",knownNames:"",quality:q).text,"Wait:")
+        XCTAssertEqual(DialogueContent.parse("[Dead End]",knownNames:"",quality:q).text,"[Dead End]","An unknown bracket-only narrative is preserved")
     }
     func testMiddleBracketsNarrativeAndOrdinaryPrefixesSurvive() {
         let q = flags(.stageCues,.speakerClassification)
