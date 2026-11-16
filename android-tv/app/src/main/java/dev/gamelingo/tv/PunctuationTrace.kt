@@ -5,10 +5,13 @@ package dev.gamelingo.tv
 internal object PunctuationTrace {
     fun signature(value: String, paragraphDirection: Int): String {
         val text = TextPresentation.clean(value).trim()
-        val first = text.codePoints().toArray().firstOrNull { Character.isLetter(it) }
-        val direction = if(first == null) "none" else when(Character.getDirectionality(first)) {
-            Character.DIRECTIONALITY_RIGHT_TO_LEFT, Character.DIRECTIONALITY_RIGHT_TO_LEFT_ARABIC -> "R"
-            else -> "L"
+        val first = text.codePoints().toArray().asSequence().map { Character.getDirectionality(it) }.firstOrNull {
+            it == Character.DIRECTIONALITY_LEFT_TO_RIGHT || it == Character.DIRECTIONALITY_RIGHT_TO_LEFT || it == Character.DIRECTIONALITY_RIGHT_TO_LEFT_ARABIC
+        }
+        val direction = when(first) {
+            null -> "none"
+            Character.DIRECTIONALITY_LEFT_TO_RIGHT -> "L"
+            else -> "R"
         }
         val marks = "()[]:\"'?؟!.…،؛«»-—"
         val positions = text.mapIndexedNotNull { index, c ->

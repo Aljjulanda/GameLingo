@@ -49,12 +49,22 @@ final class OfflineTranslator {
                 let normalized = DialogueText.normalized(text)
                 let key = Self.modelID+"/commands-v2/en/ar/"+normalized
                 let lookup = packs?.lookupDetailed(text,category:category,eventID:eventID) ?? PackLookupOutcome(fallback:.noDatabase)
+                let fallback = category == "dialogue" ? lookup.fallback : TranslationFallback.notDialogue
                 func decision(_ value: String, _ origin: TranslationOrigin) -> TranslationDecision {
-                    TranslationDecision(text:value,origin:origin,fallback:(origin == .argosInference || origin == .argosCache) ? lookup.fallback : nil,game:lookup.game,pack:lookup.pack)
+                    TranslationDecision(text:value,origin:origin,fallback:(origin == .argosInference || origin == .argosCache) ? fallback : nil,game:lookup.game,pack:lookup.pack)
                 }
-                if let localized = lookup.text { result = .success(decision(localized,lookup.origin)) }
-                else if let cached = cache.get(key) { packs?.recordArgos(); result = .success(decision(cached,DialogueCommands.cachedOrigin(normalized))) }
-                else {
+                if let localized = lookup.text {
+                    packs?.recordAttempt(lookup.origin,game:lookup.game,pack:lookup.pack)
+                    result = .success(decision(localized,lookup.origin))
+                } else if let cached = cache.get(key) {
+                    let origin = DialogueCommands.cachedOrigin(normalized)
+                    packs?.recordAttempt(origin,fallback:origin == .argosCache ? fallback : nil,game:lookup.game,pack:lookup.pack)
+                    packs?.recordArgos(); result = .success(decision(cached,origin))
+                } else {
+                    let planned = DialogueCommands.legacy[DialogueCommands.key(normalized)] == nil ? TranslationOrigin.argosInference : .command
+                    // Count requested inference even when it is later cancelled;
+                    // publishing has a separate stable-ID ledger.
+                    packs?.recordAttempt(planned,fallback:planned == .argosInference ? fallback : nil,game:lookup.game,pack:lookup.pack)
                     packs?.recordArgos()
                     lock.lock()
                     let current = cancellationGeneration == generation ? engine : nil

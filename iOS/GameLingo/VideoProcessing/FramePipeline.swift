@@ -44,6 +44,7 @@ final class FramePipeline {
     var onCaptureState: ((Bool,URL?) -> Void)?
     private var captureGeneration = UUID()
     private var pendingCapture: [CaptureLine] = []
+    private var pendingSegments: [CaptureLine] = []
     func configureQuality(_ value: QualitySettings) { queue.async {
         self.quality = value; self.ocr.qualityTrace = value[.punctuationTrace]
         if !value[.sessionCapture] { self.capture.stop(); self.ocr.captureLines = false; self.reportCapture() }
@@ -68,7 +69,7 @@ final class FramePipeline {
     private var packSpeakerNames = ""
     private var memory = DialogueMemory()
     private var stability = PublicationStability()
-    private var translations = BoundedLRU<String,(String,String)>(capacity:8)
+    private var translations = BoundedLRU<String,(String,String,TranslationDecision)>(capacity:8)
     private var isBackground = false
     private var reading = false, captureRequested = false
     private var readingTicket = UUID()
@@ -145,7 +146,7 @@ final class FramePipeline {
     }
     private func reset(preservingState: Bool = false) {
         finishReading()
-        timer?.cancel(); timer = nil; runID = UUID(); pending = nil; pendingCapture = []; ocr = VisionDialogueOCR(); ocr.setBackground(isBackground); ocr.qualityTrace = quality[.punctuationTrace]; ocr.captureLines = capture.active; signature = FrameSignature()
+        timer?.cancel(); timer = nil; runID = UUID(); pending = nil; pendingCapture = []; pendingSegments = []; ocr = VisionDialogueOCR(); ocr.setBackground(isBackground); ocr.qualityTrace = quality[.punctuationTrace]; ocr.captureLines = capture.active; signature = FrameSignature()
         if preservingState { tracker.markInterrupted(); memory.prune(now:ProcessInfo.processInfo.systemUptime) }
         else { tracker.reset(); memory.clear(); stability.clear(); translations = BoundedLRU(capacity:8) }
         // An already running inference still owns the single worker until its callback.
@@ -185,6 +186,13 @@ final class FramePipeline {
             let (_,box) = try autoreleasepool { try ocr.recognize(buffer,roi:roi,knownNames:advanced.speakerNames+","+packSpeakerNames) }
             guard isActive() else { return }
             let content = ocr.content
+            if capture.active {
+                let raw = ocr.lastLines.map{CaptureLine(text:$0.text,box:$0.box,confidence:$0.confidence)}
+                let segments = ocr.lastSegments.map{CaptureLine(text:$0.text,box:$0.box,confidence:$0.confidence)}
+                do { try capture.append(QualityCaptureRecord(eventID:capture.observationID(),lines:raw,parsed:content.text,engineInput:"",engineOutput:"",origin:nil,stage:.observation,timestamp:capture.elapsed,segments:segments)) }
+                catch { capture.stop() }
+                if !capture.active { ocr.captureLines = false; reportCapture() }
+            }
             if content.speaker != nil { metrics.speakersDetected += 1 }
             if content.uncertainSpeaker { metrics.speakersUncertain += 1 }
             metrics.punctuationTrace = quality[.punctuationTrace] ? "OCR " + ocr.punctuationTrace + " | parsed " + SubtitlePresentation.punctuation(content.text) : ""
@@ -203,6 +211,7 @@ final class FramePipeline {
                 guard stability.shouldPublish(job) else { memory.observe(job,now:now); break }
                 if !job.correction { translator.cancel() }
                 pendingCapture = capture.active ? ocr.lastLines.map{ CaptureLine(text:$0.text,box:$0.box,confidence:$0.confidence) } : []
+                pendingSegments = capture.active ? ocr.lastSegments.map{ CaptureLine(text:$0.text,box:$0.box,confidence:$0.confidence) } : []
                 pending = job; lastTextChange = now; submit()
             }
             metrics.duplicatesSuppressed = tracker.duplicatesSuppressed
@@ -221,7 +230,7 @@ final class FramePipeline {
         let reusable = !job.meaningfulCorrection && cached.map { DialogueText.same($0.0,job.text) && !DialogueText.prefix($0.0,job.text) } == true
         let override = reusable ? cached?.1 : Terminology.resolve(job.text,rules:advanced.terminology,context:memory.entries.filter { $0.id != job.id })
         let punctuationTrace = metrics.punctuationTrace
-        let captureLines = pendingCapture
+        let captureLines = pendingCapture, captureSegments = pendingSegments
         let selection = override != nil && (quality[.measurement] || quality[.provenanceMarker] || capture.active) ? translator.packs?.publication(job.id,origin:reusable ? .reuse : .rule) : nil
         let completion: (Result<TranslationDecision,Error>,Double) -> Void = { [weak self] result,latency in
             guard let self else { return }
@@ -236,17 +245,17 @@ final class FramePipeline {
                         if self.stability.shouldPublish(delivered) {
                             if !reusable { self.metrics.translationMilliseconds = latency; self.translationSamples.record(latency); self.metrics.translationP95 = self.translationSamples.p95 }
                             self.stability.didPublish(delivered)
-                            self.translations.put((job.text,text),for:job.id)
+                            self.translations.put((job.text,text,decision),for:job.id)
                             self.memory.observe(job,now:ProcessInfo.processInfo.systemUptime)
-                            let message = TVProtocol.qualityFields(TVProtocol.subtitle(delivered,arabic:text,now:TVHub.now()),settings:self.quality,origin:decision.origin)
+                            let message = TVProtocol.qualityFields(TVProtocol.subtitle(delivered,arabic:text,now:TVHub.now()),settings:self.quality,origin:decision.origin,basis:decision.basis)
                             if self.quality[.measurement] {
-                                self.translator.packs?.recordPublished(PublishedTranslation(eventID:delivered.id,game:decision.game,pack:decision.pack,origin:decision.origin,fallback:decision.fallback))
+                                self.translator.packs?.recordPublished(PublishedTranslation(eventID:delivered.id,game:decision.game,pack:decision.pack,origin:decision.origin,fallback:decision.fallback,basis:decision.basis))
                             }
                             if self.quality[.punctuationTrace] {
                                 self.metrics.punctuationTrace = punctuationTrace + " | input " + SubtitlePresentation.punctuation(job.text) + " | raw " + SubtitlePresentation.punctuation(text) + " | repair " + SubtitlePresentation.punctuation(text) + " | wire " + SubtitlePresentation.punctuation(message["translated"] as? String ?? "")
                             }
                             if self.capture.active {
-                                do { try self.capture.append(QualityCaptureRecord(eventID:delivered.id,lines:captureLines,parsed:job.text,engineInput:job.text,engineOutput:text,origin:decision.origin)) }
+                                do { try self.capture.append(QualityCaptureRecord(eventID:delivered.id,lines:captureLines,parsed:job.text,engineInput:job.text,engineOutput:text,origin:decision.origin,stage:.published,timestamp:self.capture.elapsed,segments:captureSegments,basis:decision.basis)) }
                                 catch { self.capture.stop() }
                                 self.reportCapture()
                             }
@@ -259,12 +268,13 @@ final class FramePipeline {
             }
         }
         if let override {
-            if quality[.measurement] { translator.packs?.recordAttempt(reusable ? .reuse : .rule) }
-            completion(.success(TranslationDecision(text:override,origin:reusable ? .reuse : .rule,fallback:nil,game:selection?.game,pack:selection?.pack)),0)
-        } else { translator.translateDetailed(job.text,eventID:job.id) { result,latency in
-            if let origin = try? result.get().origin { self.translator.packs?.recordAttempt(origin) }
-            completion(result,latency)
-        } }
+            var decision = TranslationDecision(text:override,origin:.rule,fallback:nil,game:selection?.game,pack:selection?.pack)
+            if reusable, let prior = cached?.2 {
+                decision = prior; decision.origin = .reuse; decision.basis = prior.basis ?? prior.origin
+            }
+            if quality[.measurement] { translator.packs?.recordAttempt(decision.origin,fallback:decision.fallback,game:decision.game,pack:decision.pack) }
+            completion(.success(decision),0)
+        } else { translator.translateDetailed(job.text,eventID:job.id,completion:completion) }
     }
     func requestReading(ticket: UUID) {
         translator.cancel()

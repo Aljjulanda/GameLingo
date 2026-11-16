@@ -10,6 +10,8 @@ class PunctuationTraceTest {
         assertFalse(trace.contains("Arthur")); assertFalse(trace.contains("أنت"))
         assertEquals("visual=LTR; logical first=none; ",PunctuationTrace.signature("123",1))
         assertTrue(PunctuationTrace.signature("(نعم!)",1).contains("first=R"))
+        assertTrue(PunctuationTrace.signature("Ⅳ: نعم",-1).contains("first=L"))
+        assertTrue(PunctuationTrace.signature("𞸀!",-1).contains("first=R"))
     }
     @Test fun signatureIsBounded() {
         val trace = PunctuationTrace.signature("!".repeat(2400),-1)

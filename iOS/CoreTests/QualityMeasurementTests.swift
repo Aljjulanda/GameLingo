@@ -2,12 +2,19 @@ import XCTest
 @testable import LingoCore
 
 final class QualityMeasurementTests: XCTestCase {
+    func testCaptureRefusesUnconfirmedOrWeakerPhysicalProtection() {
+        for value in [nil,"NSFileProtectionNone","NSFileProtectionCompleteUnlessOpen","NSFileProtectionCompleteUntilFirstUserAuthentication","unknown"] as [String?] {
+            XCTAssertFalse(QualityCapture.permitsProtectedRecording(value))
+        }
+        XCTAssertTrue(QualityCapture.permitsProtectedRecording("NSFileProtectionComplete"))
+    }
     func testCachedCommandsAreNotMisreportedAsArgos() {
         for text in ["Go","Run!","Wait?","No."] { XCTAssertEqual(DialogueCommands.cachedOrigin(text),.command) }
         XCTAssertEqual(DialogueCommands.cachedOrigin("Wait by the gate."),.argosCache)
         XCTAssertEqual(DialogueCommands.legacy[DialogueCommands.key("Wait")],"انتظر!")
     }
     func testPublishedDenominatorExcludesAttemptsCorrectionsAndSyntheticResults() {
+        XCTAssertFalse(PublishedTranslation(eventID:"no-pack",game:nil,pack:nil,origin:.packExact,fallback:nil).isPackBacked)
         var metrics = HybridMetrics()
         metrics.lookups = 100; metrics.matches = 100
         metrics.recordAttempt(.rule); metrics.recordAttempt(.reuse)
@@ -21,7 +28,16 @@ final class QualityMeasurementTests: XCTestCase {
         XCTAssertEqual(metrics.published,4); XCTAssertEqual(metrics.publishedPack,1)
         XCTAssertEqual(metrics.origins[.rule],1); XCTAssertEqual(metrics.origins[.reuse],1)
         XCTAssertEqual(metrics.status(active:true,damaged:false),"تعمل · 1 من 4 من الحزمة")
-        XCTAssertEqual(metrics.lastEvent?.eventID,"4")
+        XCTAssertEqual(metrics.lastEvent?.eventID,"2")
+        XCTAssertEqual(metrics.origins[.packExact],0); XCTAssertEqual(metrics.origins[.packNormalized],1)
+        metrics.recordPublished(PublishedTranslation(eventID:"4",game:"synthetic",pack:"p",origin:.packExact,fallback:nil))
+        metrics.recordPublished(PublishedTranslation(eventID:"2",game:"synthetic",pack:"p",origin:.reuse,fallback:nil,basis:.packNormalized))
+        XCTAssertEqual(metrics.published,4); XCTAssertEqual(metrics.publishedPack,2)
+        XCTAssertEqual(metrics.origins[.reuse],2)
+        XCTAssertEqual(metrics.fallbackReasons[.missing],0)
+        metrics.recordAttempt(.argosInference,fallback:.missing)
+        XCTAssertEqual(metrics.attemptFallbackReasons[.missing],1)
+        XCTAssertEqual(metrics.published,4)
     }
     func testFallbackStatusThresholdAndInactiveDamagedStates() {
         var metrics = HybridMetrics()
@@ -58,6 +74,8 @@ final class QualityMeasurementTests: XCTestCase {
         XCTAssertFalse(signature.contains("Arthur")); XCTAssertFalse(signature.contains("أنت"))
         XCTAssertTrue(SubtitlePresentation.punctuation("(نعم!)").contains("first=R"))
         XCTAssertTrue(SubtitlePresentation.punctuation("123").contains("none"))
+        XCTAssertTrue(SubtitlePresentation.punctuation("Ⅳ: نعم").contains("first=L"))
+        XCTAssertTrue(SubtitlePresentation.punctuation("𞸀!").contains("first=R"))
         XCTAssertEqual(SubtitlePresentation.clean(input),input)
         XCTAssertTrue(SubtitlePresentation.isSafeRenderSignature("visual=RTL; logical first=L; ::middle (:middle ؟:end"))
         XCTAssertFalse(SubtitlePresentation.isSafeRenderSignature("visual=RTL; logical first=L; private-dialogue"))
@@ -67,6 +85,7 @@ final class QualityMeasurementTests: XCTestCase {
         let baseline: [String:Any] = ["v":1,"type":"subtitle_show","id":"fixture","translated":"تحرك الآن.","source":"Move now."]
         let off = QualitySettings()
         XCTAssertEqual(try TVProtocol.encode(TVProtocol.qualityFields(baseline,settings:off,origin:.packExact)),try TVProtocol.encode(baseline))
+        XCTAssertEqual(try TVProtocol.encode(TVProtocol.qualityFields(baseline,settings:off,origin:.reuse,basis:.packExact)),try TVProtocol.encode(baseline))
         var all = off
         for flag in QualityFlag.allCases { all[flag] = true }
         XCTAssertEqual(TVProtocol.qualityFields(baseline,settings:all,origin:.packExact)["provenance"] as? String,"packExact")
@@ -129,5 +148,19 @@ final class QualityMeasurementTests: XCTestCase {
         var requests: [String] = []
         let result = try QualityReplay.run(data,translate:{ requests.append($0); return "stub" })
         XCTAssertEqual(requests,["Move now."]); XCTAssertEqual(result,["stub"])
+    }
+    func testReplayUsesRecordedGlyphSegmentsAndDoesNotDoubleReadPublications() throws {
+        let raw = CaptureLine(text:"Move now.     Alex",box:SourceBox(x:0.2,y:0.78,w:0.6,h:0.04),confidence:0.95)
+        let segments = [CaptureLine(text:"Alex",box:SourceBox(x:0.2,y:0.78,w:0.08,h:0.025),confidence:0.95),CaptureLine(text:"Move now.",box:SourceBox(x:0.31,y:0.78,w:0.4,h:0.035),confidence:0.95)]
+        var observation = QualityCaptureRecord(eventID:"obs-1",lines:[raw],parsed:"Move now.",engineInput:"",engineOutput:"",origin:nil,stage:.observation,timestamp:0.2,segments:segments)
+        var published = observation; published.eventID = "stable-id"; published.stage = .published
+        published.origin = .packExact; published.engineInput = "Move now."; published.engineOutput = "تحرك الآن."
+        var data = try JSONEncoder().encode(observation); data.append(10)
+        data.append(try JSONEncoder().encode(published)); data.append(10)
+        observation.eventID = "obs-2"; observation.timestamp = 0.4
+        data.append(try JSONEncoder().encode(observation))
+        var requested: [String] = []
+        XCTAssertEqual(try QualityReplay.run(data,translate:{requested.append($0); return "stub"}),["stub"])
+        XCTAssertEqual(requested,["Move now."])
     }
 }

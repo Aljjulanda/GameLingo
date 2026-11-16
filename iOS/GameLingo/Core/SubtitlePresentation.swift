@@ -1,6 +1,9 @@
 import Foundation
 
 enum SubtitlePresentation {
+    // ICU Unicode Bidi_Class, not a script-range/letter heuristic. Roman
+    // numerals and supplementary-plane letters also have strong directions.
+    private static let strongDirection = try! NSRegularExpression(pattern:"([\\p{bc=R}\\p{bc=AL}])|(\\p{bc=L})")
     /// Remove untrusted directional formatting, never meaningful punctuation.
     /// The TV owns presentation isolates and paragraph direction.
     static func clean(_ text: String) -> String {
@@ -10,10 +13,9 @@ enum SubtitlePresentation {
     static func punctuation(_ text: String) -> String {
         let marks = Set("()[]:\"'?؟!.…،؛«»-—")
         let characters = Array(text.trimmingCharacters(in:.whitespacesAndNewlines))
-        let first = text.unicodeScalars.first { CharacterSet.letters.contains($0) }
         let direction: String
-        if let first {
-            direction = (0x0590...0x08ff).contains(first.value) || (0xfb1d...0xfdff).contains(first.value) || (0xfe70...0xfefc).contains(first.value) || (0x1ee00...0x1eeff).contains(first.value) ? "R" : "L"
+        if let first = strongDirection.firstMatch(in:text,range:NSRange(text.startIndex...,in:text)) {
+            direction = first.range(at:1).location == NSNotFound ? "L" : "R"
         } else { direction = "none" }
         let positions = characters.enumerated().compactMap { index, mark -> String? in
             guard marks.contains(mark) else { return nil }

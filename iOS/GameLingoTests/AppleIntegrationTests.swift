@@ -130,15 +130,13 @@ final class AppleIntegrationTests: XCTestCase {
         let closed = expectation(description:"document closes")
         let ticket = UUID()
         var translatedPages: [String] = []
-        pipeline.onReading = { observed,active,pages,_ in
+        pipeline.onReading = { observed,active,pages,status in
+            print("SYNTHETIC_READING_STATE active=\(active) pages=\(pages.count) status=\(status)")
             XCTAssertEqual(observed,ticket)
             if active && pages.isEmpty { waiting.fulfill() }
             else if active { translatedPages = pages; ready.fulfill() }
             else { closed.fulfill() }
         }
-        pipeline.start(roi:.dialogue,mode:.balanced)
-        pipeline.requestReading(ticket:ticket)
-        await fulfillment(of:[waiting],timeout:5)
         let image = UIGraphicsImageRenderer(size:CGSize(width:1280,height:720)).image { context in
             UIColor.black.setFill(); context.fill(CGRect(x:0,y:0,width:1280,height:720))
             for (row,line) in ["Dear John,","We will not leave the camp.","Bring 11 coins before leaving."].enumerated() {
@@ -155,6 +153,11 @@ final class AppleIntegrationTests: XCTestCase {
         CVPixelBufferUnlockBaseAddress(pixels,[])
         let source = try VisionDialogueOCR().document(pixels).joined(separator:" ")
         XCTAssertTrue(source.contains("11")); XCTAssertTrue(source.lowercased().contains("not leave"))
+        // Construct and warm the synthetic fixture BEFORE the production
+        // six-second fresh-frame deadline. Fixture generation is not Remote Play.
+        pipeline.start(roi:.dialogue,mode:.balanced)
+        pipeline.requestReading(ticket:ticket)
+        await fulfillment(of:[waiting],timeout:5)
         pipeline.offer(pixels)
         await fulfillment(of:[ready],timeout:30)
         XCTAssertFalse(translatedPages.isEmpty)

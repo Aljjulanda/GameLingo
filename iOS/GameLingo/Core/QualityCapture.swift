@@ -3,13 +3,18 @@ import Foundation
 struct CaptureLine: Codable {
     var text: String, box: SourceBox, confidence: Double
 }
+enum CaptureStage: String, Codable { case observation, published }
 struct QualityCaptureRecord: Codable {
     var eventID: String
     var lines: [CaptureLine]
     var parsed: String
     var engineInput: String
     var engineOutput: String
-    var origin: TranslationOrigin
+    var origin: TranslationOrigin?
+    var stage: CaptureStage? = nil
+    var timestamp: Double? = nil
+    var segments: [CaptureLine]? = nil
+    var basis: TranslationOrigin? = nil
 }
 /// Explicit local consent only. Fixed filename, bounded session, no uploader.
 /// All methods confined to the pipeline queue (UI actions use that queue too).
@@ -19,6 +24,10 @@ final class QualityCapture {
     private(set) var active = false
     private var bytes = 0
     private var deadline = Date.distantPast
+    private var startClock = 0.0
+    private var observationSerial: UInt64 = 0
+    var elapsed: Double { max(0,ProcessInfo.processInfo.systemUptime-startClock) }
+    func observationID() -> String { observationSerial &+= 1; return "observation-\(observationSerial)" }
     let byteLimit: Int, retention: TimeInterval
     init(folder: URL, byteLimit: Int = 4*1024*1024, retention: TimeInterval = 86400) {
         self.folder = folder; self.byteLimit = max(256,byteLimit); self.retention = max(60,retention)
@@ -40,14 +49,18 @@ final class QualityCapture {
         try Data().write(to:file,options:[.atomic,.completeFileProtection])
         try FileManager.default.setAttributes([.protectionKey:FileProtectionType.complete],ofItemAtPath:file.path)
         #if !targetEnvironment(simulator)
-        guard protectionClass == FileProtectionType.complete.rawValue else {
+        guard Self.permitsProtectedRecording(protectionClass) else {
             throw LingoError.invalid("تعذر تأكيد حماية ملف التسجيل؛ لن تُسجل النصوص")
         }
         #endif
         #else
         try Data().write(to:file,options:.atomic)
         #endif
-        bytes = 0; deadline = now.addingTimeInterval(30*60); active = true
+        bytes = 0; deadline = now.addingTimeInterval(30*60)
+        startClock = ProcessInfo.processInfo.systemUptime; observationSerial = 0; active = true
+    }
+    static func permitsProtectedRecording(_ reportedClass: String?) -> Bool {
+        reportedClass == "NSFileProtectionComplete"
     }
     var protectionClass: String? {
         #if os(iOS)
@@ -79,10 +92,14 @@ enum QualityReplay {
         guard data.count <= 4*1024*1024 else { throw LingoError.invalid("ملف الاختبار كبير") }
         var selector = DialogueSelection(), tracker = DialogueTracker(), stability = PublicationStability()
         var result: [String] = [], clock = 0.0
-        for line in data.split(separator:10) {
-            clock += 0.6
-            let record = try JSONDecoder().decode(QualityCaptureRecord.self,from:Data(line))
-            let lines = record.lines.map{OCRLine(text:$0.text,box:$0.box,confidence:$0.confidence)}
+        let records = try data.split(separator:10).map { try JSONDecoder().decode(QualityCaptureRecord.self,from:Data($0)) }
+        // A real capture contains raw candidates AND publication outcomes.
+        // Replay candidates once; never count its publication record as a new
+        // OCR read. Legacy/synthetic publication-only files remain readable.
+        let rawStream = records.contains{$0.stage == .observation}
+        for record in records where !rawStream || record.stage == .observation {
+            clock = record.timestamp.map{max(clock,$0)} ?? clock+0.6
+            let lines = (record.segments ?? record.lines).map{OCRLine(text:$0.text,box:$0.box,confidence:$0.confidence)}
             let reading = DialogueObservation.resolve(lines,roi:.dialogue,knownNames:"",selector:&selector)
             if case .dialogue(let job,_) = tracker.observe(text:reading.content.text,box:reading.box,now:clock,frameMilliseconds:Int64(clock*1000),speaker:reading.content.speaker,confidence:reading.confidence), stability.shouldPublish(job) {
                 result.append(translate(job.text)); stability.didPublish(job)

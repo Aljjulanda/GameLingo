@@ -127,7 +127,13 @@ final class TranslationPackStore {
             metrics.recordPublished(event)
         }
     }
-    func recordAttempt(_ origin: TranslationOrigin) { queue.async { self.metrics.recordAttempt(origin) } }
+    func recordAttempt(_ origin: TranslationOrigin, fallback: TranslationFallback? = nil, game: String?, pack: String?) {
+        queue.async { [self] in
+            let active = state.loaded ? state.registry.packs.first{$0.manifest.gameId == state.registry.selectedGame && $0.enabled}?.id : nil
+            guard game == state.registry.selectedGame, pack == active else { return }
+            metrics.recordAttempt(origin,fallback:fallback)
+        }
+    }
     func publication(_ id: String, origin: TranslationOrigin, fallback: TranslationFallback? = nil) -> PublishedTranslation {
         queue.sync { PublishedTranslation(eventID:id,game:state.registry.selectedGame,
             pack:state.loaded ? state.registry.packs.first{$0.manifest.gameId == state.registry.selectedGame && $0.enabled}?.id : nil,

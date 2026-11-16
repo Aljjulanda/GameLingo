@@ -26,7 +26,14 @@ final class GamePackLibrary: ObservableObject {
     init(store: TranslationPackStore = TranslationPackStore()) {
         self.store = store
         store.onChange = { [weak self] value in
-            guard let self else { return }; self.state = value
+            guard let self else { return }
+            let previous = self.state
+            let oldPack = previous.registry.packs.first{$0.manifest.gameId == previous.registry.selectedGame && $0.enabled}?.id
+            let newPack = value.registry.packs.first{$0.manifest.gameId == value.registry.selectedGame && $0.enabled}?.id
+            if previous.registry.selectedGame != value.registry.selectedGame || oldPack != newPack || previous.loaded != value.loaded {
+                self.metrics = HybridMetrics(); self.selfTestReport = ""
+            }
+            self.state = value
             let active = value.loaded ? value.registry.packs.first { $0.manifest.gameId == value.registry.selectedGame && $0.enabled } : nil
             self.onNamesChanged?((active?.manifest.speakerNames ?? []).joined(separator:","))
         }
@@ -64,10 +71,10 @@ struct GamePackLibraryView: View {
             Section("طريقة الترجمة") {
                 Text(library.method)
             if model.quality[.measurement] {
-                Text(library.metrics.status(active:library.state.loaded,damaged:library.state.error != nil,threshold:model.quality.noHitThreshold))
+                Text(library.metrics.status(active:library.state.loaded,damaged:library.state.error != nil && !library.state.loaded && library.state.registry.selectedGame != nil,threshold:model.quality.noHitThreshold))
                 Text("المقام هو عدد معرّفات الحوار التي نُشرت للمرة الأولى منذ تفعيل اللعبة؛ لا يشمل محاولات OCR أو الاختبار الاصطناعي.").font(.footnote)
                 ForEach(TranslationOrigin.allCases,id:\.rawValue) { origin in
-                    LabeledContent(origin.title,value:String(library.metrics.origins[origin,default:0]))
+                    LabeledContent(origin.title,value:"\(library.metrics.origins[origin,default:0]) منشور · \(library.metrics.attemptOrigins[origin,default:0]) محاولة")
                 }
                 Button("اختبار الحزمة · اصطناعي") { library.testPack() }.disabled(!library.state.loaded || model.running)
                 if !library.selfTestReport.isEmpty { Text(library.selfTestReport).font(.footnote) }
@@ -173,7 +180,7 @@ struct HybridStatisticsView: View {
         Section("حزمة اللعبة وArgos") {
             Text(library.method)
             if model.quality[.measurement] {
-                Text(library.metrics.status(active:library.state.loaded,damaged:library.state.error != nil,threshold:model.quality.noHitThreshold))
+                Text(library.metrics.status(active:library.state.loaded,damaged:library.state.error != nil && !library.state.loaded && library.state.registry.selectedGame != nil,threshold:model.quality.noHitThreshold))
                 Text("المقام هو عدد معرّفات الحوار التي نُشرت للمرة الأولى منذ تفعيل اللعبة؛ لا يشمل محاولات OCR أو الاختبار الاصطناعي.").font(.footnote)
                 ForEach(TranslationOrigin.allCases,id:\.rawValue) { origin in
                     LabeledContent(origin.rawValue,value:String(library.metrics.origins[origin,default:0]))

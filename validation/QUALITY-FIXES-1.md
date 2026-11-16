@@ -201,3 +201,44 @@ Focused native checkpoints can select explicit XCTest identifiers and reject
 an empty/no-executed test result. They do not generate a release IPA and cannot
 substitute for the full unfiltered archive/native/GUI final workflow. Unit A
 still needs the affected native checks to pass before proceeding to B.
+
+### Focused native evidence and final unit-A corrections
+
+Focused run 43854174879 executed four cases. Secure WSS and actual Argos
+cache/equivalence passed. Model initialization measured 13,551.5 ms on this
+Intel Simulator. Smart Reading still failed because the test constructed and
+OCR-warmed its image AFTER starting the production six-second fresh-frame
+wait. Move synthetic image preparation before the request; offer its frame
+only after the waiting state is observed. Production deadline/reading code is
+unchanged; translated pages/number/freshness/context checks remain required.
+
+Protection metadata was absent (`present=false`) even after explicit setting;
+this is now an observed runtime limitation rather than an assumed cast issue.
+A direct Foundation control-file probe must confirm the same absence before
+marking the metadata-only hardware check skipped on Simulator. Backup exclusion,
+consent, no automatic resumption, limits, retention and replay remain tested.
+The real-device path never skips: it refuses recording unless COMPLETE is
+read back. A portable policy test rejects missing/weaker/unrecognized classes.
+Do not claim hardware encryption was validated by Simulator results.
+
+Final provenance ledger replaces each stable ID's source on accepted updates,
+without increasing Y. X follows the actual final source, including reuse with
+an explicit original basis and non-nil pack identity. Attempt origins/fallbacks
+are recorded before inference, including later cancellations. Rule/reuse paths
+are counted; selection identity rejects stale attempts. The UI immediately
+clears stale scope counters when changing games/activation and when resetting
+measurement. Unknown/synthetic compatibility probes never affect the ledger.
+
+Trace now uses actual Unicode Bidi_Class (ICU on Swift / Character on Android),
+including Roman numerals and supplementary Arabic letters; no script-range
+heuristic. Android's 31 JVM tests passed again after this change. Optional
+`provenance_basis` is sent only with the marker flag; all flags OFF omits every
+new optional field.
+
+Capture records pre-filter raw Vision lines AND actual glyph-derived segments,
+not only successful publications. Raw observation records have no fabricated
+engine provenance; publication records carry the chosen origin/basis. Monotonic
+relative timestamps allow typewriter replay. The replay selects the raw stream
+when present and never counts publication records as extra OCR reads. Both
+streams remain within the same protected, bounded, consent-only JSONL file.
+No production OCR sampling, ROI, filtering or duplicate algorithm was changed.

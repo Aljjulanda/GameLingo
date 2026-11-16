@@ -14,6 +14,7 @@ final class VisionDialogueOCR {
     var captureLines = false
     private var selector = DialogueSelection()
     private(set) var lastLines: [OCRLine] = []
+    private(set) var lastSegments: [OCRLine] = []
     private(set) var confidence: Double = 0
     private(set) var separateSpeakerLabel = false
     private(set) var content = DialogueContent(text:"",speaker:nil)
@@ -65,15 +66,21 @@ final class VisionDialogueOCR {
         // Vision's ROI is lower-left origin. The shared TV protocol uses top-left origin.
         request.regionOfInterest = CGRect(x:roi.x,y:1-roi.y-roi.h,width:roi.w,height:roi.h)
         try VNImageRequestHandler(cvPixelBuffer:buffer,orientation:.up,options:[:]).perform([request])
-        let lines: [OCRLine] = (request.results ?? []).flatMap { observation -> [OCRLine] in
-            guard let candidate = observation.topCandidates(1).first, candidate.confidence >= 0.2 else { return [] }
+        var lines: [OCRLine] = [], raw: [OCRLine] = []
+        for observation in request.results ?? [] {
+            guard let candidate = observation.topCandidates(1).first else { continue }
             let b = observation.boundingBox
-            // Vision reports observations relative to the request's ROI. Project
-            // into the full frame before applying dialogue geometry or event IDs.
-            return visualLines(candidate,box:b,roi:roi,knownNames:knownNames)
+            if captureLines || qualityTrace {
+                raw.append(OCRLine(text:candidate.string,box:project(b,roi:roi),confidence:Double(candidate.confidence)))
+            }
+            guard candidate.confidence >= 0.2 else { continue }
+            // Preserve the original eligibility and glyph-gap segmentation;
+            // debug raw observations are recorded before those transformations.
+            lines.append(contentsOf:visualLines(candidate,box:b,roi:roi,knownNames:knownNames))
         }
-        lastLines = captureLines ? Array(lines.prefix(150)) : []
-        punctuationTrace = qualityTrace ? SubtitlePresentation.punctuation(lines.map(\.text).joined(separator:" ")) : ""
+        lastLines = captureLines ? Array(raw.prefix(150)) : []
+        lastSegments = captureLines ? Array(lines.prefix(150)) : []
+        punctuationTrace = qualityTrace ? SubtitlePresentation.punctuation(raw.map(\.text).joined(separator:" ")) : ""
         let reading = DialogueObservation.resolve(lines,roi:roi,knownNames:knownNames,selector:&selector)
         confidence = reading.confidence; content = reading.content; separateSpeakerLabel = reading.separateSpeakerLabel
         return (reading.rawText,reading.box)

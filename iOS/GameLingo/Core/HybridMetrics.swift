@@ -37,6 +37,7 @@ struct TranslationDecision {
     var fallback: TranslationFallback?
     var game: String?
     var pack: String?
+    var basis: TranslationOrigin? = nil
 }
 struct PackLookupOutcome {
     var text: String?
@@ -50,6 +51,8 @@ struct PublishedTranslation: Codable {
     var eventID: String, game: String?, pack: String?
     var origin: TranslationOrigin
     var fallback: TranslationFallback?
+    var basis: TranslationOrigin? = nil
+    var isPackBacked: Bool { pack != nil && (origin.isPack || (origin == .reuse && basis?.isPack == true)) }
 }
 struct HybridMetrics {
     // Retain legacy attempt counters for comparison; none is the denominator Y.
@@ -60,20 +63,30 @@ struct HybridMetrics {
     private(set) var published = 0, publishedPack = 0
     private(set) var origins: [TranslationOrigin:Int] = [:]
     private(set) var attemptOrigins: [TranslationOrigin:Int] = [:]
+    private(set) var attemptFallbackReasons: [TranslationFallback:Int] = [:]
     private(set) var fallbackReasons: [TranslationFallback:Int] = [:]
     private(set) var lastEvent: PublishedTranslation?
-    private var seen = Set<String>()
+    private var events: [String:PublishedTranslation] = [:]
     private(set) var saturated = false
     var average: Double { lookups == 0 ? 0 : lookupTotal/Double(lookups) }
-    mutating func recordAttempt(_ origin: TranslationOrigin) { attemptOrigins[origin,default:0] += 1 }
+    mutating func recordAttempt(_ origin: TranslationOrigin, fallback: TranslationFallback? = nil) {
+        attemptOrigins[origin,default:0] += 1
+        if let fallback { attemptFallbackReasons[fallback,default:0] += 1 }
+    }
     /// Y = first accepted publication of each stable dialogue ID, in the current
     /// selected game/pack activation or explicit measurement reset. Corrections/retries never increment Y.
     mutating func recordPublished(_ event: PublishedTranslation) {
-        guard !seen.contains(event.eventID) else { return }
-        guard seen.count < 50000 else { saturated = true; return }
-        seen.insert(event.eventID); published += 1; lastEvent = event
+        if let old = events[event.eventID] {
+            origins[old.origin,default:0] -= 1
+            if old.isPackBacked { publishedPack -= 1 }
+            if let reason = old.fallback { fallbackReasons[reason,default:0] -= 1 }
+        } else {
+            guard events.count < 50000 else { saturated = true; return }
+            published += 1
+        }
+        events[event.eventID] = event; lastEvent = event
         origins[event.origin,default:0] += 1
-        if event.origin.isPack { publishedPack += 1 }
+        if event.isPackBacked { publishedPack += 1 }
         if let reason = event.fallback { fallbackReasons[reason,default:0] += 1 }
     }
     func status(active: Bool, damaged: Bool, threshold: Int = 20) -> String {
@@ -81,13 +94,14 @@ struct HybridMetrics {
         guard active else { return "غير مفعّلة (اختر اللعبة)" }
         if publishedPack > 0 { return "تعمل · \(publishedPack) من \(published) من الحزمة" }
         if published >= max(1,threshold) {
-            let top = fallbackReasons.sorted { $0.value == $1.value ? $0.key.rawValue < $1.key.rawValue : $0.value > $1.value }.first?.key.title ?? "لا مطابقة"
+            let top = fallbackReasons.filter{$0.value > 0}.sorted { $0.value == $1.value ? $0.key.rawValue < $1.key.rawValue : $0.value > $1.value }.first?.key.title ?? "اختيرت قواعد أو مصادر أخرى قبل الحزمة"
             return "مفعّلة · لا تطابق بعد \(published) حوار · السبب الأغلب: \(top)"
         }
         return "مفعّلة · بانتظار حوارات منشورة (\(published))"
     }
     var summary: String {
-        "Attempts: \(lookups); matches: \(matches); Argos requests: \(argos); published unique IDs Y: \(published); published pack X: \(publishedPack); saturated: \(saturated); lookup avg/p95 ms: \(NumericInput.format(average))/\(NumericInput.format(samples.p95))"
+        let identity = lastEvent.map { "last id=\($0.eventID) game=\($0.game ?? "general") pack=\($0.pack ?? "none") origin=\($0.origin.rawValue) basis=\($0.basis?.rawValue ?? "none")" } ?? "last event=none"
+        return "Attempts: \(lookups); matches: \(matches); Argos requests: \(argos); published unique IDs Y: \(published); published pack X: \(publishedPack); saturated: \(saturated); lookup avg/p95 ms: \(NumericInput.format(average))/\(NumericInput.format(samples.p95)); \(identity)"
     }
 }
 

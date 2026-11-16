@@ -16,7 +16,7 @@ final class AppModel: ObservableObject {
     @Published var quality = QualitySettings.load() {
         didSet {
             quality.save(); pipeline.configureQuality(quality)
-            if oldValue[.measurement] != quality[.measurement] { packLibrary.store.resetMetrics() }
+            if oldValue[.measurement] != quality[.measurement] { packLibrary.metrics = HybridMetrics(); packLibrary.store.resetMetrics() }
         }
     }
     @Published var qualityCaptureActive = false
