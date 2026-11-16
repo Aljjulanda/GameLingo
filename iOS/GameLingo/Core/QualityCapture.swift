@@ -88,7 +88,7 @@ final class QualityCapture {
 /// Deterministic post-OCR replay. It intentionally does not claim OCR/model or
 /// hardware coverage; native integration tests exercise those separately.
 enum QualityReplay {
-    static func run(_ data: Data, translate: (String) -> String) throws -> [String] {
+    static func run(_ data: Data, quality: QualitySettings = QualitySettings(), translate: (String) -> String) throws -> [String] {
         guard data.count <= 4*1024*1024 else { throw LingoError.invalid("ملف الاختبار كبير") }
         var selector = DialogueSelection(), tracker = DialogueTracker(), stability = PublicationStability()
         var result: [String] = [], clock = 0.0
@@ -100,9 +100,10 @@ enum QualityReplay {
         for record in records where !rawStream || record.stage == .observation {
             clock = record.timestamp.map{max(clock,$0)} ?? clock+0.6
             let lines = (record.segments ?? record.lines).map{OCRLine(text:$0.text,box:$0.box,confidence:$0.confidence)}
-            let reading = DialogueObservation.resolve(lines,roi:.dialogue,knownNames:"",selector:&selector)
+            let reading = DialogueObservation.resolve(lines,roi:.dialogue,knownNames:"",selector:&selector,quality:quality)
             if case .dialogue(let job,_) = tracker.observe(text:reading.content.text,box:reading.box,now:clock,frameMilliseconds:Int64(clock*1000),speaker:reading.content.speaker,confidence:reading.confidence), stability.shouldPublish(job) {
-                result.append(translate(job.text)); stability.didPublish(job)
+                let input = reading.content.engineText ?? job.text
+                result.append(input.isEmpty && reading.content.cue != nil ? reading.content.cue! : translate(input)); stability.didPublish(job)
             }
         }
         return result

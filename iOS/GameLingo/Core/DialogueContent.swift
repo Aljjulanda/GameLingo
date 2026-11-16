@@ -4,8 +4,13 @@ struct DialogueContent {
     let text: String
     let speaker: String?
     var uncertainSpeaker = false
+    var engineText: String? = nil
+    var cue: String? = nil
+    var speakerHidden = false
+    var labelForm: SpeakerLabelForm? = nil
     static let ordinary: Set<String> = ["warning","note","objective","mission","quest","hint","tip","chapter","attention","remember","listen","look","yes","no","hello","inventory","options","settings","item","message","journal","letter","press","hold","system","dialogue","go","run","wait","stop","help","come","follow","leave","hey","okay","sure","please","thanks","we","you","they","he","she","it","the","i","left","right","up","down","forward","back","attack","block","jump","reload","fire","aim","interact","move","get","out","open","close","collect","save","load","exit","enter","new","game"]
-    static func isName(_ value: String, knownNames: String, confidence: Double) -> Bool {
+    static func isName(_ value: String, knownNames: String, confidence: Double, quality: QualitySettings = QualitySettings()) -> Bool {
+        if quality[.speakerClassification] { return SpeakerEvidence.isName(value,knownNames:knownNames,confidence:confidence) }
         let label = speakerLabel(value)
         let key = label.lowercased().trimmingCharacters(in:CharacterSet(charactersIn:".:!"))
         let words = label.split(separator:" ")
@@ -25,7 +30,10 @@ struct DialogueContent {
         }
         return label
     }
-    static func parse(_ text: String, knownNames: String, separateLabel: Bool = false, confidence: Double = 1) -> DialogueContent {
+    static func parse(_ text: String, knownNames: String, separateLabel: Bool = false, confidence: Double = 1, quality: QualitySettings = QualitySettings()) -> DialogueContent {
+        if quality[.stageCues] || quality[.speakerClassification] {
+            return SpeakerEvidence.parse(text,knownNames:knownNames,separateLabel:separateLabel,confidence:confidence,quality:quality)
+        }
         let lines = SubtitlePresentation.clean(text).components(separatedBy:.newlines).filter { !$0.trimmingCharacters(in:.whitespaces).isEmpty }
         guard let first = lines.first else { return DialogueContent(text:"",speaker:nil) }
         if let opening = first.first, opening == "(" || opening == "[", let end = first.firstIndex(of:opening == "(" ? ")" : "]") {

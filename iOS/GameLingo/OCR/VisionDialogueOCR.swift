@@ -12,6 +12,10 @@ final class VisionDialogueOCR {
     }()
     var qualityTrace = false
     var captureLines = false
+    var quality = QualitySettings()
+    private(set) var nameConfidence = NameConfidenceCounts()
+    var configuredCustomWords: [String] { request.customWords }
+    var usesLanguageCorrection: Bool { request.usesLanguageCorrection }
     private var selector = DialogueSelection()
     private(set) var lastLines: [OCRLine] = []
     private(set) var lastSegments: [OCRLine] = []
@@ -27,7 +31,7 @@ final class VisionDialogueOCR {
     private func visualLines(_ candidate: VNRecognizedText, box: CGRect, roi: SourceBox, knownNames: String) -> [OCRLine] {
         let text = candidate.string, confidence = Double(candidate.confidence)
         let original = OCRLine(text:text,box:project(box,roi:roi),confidence:confidence)
-        if DialogueContent.parse(text,knownNames:knownNames,confidence:confidence).speaker != nil { return [original] }
+        if DialogueContent.parse(text,knownNames:knownNames,confidence:confidence,quality:quality).speaker != nil { return [original] }
         let words = text.split(whereSeparator:\.isWhitespace)
         guard words.count >= 3 else { return [original] }
         for leading in [true,false] {
@@ -35,7 +39,10 @@ final class VisionDialogueOCR {
                 let names = leading ? Array(words.prefix(count)) : Array(words.suffix(count))
                 let body = leading ? Array(words.dropFirst(count)) : Array(words.dropLast(count))
                 let nameRange = names.first!.startIndex..<names.last!.endIndex
-                guard DialogueContent.isName(String(text[nameRange]),knownNames:knownNames,confidence:confidence) else { continue }
+                let label = String(text[nameRange])
+                let classified = DialogueContent.isName(label,knownNames:knownNames,confidence:confidence,quality:quality)
+                let possibleLabel = quality[.speakerClassification] && SpeakerEvidence.shape(label) && !SpeakerEvidence.excluded(label) && label.first?.isUppercase == true
+                guard classified || possibleLabel else { continue }
                 let bodyRange = body.first!.startIndex..<body.last!.endIndex
                 guard let a = try? candidate.boundingBox(for:nameRange), let b = try? candidate.boundingBox(for:bodyRange) else { continue }
                 let gap = max(a.boundingBox.minX-b.boundingBox.maxX,b.boundingBox.minX-a.boundingBox.maxX)
@@ -65,6 +72,7 @@ final class VisionDialogueOCR {
         guard roi.isValid else { throw LingoError.invalid("منطقة الحوار غير صالحة") }
         // Vision's ROI is lower-left origin. The shared TV protocol uses top-left origin.
         request.regionOfInterest = CGRect(x:roi.x,y:1-roi.y-roi.h,width:roi.w,height:roi.h)
+        request.customWords = quality[.visionNames] ? VisionNameDictionary.words([knownNames]) : []
         try VNImageRequestHandler(cvPixelBuffer:buffer,orientation:.up,options:[:]).perform([request])
         var lines: [OCRLine] = [], raw: [OCRLine] = []
         for observation in request.results ?? [] {
@@ -81,7 +89,8 @@ final class VisionDialogueOCR {
         lastLines = captureLines ? Array(raw.prefix(150)) : []
         lastSegments = captureLines ? Array(lines.prefix(150)) : []
         punctuationTrace = qualityTrace ? SubtitlePresentation.punctuation(raw.map(\.text).joined(separator:" ")) : ""
-        let reading = DialogueObservation.resolve(lines,roi:roi,knownNames:knownNames,selector:&selector)
+        if quality[.speakerClassification] || quality[.visionNames] { nameConfidence.observe(lines) }
+        let reading = DialogueObservation.resolve(lines,roi:roi,knownNames:knownNames,selector:&selector,quality:quality)
         confidence = reading.confidence; content = reading.content; separateSpeakerLabel = reading.separateSpeakerLabel
         return (reading.rawText,reading.box)
     }

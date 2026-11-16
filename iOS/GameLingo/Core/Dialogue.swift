@@ -101,6 +101,8 @@ struct DialogueJob: Equatable {
     var meaningfulCorrection = false
     var eventBoundary = ""
     var sourceGapMilliseconds: Int64 = 0
+    var engineText: String? = nil
+    var cue: String? = nil
 }
 
 enum Observation {

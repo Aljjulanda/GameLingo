@@ -38,6 +38,7 @@ struct QualitySettings: Equatable {
     var noHitThreshold = 20
     var settleSeconds = 3.0
     var nameHeightRatio = 1.4, nameGapRatio = 2.0, nameOverlap = 0.15
+    var nameLeftOffset = 0.18
     subscript(_ flag: QualityFlag) -> Bool {
         get { enabled.contains(flag) }
         set { if newValue { enabled.insert(flag) } else { enabled.remove(flag) } }
@@ -48,11 +49,22 @@ struct QualitySettings: Equatable {
         for flag in QualityFlag.allCases { value[flag] = defaults.bool(forKey:"quality."+flag.rawValue) }
         if let n = defaults.object(forKey:"quality.noHitThreshold") as? Int { value.noHitThreshold = max(1,min(1000,n)) }
         if defaults.object(forKey:"quality.settleSeconds") != nil { value.settleSeconds = max(0,min(3,defaults.double(forKey:"quality.settleSeconds"))) }
+        func bounded(_ key: String, _ fallback: Double, _ range: ClosedRange<Double>) -> Double {
+            guard defaults.object(forKey:key) != nil else { return fallback }
+            let n = defaults.double(forKey:key)
+            return n.isFinite ? max(range.lowerBound,min(range.upperBound,n)) : fallback
+        }
+        value.nameHeightRatio = bounded("quality.nameHeightRatio",1.4,0.8...2)
+        value.nameGapRatio = bounded("quality.nameGapRatio",2,0.5...3)
+        value.nameOverlap = bounded("quality.nameOverlap",0.15,0...0.75)
+        value.nameLeftOffset = bounded("quality.nameLeftOffset",0.18,0...0.3)
         return value
     }
     func save(_ defaults: UserDefaults = .standard) {
         for flag in QualityFlag.allCases { defaults.set(self[flag],forKey:"quality."+flag.rawValue) }
         defaults.set(noHitThreshold,forKey:"quality.noHitThreshold")
         defaults.set(settleSeconds,forKey:"quality.settleSeconds")
+        defaults.set(nameHeightRatio,forKey:"quality.nameHeightRatio"); defaults.set(nameGapRatio,forKey:"quality.nameGapRatio")
+        defaults.set(nameOverlap,forKey:"quality.nameOverlap"); defaults.set(nameLeftOffset,forKey:"quality.nameLeftOffset")
     }
 }

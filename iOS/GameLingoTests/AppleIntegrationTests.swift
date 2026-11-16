@@ -50,6 +50,43 @@ final class AppleIntegrationTests: XCTestCase {
             XCTAssertFalse(ocr.content.text.lowercased().contains("arthur"))
         }
     }
+    func testQualityVisionNamesDictionaryDoesNotDegradeOrdinaryWords() throws {
+        var nameCorrect = [0,0], ordinaryCorrect = [0,0]
+        for source in ["Quillan: We should leave now.","The Stranger: We should leave now.","Wait: do not open the door.","Look: the river is deep."] {
+            let pixels = try visionFixture { _ in
+                (source as NSString).draw(at:CGPoint(x:230,y:530),withAttributes:[.font:UIFont.systemFont(ofSize:30),.foregroundColor:UIColor.white])
+            }
+            for enabled in [false,true] {
+                let ocr = VisionDialogueOCR(); ocr.quality[.visionNames] = enabled
+                ocr.quality[.speakerClassification] = true
+                let (text,_) = try ocr.recognize(pixels,roi:.dialogue,knownNames:"Quillan,The Stranger")
+                XCTAssertTrue(ocr.usesLanguageCorrection)
+                XCTAssertEqual(ocr.configuredCustomWords,enabled ? ["Quillan","The Stranger"] : [])
+                let index = enabled ? 1 : 0
+                if source.hasPrefix("Quillan:") || source.hasPrefix("The Stranger:") {
+                    let expected = String(source.split(separator:":")[0])
+                    if ocr.content.speaker?.lowercased() == expected.lowercased() { nameCorrect[index] += 1 }
+                    XCTAssertEqual(ocr.content.speaker,expected)
+                } else {
+                    if DialogueText.exactWords(text) == DialogueText.exactWords(source) { ordinaryCorrect[index] += 1 }
+                    XCTAssertEqual(DialogueText.exactWords(text),DialogueText.exactWords(source))
+                    XCTAssertNil(ocr.content.speaker,"Ordinary prefix must remain dialogue")
+                }
+            }
+        }
+        XCTAssertGreaterThanOrEqual(nameCorrect[1],nameCorrect[0]); XCTAssertEqual(nameCorrect[1],2)
+        XCTAssertGreaterThanOrEqual(ordinaryCorrect[1],ordinaryCorrect[0]); XCTAssertEqual(ordinaryCorrect[1],2)
+        print("SYNTHETIC_VISION_DICTIONARY name_correct=\(nameCorrect) ordinary_correct=\(ordinaryCorrect); clear synthetic glyphs, not game OCR quality")
+    }
+    func testQualityVisionRecognizedCueDoesNotEnterEngineInput() throws {
+        let pixels = try visionFixture { _ in
+            ("[laughs] We should leave now." as NSString).draw(at:CGPoint(x:240,y:530),withAttributes:[.font:UIFont.systemFont(ofSize:31),.foregroundColor:UIColor.white])
+        }
+        let ocr = VisionDialogueOCR(); ocr.quality[.stageCues] = true; ocr.quality[.speakerClassification] = true
+        _ = try ocr.recognize(pixels,roi:.dialogue)
+        XCTAssertEqual(ocr.content.engineText,"We should leave now.")
+        XCTAssertEqual(ocr.content.cue,"(ضحك)"); XCTAssertNil(ocr.content.speaker)
+    }
     func testNativeArgosAndContextRuleBenchmarkOnSyntheticDialogue() throws {
         let folder = try XCTUnwrap(Bundle(for:Self.self).url(forResource:"en_ar",withExtension:nil))
         var error: NSError?

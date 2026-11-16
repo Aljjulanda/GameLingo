@@ -7,11 +7,15 @@ struct QualitySettingsSection: View {
         Section("إصلاحات الجودة") {
             // Show only implemented units. Later units add their flags here
             // after their tests pass; the storage enum alone is not a feature.
-            ForEach([QualityFlag.measurement,.provenanceMarker,.punctuationTrace,.sessionCapture],id:\.rawValue) { flag in
+            ForEach([QualityFlag.measurement,.provenanceMarker,.punctuationTrace,.sessionCapture,.stageCues,.speakerClassification,.speakerGeometry,.visionNames],id:\.rawValue) { flag in
                 Toggle(flag.title,isOn:Binding(get:{model.quality[flag]},set:{model.quality[flag] = $0}))
             }
             DisclosureGroup("متقدم") {
                 Stepper("تنبيه غياب المطابقة: \(model.quality.noHitThreshold) حوار",value:$model.quality.noHitThreshold,in:1...1000)
+                Stepper("ارتفاع الاسم: \(model.quality.nameHeightRatio,specifier:"%.2f")",value:$model.quality.nameHeightRatio,in:0.8...2,step:0.1)
+                Stepper("فجوة الاسم: \(model.quality.nameGapRatio,specifier:"%.2f")",value:$model.quality.nameGapRatio,in:0.5...3,step:0.1)
+                Stepper("تداخل الاسم: \(model.quality.nameOverlap,specifier:"%.2f")",value:$model.quality.nameOverlap,in:0...0.75,step:0.05)
+                Stepper("إزاحة الاسم الجانبية: \(model.quality.nameLeftOffset,specifier:"%.2f")",value:$model.quality.nameLeftOffset,in:0...0.3,step:0.02)
             }
             Button("استعادة الافتراضي") { model.quality = QualitySettings() }
             if model.qualityCaptureActive {

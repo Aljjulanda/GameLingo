@@ -99,6 +99,7 @@ final class AppModel: ObservableObject {
             "Audio interruptions: \(audioInterruptions)", "Network interruptions: \(networkInterruptions)",
             "Duplicate OCR suppressed: \(metrics.duplicatesSuppressed)", "OCR corrections merged: \(metrics.correctionsMerged)",
             "Speaker readings detected: \(metrics.speakersDetected)", "Speaker readings uncertain: \(metrics.speakersUncertain)",
+            "Confirmed labels hidden: \(metrics.speakerHidden)", metrics.nameConfidence,
             "Battery percentage change: \(batteryUsed.map(NumericInput.format) ?? "unavailable")",
             "Smart Reading: \(NumericInput.format(metrics.documentMilliseconds)) ms, sampled extra RSS \(NumericInput.format(metrics.documentExtraMegabytes)) MB",
             "Punctuation stages (logical order, no dialogue): \(metrics.punctuationTrace)",

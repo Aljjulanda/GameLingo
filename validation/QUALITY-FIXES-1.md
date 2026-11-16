@@ -242,3 +242,26 @@ relative timestamps allow typewriter replay. The replay selects the raw stream
 when present and never counts publication records as extra OCR reads. Both
 streams remain within the same protected, bounded, consent-only JSONL file.
 No production OCR sampling, ROI, filtering or duplicate algorithm was changed.
+
+### Unit A checkpoint accepted; unit B in progress
+
+Source b00f181 passed all 91 portable Swift cases (run 43858901911), 31 Android
+JVM cases, packaging/source checks, and five native runtime cases in focused run
+43858905781. The sixth native case explicitly skipped only the hardware file-
+protection metadata assertion after both capture and direct Foundation control
+returned no metadata. Consent, backup exclusion, no resumption, bounds and the
+physical-device fail-closed COMPLETE policy remain required and passed their
+available tests. This is not a full release gate or physical-device validation.
+
+Unit B extends the existing parser/selector; all four flags remain OFF by default.
+Recognized leading cues keep a distinct English source identity, while only the
+body reaches rules/pack/Argos. A cue alone uses the authored masdar, never model
+inference. Optional cue metadata is ignored by old TVs (a cue-only body remains
+readable); inline styling arrives in G. Mid-sentence and uncertain narrative
+brackets remain intact. Confirmed spatial labels can be removed without claiming
+their identity; hidden counts and confidence bins contain no text. Digit names
+use explicit bounded patterns, and entirely ordinary/HUD prefixes are excluded.
+Geometry preferences are independently persisted and bounded in Advanced.
+Vision's existing language-correction setting remains enabled; customWords are
+deduplicated/capped at 200 and cleared when the dictionary flag is OFF. Real
+Vision comparisons and portable regression checks are pending before unit C.

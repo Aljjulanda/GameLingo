@@ -13,6 +13,8 @@ struct PipelineMetrics {
     var documentCompleted = 0, documentTotal = 0
     var duplicatesSuppressed = 0, correctionsMerged = 0, speakersDetected = 0, speakersUncertain = 0
     var punctuationTrace = ""
+    var speakerHidden = 0
+    var nameConfidence = ""
 }
 
 final class FramePipeline {
@@ -46,7 +48,7 @@ final class FramePipeline {
     private var pendingCapture: [CaptureLine] = []
     private var pendingSegments: [CaptureLine] = []
     func configureQuality(_ value: QualitySettings) { queue.async {
-        self.quality = value; self.ocr.qualityTrace = value[.punctuationTrace]
+        self.quality = value; self.ocr.quality = value; self.ocr.qualityTrace = value[.punctuationTrace]
         if !value[.sessionCapture] { self.capture.stop(); self.ocr.captureLines = false; self.reportCapture() }
     } }
     func captureAction(start: Bool = false, delete: Bool = false) {
@@ -147,6 +149,7 @@ final class FramePipeline {
     private func reset(preservingState: Bool = false) {
         finishReading()
         timer?.cancel(); timer = nil; runID = UUID(); pending = nil; pendingCapture = []; pendingSegments = []; ocr = VisionDialogueOCR(); ocr.setBackground(isBackground); ocr.qualityTrace = quality[.punctuationTrace]; ocr.captureLines = capture.active; signature = FrameSignature()
+        ocr.quality = quality
         if preservingState { tracker.markInterrupted(); memory.prune(now:ProcessInfo.processInfo.systemUptime) }
         else { tracker.reset(); memory.clear(); stability.clear(); translations = BoundedLRU(capacity:8) }
         // An already running inference still owns the single worker until its callback.
@@ -195,6 +198,8 @@ final class FramePipeline {
             }
             if content.speaker != nil { metrics.speakersDetected += 1 }
             if content.uncertainSpeaker { metrics.speakersUncertain += 1 }
+            if content.speakerHidden { metrics.speakerHidden += 1 }
+            if quality[.speakerClassification] || quality[.visionNames] { metrics.nameConfidence = ocr.nameConfidence.summary }
             metrics.punctuationTrace = quality[.punctuationTrace] ? "OCR " + ocr.punctuationTrace + " | parsed " + SubtitlePresentation.punctuation(content.text) : ""
             metrics.recognitions &+= 1
             metrics.actualOCRRate = Double(metrics.recognitions)/max(0.001,ProcessInfo.processInfo.systemUptime-startedAt)
@@ -205,7 +210,8 @@ final class FramePipeline {
             case .unchanged: break
             case .gone(let id):
                 translator.cancel(); pending = nil; publish(TVProtocol.envelope("subtitle_source_gone",fields:["id":id])); lastTextChange = now
-            case .dialogue(let job,let previous):
+            case .dialogue(var job,let previous):
+                job.engineText = content.engineText; job.cue = content.cue
                 translator.packs?.recordDialogue(job.id)
                 if let previous { publish(TVProtocol.envelope("subtitle_source_gone",fields:["id":previous])) }
                 guard stability.shouldPublish(job) else { memory.observe(job,now:now); break }
@@ -227,8 +233,10 @@ final class FramePipeline {
         let epoch = runID
         memory.prune(now:ProcessInfo.processInfo.systemUptime)
         let cached = translations.get(job.id)
+        let engineInput = job.engineText ?? job.text
         let reusable = !job.meaningfulCorrection && cached.map { DialogueText.same($0.0,job.text) && !DialogueText.prefix($0.0,job.text) } == true
-        let override = reusable ? cached?.1 : Terminology.resolve(job.text,rules:advanced.terminology,context:memory.entries.filter { $0.id != job.id })
+        let cueOnly = engineInput.isEmpty && job.cue != nil
+        let override = reusable ? cached?.1 : (cueOnly ? job.cue : Terminology.resolve(engineInput,rules:advanced.terminology,context:memory.entries.filter { $0.id != job.id }))
         let punctuationTrace = metrics.punctuationTrace
         let captureLines = pendingCapture, captureSegments = pendingSegments
         let selection = override != nil && (quality[.measurement] || quality[.provenanceMarker] || capture.active) ? translator.packs?.publication(job.id,origin:reusable ? .reuse : .rule) : nil
@@ -247,15 +255,16 @@ final class FramePipeline {
                             self.stability.didPublish(delivered)
                             self.translations.put((job.text,text,decision),for:job.id)
                             self.memory.observe(job,now:ProcessInfo.processInfo.systemUptime)
-                            let message = TVProtocol.qualityFields(TVProtocol.subtitle(delivered,arabic:text,now:TVHub.now()),settings:self.quality,origin:decision.origin,basis:decision.basis)
+                            var message = TVProtocol.qualityFields(TVProtocol.subtitle(delivered,arabic:text,now:TVHub.now()),settings:self.quality,origin:decision.origin,basis:decision.basis)
+                            if self.quality[.stageCues], let cue = job.cue { message["cue"] = cue; if cueOnly { message["cue_only"] = true } }
                             if self.quality[.measurement] {
                                 self.translator.packs?.recordPublished(PublishedTranslation(eventID:delivered.id,game:decision.game,pack:decision.pack,origin:decision.origin,fallback:decision.fallback,basis:decision.basis))
                             }
                             if self.quality[.punctuationTrace] {
-                                self.metrics.punctuationTrace = punctuationTrace + " | input " + SubtitlePresentation.punctuation(job.text) + " | raw " + SubtitlePresentation.punctuation(text) + " | repair " + SubtitlePresentation.punctuation(text) + " | wire " + SubtitlePresentation.punctuation(message["translated"] as? String ?? "")
+                                self.metrics.punctuationTrace = punctuationTrace + " | input " + SubtitlePresentation.punctuation(engineInput) + " | raw " + SubtitlePresentation.punctuation(text) + " | repair " + SubtitlePresentation.punctuation(text) + " | wire " + SubtitlePresentation.punctuation(message["translated"] as? String ?? "")
                             }
                             if self.capture.active {
-                                do { try self.capture.append(QualityCaptureRecord(eventID:delivered.id,lines:captureLines,parsed:job.text,engineInput:job.text,engineOutput:text,origin:decision.origin,stage:.published,timestamp:self.capture.elapsed,segments:captureSegments,basis:decision.basis)) }
+                                do { try self.capture.append(QualityCaptureRecord(eventID:delivered.id,lines:captureLines,parsed:job.text,engineInput:engineInput,engineOutput:text,origin:decision.origin,stage:.published,timestamp:self.capture.elapsed,segments:captureSegments,basis:decision.basis)) }
                                 catch { self.capture.stop() }
                                 self.reportCapture()
                             }
@@ -274,7 +283,7 @@ final class FramePipeline {
             }
             if quality[.measurement] { translator.packs?.recordAttempt(decision.origin,fallback:decision.fallback,game:decision.game,pack:decision.pack) }
             completion(.success(decision),0)
-        } else { translator.translateDetailed(job.text,eventID:job.id,completion:completion) }
+        } else { translator.translateDetailed(engineInput,eventID:job.id,completion:completion) }
     }
     func requestReading(ticket: UUID) {
         translator.cancel()
