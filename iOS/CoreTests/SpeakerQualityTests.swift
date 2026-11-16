@@ -43,13 +43,13 @@ final class SpeakerQualityTests: XCTestCase {
     }
     func testConfirmedUnknownLabelIsRemovedBeforeIdentityIsKnown() {
         let q = flags(.speakerClassification)
-        let before = DialogueContent.parse("M0rgan\nWe need to leave.",knownNames:"",separateLabel:true,confidence:0.5,quality:q)
+        let before = DialogueContent.parse("Arthur\nWe need to leave.",knownNames:"",separateLabel:true,confidence:0.5,quality:q)
         XCTAssertEqual(before.text,"We need to leave."); XCTAssertTrue(before.speakerHidden); XCTAssertNil(before.speaker)
-        let after = DialogueContent.parse("M0rgan\nWe need to leave.",knownNames:"M0rgan",separateLabel:true,confidence:0.5,quality:q)
-        XCTAssertEqual(before.text,after.text); XCTAssertEqual(after.speaker,"M0rgan")
+        let after = DialogueContent.parse("Arthur\nWe need to leave.",knownNames:"Arthur",separateLabel:true,confidence:0.5,quality:q)
+        XCTAssertEqual(before.text,after.text); XCTAssertEqual(after.speaker,"Arthur")
         XCTAssertEqual(before.labelForm,.separate)
-        let uncertain = DialogueContent.parse("[M0rgan] We need to leave.",knownNames:"",confidence:0.5,quality:q)
-        XCTAssertTrue(uncertain.text.contains("M0rgan"),"No spatial or accepted-name evidence: preserve the source")
+        let uncertain = DialogueContent.parse("[Arthur] We need to leave.",knownNames:"",confidence:0.5,quality:q)
+        XCTAssertTrue(uncertain.text.contains("Arthur"),"No spatial or accepted-name evidence: preserve the source")
     }
     func testGeometryAllowsLeftOffsetButRejectsRemoteOrHUDElements() {
         let q = flags(.speakerClassification,.speakerGeometry)
