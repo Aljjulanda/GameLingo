@@ -9,6 +9,7 @@ import UniformTypeIdentifiers
     private let root: URL
     private var selection: String?
     private var history = RecentPublishedLines()
+    private(set) var historyToken = UUID()
     var onChange: ((CorrectionsSnapshot) -> Void)?
     init(root: URL? = nil) {
         self.root = root ?? FileManager.default.urls(for:.applicationSupportDirectory,in:.userDomainMask)[0].appendingPathComponent("corrections",isDirectory:true)
@@ -27,18 +28,25 @@ import UniformTypeIdentifiers
             message = ""; refresh()
         } catch {
             store = nil; selection = selected
+            let previousScope = snapshot.scopeKey
             snapshot = CorrectionsSnapshot(game:game,general:selected == nil ? true : nil)
+            if previousScope != snapshot.scopeKey { historyToken = UUID() }
             message = "تعذر تحميل التصحيحات؛ لم يُستبدل الملف السابق"
             history.select(snapshot.scopeKey); recent = history.entries; onChange?(snapshot)
         }
     }
     private func refresh() {
+        let previousScope = snapshot.scopeKey
         if let store { snapshot = store.snapshot }
+        if previousScope != snapshot.scopeKey { historyToken = UUID() }
         history.select(snapshot.scopeKey); recent = history.entries; onChange?(snapshot)
     }
     // Receives only successfully published dialogues, never raw OCR candidates.
-    func published(_ line: RecentPublishedLine) { history.published(line); recent = history.entries }
-    func clearRecent() { history.clear(); recent = [] }
+    func published(_ line: RecentPublishedLine, token: UUID) {
+        guard token == historyToken else { return }
+        history.published(line); recent = history.entries
+    }
+    func clearRecent() { historyToken = UUID(); history.clear(); recent = []; onChange?(snapshot) }
     @discardableResult func save(source: String, target: String, id: String? = nil) -> Bool {
         guard let store else { message = "تعذر فتح مخزن التصحيحات؛ لم يُحفظ التعديل"; return false }
         do { try store.save(source:source,target:target,id:id); message = "حُفظ التصحيح للمرات القادمة"; refresh(); return true }

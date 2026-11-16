@@ -51,9 +51,11 @@ final class FramePipeline {
     private var namesCacheKey: String { namesSnapshot.outputKey }
     private var correctionSnapshot = CorrectionsSnapshot(game:"general",general:true)
     private var corrections = CorrectionContext(CorrectionsSnapshot(game:"general",general:true),enabled:false)
-    var onRecentPublished: ((RecentPublishedLine) -> Void)?
+    private var recentToken = UUID()
+    var onRecentPublished: ((RecentPublishedLine,UUID) -> Void)?
     private var outputContextKey: String { namesCacheKey+"|"+corrections.outputKey+"|"+quality.outputKey }
-    func configureCorrections(_ snapshot: CorrectionsSnapshot) { queue.async {
+    func configureCorrections(_ snapshot: CorrectionsSnapshot, recentToken: UUID? = nil) { queue.async {
+        if let recentToken { self.recentToken = recentToken }
         self.correctionSnapshot = snapshot
         let context = CorrectionContext(snapshot,enabled:self.quality[.corrections])
         if self.corrections.outputKey != context.outputKey { self.translations = BoundedLRU(capacity:8) }
@@ -278,6 +280,7 @@ final class FramePipeline {
         let epoch = runID
         let contextKey = outputContextKey
         let correctionScope = correctionSnapshot.scopeKey
+        let publicationToken = recentToken
         memory.prune(now:ProcessInfo.processInfo.systemUptime)
         let cached = translations.get(job.id)
         let engineInput = job.engineText ?? job.text
@@ -332,7 +335,7 @@ final class FramePipeline {
                             self.publish(message)
                             if self.quality[.corrections] {
                                 let recent = RecentPublishedLine(id:delivered.id,scope:self.correctionSnapshot.scopeKey,source:correctionSource,target:message["translated"] as? String ?? text,origin:decision.origin)
-                                DispatchQueue.main.async { self.onRecentPublished?(recent) }
+                                DispatchQueue.main.async { self.onRecentPublished?(recent,publicationToken) }
                             }
                         }
                     case .failure(let error): if !(error is CancellationError) { DispatchQueue.main.async { self.onError?(error.localizedDescription) } }

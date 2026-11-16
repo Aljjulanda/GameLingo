@@ -415,3 +415,15 @@ B/C native Intel43902723228 is still queued without a runner at this writing.
 No new release or IPA/APK has been published. D production wiring remains
 provisional pending build/native/legacy verification; do not move on to E until
 its required tests are resolved or the incomplete unit is explicitly isolated.
+
+D sourcecd80f78 passed all114 portable cases in43903911917/job133427512789.
+A library-generation token now also rejects callbacks queued before Stop, OFF
+or A->B->A scope changes, even if the app has already restarted a session when
+the main queue receives them. The token is RAM-only, never a persisted history.
+Its native regression fixture exercises late Stop and returning-scope callbacks.
+
+Intel43902723228 was cancelled by a higher-priority stale concurrency request,
+NOT by an Intel capacity annotation. The old43894082288 eventually became pending;
+its normal cancel then succeeded (earlier409 requests had not been queued yet).
+New combined B/C/D native43904258846 oncd80f78 is queued on Intel, same Xcode16.4.
+ARM43897279214 remains the confirmed hosted-capacity failure.

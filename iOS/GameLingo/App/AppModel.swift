@@ -137,11 +137,13 @@ final class AppModel: ObservableObject {
         pipeline.captureAction()
         namesLibrary.onChange = { [weak self] store,snapshot in self?.pipeline.configureNames(store,snapshot:snapshot) }
         pipeline.configureNames(namesLibrary.store,snapshot:namesLibrary.snapshot)
-        correctionsLibrary.onChange = { [weak self] snapshot in self?.pipeline.configureCorrections(snapshot) }
-        pipeline.configureCorrections(correctionsLibrary.snapshot)
-        pipeline.onRecentPublished = { [weak self] line in
+        correctionsLibrary.onChange = { [weak self] snapshot in
+            guard let self else { return }; self.pipeline.configureCorrections(snapshot,recentToken:self.correctionsLibrary.historyToken)
+        }
+        pipeline.configureCorrections(correctionsLibrary.snapshot,recentToken:correctionsLibrary.historyToken)
+        pipeline.onRecentPublished = { [weak self] line,token in
             guard let self, self.running, self.quality[.corrections] else { return }
-            self.correctionsLibrary.published(line)
+            self.correctionsLibrary.published(line,token:token)
         }
         packLibrary.onNamesChanged = { [weak self] names in
             guard let self else { return }
