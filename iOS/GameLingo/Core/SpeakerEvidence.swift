@@ -44,6 +44,7 @@ enum SpeakerEvidence {
         let words = key.split(separator:" ").map(String.init)
         return StageDirections.arabic(key) != nil || hud.contains(key) ||
             (!words.isEmpty && words.allSatisfy { DialogueContent.ordinary.contains($0) || hud.contains($0) }) ||
+            ["press ","hold ","tap "].contains(where:key.hasPrefix) ||
             key.range(of:"^(hp|ammo|fps|xp|level|score)\\s*\\d",options:.regularExpression) != nil
     }
     static func digitName(_ word: String) -> Bool {
@@ -52,6 +53,7 @@ enum SpeakerEvidence {
     static func isName(_ value: String, knownNames: String, confidence: Double) -> Bool {
         let label = DialogueContent.speakerLabel(value), words = label.split(separator:" ").map(String.init)
         guard shape(label), !excluded(label) else { return false }
+        guard words.allSatisfy({ !$0.contains(where:\.isNumber) || digitName($0) }) else { return false }
         if known(label,knownNames) { return confidence >= 0.35 }
         guard confidence >= 0.65 else { return false }
         var distinctive = false

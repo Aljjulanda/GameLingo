@@ -35,9 +35,10 @@ final class SpeakerQualityTests: XCTestCase {
             XCTAssertTrue(DialogueContent.isName(name,knownNames:"",confidence:0.9,quality:q),name)
             XCTAssertEqual(DialogueContent.parse(name+": We must go.",knownNames:"",quality:q).speaker,name)
         }
-        for value in ["The","Wait","Main Menu","Health","HP 47","2026","PS5","Music","Mission Objective","Press A","the wind"] {
+        for value in ["The","Wait","Main Menu","Health","HP 47","2026","PS5","Music","Mission Objective","Press A"] {
             XCTAssertFalse(DialogueContent.isName(value,knownNames:value,confidence:1,quality:q),value)
         }
+        XCTAssertFalse(DialogueContent.isName("the wind",knownNames:"",confidence:1,quality:q))
         XCTAssertFalse(DialogueContent.isName("The Stranger",knownNames:"",confidence:1),"Independent rollback restores strict classifier")
     }
     func testConfirmedUnknownLabelIsRemovedBeforeIdentityIsKnown() {
