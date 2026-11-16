@@ -51,7 +51,12 @@ final class NamesIntegrationTests: XCTestCase {
             }
         }
         XCTAssertEqual(probes,20)
-        print("SYNTHETIC_NAME_FORMS survived=\(survival) context_unchanged=\(unchanged) unsafe_survivors=\(unsafe); Intel Simulator FLOAT32, not phone INT8")
+        #if arch(arm64)
+        let environment = "ARM64 Simulator; bridge requests INT8, not a physical iPhone"
+        #else
+        let environment = "Intel Simulator; bridge requests FLOAT32, not phone INT8"
+        #endif
+        print("SYNTHETIC_NAME_FORMS survived=\(survival) context_unchanged=\(unchanged) unsafe_survivors=\(unsafe); \(environment)")
     }
     #endif
     func testNamesStoreBackupAndRealTranslatorCacheInvalidation() async throws {

@@ -381,3 +381,11 @@ The full release workflow is unchanged. Remove checkpoint push activation to
 avoid an accidental duplicate expensive job; manual tests remain available.
 Names typed place/term remain in Vision words but are not added as trusted
 PERSON speaker identities. New source still needs Core/native revalidation.
+
+ARM checkpoint43897279214 did not receive a hosted runner: annotation says
+"The job was not acquired by Runner of type hosted even after multiple attempts"
+and reports ARM capacity constraints. No checkout/build/test step ran. This is
+not a native test result. Keep Xcode16.4; retry available Intel capacity. Also
+serialize first names-file export under the store lock, preventing an empty
+first-export write from racing a concurrent explicit edit. Native experiment
+logs now identify ARM64 versus Intel Simulator instead of hardcoding Intel.

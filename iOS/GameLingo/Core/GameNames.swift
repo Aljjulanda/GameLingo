@@ -135,9 +135,9 @@ final class GameNamesStore {
         }
     }
     func export() throws -> URL {
-        try change { _ in }
+        lock.lock(); defer { lock.unlock() }
         // An empty new store has no file until explicitly exported.
-        if !FileManager.default.fileExists(atPath:file.path) { try UserDataFile.write(JSONEncoder().encode(snapshot),to:file) }
+        if !FileManager.default.fileExists(atPath:file.path) { try UserDataFile.write(JSONEncoder().encode(state),to:file) }
         return file
     }
 }
