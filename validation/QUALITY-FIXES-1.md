@@ -468,3 +468,36 @@ Future IPA native verification remains mandatory. No source/pack/capture data or
 keys are bundled into test images/APK. See Arabic TV report for exact APK hash,
 original certificate, package/version, limitations and installation steps.
 No new GitHub Release, no replacement of old release or physical TV installation.
+
+### Full run43920818047: archive succeeds; runtime green was NOT test execution
+
+Full Intel run onfb76f91 acquired a runner and passed source/115 Core cases,
+real RDR2/maintenance validation, project and physical ARM64 archive. IPA artifact
+14255356102 verified ZIPdigest2fe0f1e1e4d9f859f498c4b40750fde0b27ee15806ded9639fd2719a14ece5c3;
+actual IPA3,024,681bytes SHA2563cdb1dea050a022e73cd3fb477891a459b15908fed07529fbcf0fa0d2c63304a,
+dev.gamelingo.ios0.3.0/build8, unsigned/physical ARM64 structure validated locally.
+It is NOT approved/published: the whole run failed.
+
+The API marked the native step successful, which initially led to an incorrect
+progress claim. Inspection of the actual validation artifact14255437882 (ZIP
+SHA2560d5c4b2039fe77c0944357a18ab4d3a48a1316920c7d7541d3f3b1bfd8527f19)
+revealed apple-tests.log EMPTY and NO result bundle. Exact job line:
+`iOS/Scripts/test.sh: line51: TEST_FILTER_ARGS[@]: unbound variable`.
+The full unfiltered route expanded an empty optional array under macOS Bash3.2
+nounset and never invoked xcodebuild test. Focused runs used a nonempty array.
+Thus B/C/D runtime is STILL unverified; do not claim a pass from step color.
+
+Use an always-nonempty command array and append only explicit validated filters.
+Both full/focused native and picker scripts now require a nonempty XCTest
+execution summary AND result bundle. Four orchestration regressions run the REAL
+shell script with fake SDK tools: unfiltered invocation, optional filter
+forwarding/rejection, zero-exit/no-tests rejection, failure through tee/cleanup.
+All4 passed locally using Git Bash, separately labeled STUB/orchestration tests;
+these do not replace actual Mac tests. Keep Xcode16.4 and all runtime cases.
+Move IPA upload after both runtime and actual picker checks, preventing a failed
+run from exposing a new IPA artifact as if approved.
+
+Picker build also caught a real test compilation error: waitFinished throws but
+testSandboxFolderImportsWithoutSystemPicker had neither throws nor try. Corrected
+in0c14b60; no application behavior or assertions removed. Repeat the FULL workflow
+on the combined fix. No new Release, no distribution of this failed-run IPA.

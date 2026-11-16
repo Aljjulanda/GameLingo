@@ -23,3 +23,5 @@ xcodebuild test-without-building -project GameLingo.xcodeproj -scheme GameLingoP
   -resultBundlePath build/GameLingoPickerUI.xcresult \
   CODE_SIGN_ENTITLEMENTS='' ARCHS="$ARCH" ONLY_ACTIVE_ARCH=YES \
   2>&1 | tee build/logs/picker-ui-tests.log
+test -d build/GameLingoPickerUI.xcresult || { echo 'Missing picker XCTest result bundle'; exit 1; }
+grep -Eq 'Executed [1-9][0-9]* tests?' build/logs/picker-ui-tests.log || { echo 'No picker XCTest cases executed'; exit 1; }

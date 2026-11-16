@@ -38,21 +38,23 @@ else
   python3 Scripts/prepare-simulator.py
   DESTINATION="$(cat build/simulator-destination.txt)"
 fi
-TEST_FILTER_ARGS=()
+# macOS ships Bash 3.2: expanding an empty array with nounset can abort
+# before xcodebuild runs. Keep the command nonempty for the unfiltered route.
+TEST_COMMAND=(xcodebuild test-without-building -project GameLingo.xcodeproj -scheme GameLingo -configuration Debug
+  -destination "$DESTINATION" -derivedDataPath build/DerivedData
+  -resultBundlePath build/GameLingoTests.xcresult
+  CODE_SIGN_ENTITLEMENTS='' ARCHS="$ARCH" ONLY_ACTIVE_ARCH=YES)
+FILTER_COUNT=0
 if [[ -n "${IOS_TEST_FILTERS:-}" ]]; then
   while IFS= read -r filter; do
     [[ -z "$filter" ]] && continue
     [[ "$filter" =~ ^GameLingoTests/[A-Za-z0-9_]+(/[A-Za-z0-9_]+)?$ ]] || { echo 'Invalid focused XCTest identifier'; exit 2; }
-    TEST_FILTER_ARGS+=("-only-testing:$filter")
+    TEST_COMMAND+=("-only-testing:$filter")
+    FILTER_COUNT=$((FILTER_COUNT+1))
+    printf 'Focused native test identifier: %s\n' "$filter"
   done <<< "$IOS_TEST_FILTERS"
-  ((${#TEST_FILTER_ARGS[@]} > 0)) || { echo 'Focused test list was empty'; exit 2; }
-  printf 'Focused native test identifier: %s\n' "${TEST_FILTER_ARGS[@]}"
+  ((FILTER_COUNT > 0)) || { echo 'Focused test list was empty'; exit 2; }
 fi
-xcodebuild test-without-building -project GameLingo.xcodeproj -scheme GameLingo -configuration Debug \
-  -destination "$DESTINATION" -derivedDataPath build/DerivedData \
-  -resultBundlePath build/GameLingoTests.xcresult \
-  CODE_SIGN_ENTITLEMENTS='' ARCHS="$ARCH" ONLY_ACTIVE_ARCH=YES "${TEST_FILTER_ARGS[@]}" \
-  2>&1 | tee build/logs/apple-tests.log
-if [[ -n "${IOS_TEST_FILTERS:-}" ]]; then
-  grep -Eq 'Executed [1-9][0-9]* tests?' build/logs/apple-tests.log || { echo 'No focused XCTest cases executed'; exit 1; }
-fi
+"${TEST_COMMAND[@]}" 2>&1 | tee build/logs/apple-tests.log
+test -d build/GameLingoTests.xcresult || { echo 'Missing native XCTest result bundle'; exit 1; }
+grep -Eq 'Executed [1-9][0-9]* tests?' build/logs/apple-tests.log || { echo 'No native XCTest cases executed'; exit 1; }

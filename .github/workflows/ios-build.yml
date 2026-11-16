@@ -60,6 +60,7 @@ jobs:
           python3 tools/pack_converter/test_converter.py
           python3 iOS/Scripts/validate-source.py
           python3 iOS/Scripts/test-build-tools.py
+          python3 iOS/Scripts/test-test-orchestration.py
       - name: Test portable Swift dialogue and protocol logic
         working-directory: iOS
         run: |
@@ -80,19 +81,19 @@ jobs:
           plutil -lint iOS/GameLingo.xcodeproj/project.pbxproj
       - name: Archive and package unsigned IPA
         run: bash iOS/Scripts/build-unsigned.sh
-      - name: Upload unsigned IPA
-        uses: actions/upload-artifact@v7
-        with:
-          name: GameLingo-unsigned-IPA
-          path: iOS/build/GameLingo-unsigned.ipa
-          if-no-files-found: error
-          retention-days: 14
       - name: Core and Apple integration tests
         env:
           SKIP_CORE_TESTS: '1'
         run: bash iOS/Scripts/test.sh
       - name: Native Files picker selection and sandbox import
         run: bash iOS/Scripts/test-picker-ui.sh
+      - name: Upload unsigned IPA after all runtime and picker tests pass
+        uses: actions/upload-artifact@v7
+        with:
+          name: GameLingo-unsigned-IPA
+          path: iOS/build/GameLingo-unsigned.ipa
+          if-no-files-found: error
+          retention-days: 14
       - name: Save compiled native dependencies
         if: always() && steps.native-cache.outputs.cache-hit != 'true' && hashFiles('iOS/.build/native/iphoneos-arm64/prefix/lib/libcrypto.a') != ''
         uses: actions/cache/save@v5
