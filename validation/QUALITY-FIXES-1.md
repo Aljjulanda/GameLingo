@@ -154,3 +154,16 @@ Also corrected provenance classification of cached command-map outputs: they
 remain `command`, never `argosCache`. The shared command table/text/key behavior
 is unchanged; new portable tests distinguish it from real model-cache hits.
 No translation punctuation behavior has changed yet (unit F is pending).
+
+### Approved-corpus check restored; standalone benchmark dependency fixed
+
+Intel run 43846469584 passed the original-corpus native SQLite validation:
+228,174 rows / 209,459 eligible; 1,000 correct matches and 102 expected
+rejections; 1,102 lookups, average 0.081 ms / p95 0.107 ms. Validation took
+14.918 s on the Intel CI Mac; this is lookup correctness, not game quality.
+The run then caught a real integration error: adding the provenance helper to
+DialogueContent introduced a TranslationOrigin dependency into a standalone
+maintenance benchmark that intentionally compiles only legacy dialogue files.
+Move that helper to Core/TranslationCommands.swift; do not weaken or modify the
+benchmark. Native archive/integration/GUI gates have still not run. Retry all
+required checks after correcting source organization.
