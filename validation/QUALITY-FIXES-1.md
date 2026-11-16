@@ -131,3 +131,26 @@ ROI and duplicate algorithms are unchanged. Added real replay fixtures for
 speaker segmentation, duplicate suppression and negative menu selection.
 Unit A is still awaiting native verification. Units B–I have not started, and
 there is no new release.
+
+### Immutable real-data fixture source
+
+The Intel runner started, but run 43844820344 stopped before archive/native
+integration at the unchanged real-RDR2 fixture's SHA-256 check. The mutable
+upstream Pages installer changed after the approved baseline tests. Reviewed
+metadata: current 11,940,944 bytes / SHA-256
+`a3992dfad44167947a18ac46cf7c81e037adb274c1ab4d4beff9c244893bd88b`;
+approved desktop file 11,941,456 bytes / SHA-256
+`3eaead8f4e851ad6c6c9a894415799e047928c522f009a632830cc3826fd0598`.
+
+Fetched bounded historical upstream revisions without executing any installer.
+Commit `04e9bb1ee583740fcba30b1a016329d4a3243a62` contains bytes identical to the
+approved file (same length AND SHA-256). The validation script now downloads
+that immutable upstream revision; **the approved digest is unchanged**. No
+fixture, hash verification or test is skipped, and no localization is uploaded.
+Two other reviewed revisions did not match and were not adopted. The test
+continues to statically extract and validate the original approved corpus.
+
+Also corrected provenance classification of cached command-map outputs: they
+remain `command`, never `argosCache`. The shared command table/text/key behavior
+is unchanged; new portable tests distinguish it from real model-cache hits.
+No translation punctuation behavior has changed yet (unit F is pending).

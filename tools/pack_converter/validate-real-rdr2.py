@@ -19,6 +19,12 @@ ROOT=Path(__file__).resolve().parents[2]
 WORK=ROOT/'iOS/.build/rdr2-ci-private'
 REV='cdb2b8ab3134291a19a86d8d35fe0bd48cb8f926'
 INSTALLER_HASH='3eaead8f4e851ad6c6c9a894415799e047928c522f009a632830cc3826fd0598'
+# The Pages URL is mutable (changed 2026-11-14 after baseline validation).
+# This upstream historical revision has the EXACT approved installer bytes.
+# Keep the independent digest assertion below; never accept a new installer by
+# merely updating its hash. Downloading is for static extraction, not execution.
+INSTALLER_REV='04e9bb1ee583740fcba30b1a016329d4a3243a62'
+INSTALLER_URL=f'https://raw.githubusercontent.com/arabic-pc/arabic-pc.github.io/{INSTALLER_REV}/downloads/Arabic-RDR2.exe'
 MAIN=r'''
 import Foundation
 @main struct Validation {
@@ -57,7 +63,7 @@ def main():
     import convert as c
     installer=WORK/'Arabic-RDR2.exe'
     if not installer.exists():
-        with urllib.request.urlopen('https://arabic-pc.github.io/downloads/Arabic-RDR2.exe',timeout=60) as response:
+        with urllib.request.urlopen(INSTALLER_URL,timeout=60) as response:
             data=response.read(128*1024*1024+1)
         if len(data)>128*1024*1024:raise ValueError('Installer download exceeds bound')
         installer.write_bytes(data)
