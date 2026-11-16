@@ -501,3 +501,20 @@ Picker build also caught a real test compilation error: waitFinished throws but
 testSandboxFolderImportsWithoutSystemPicker had neither throws nor try. Corrected
 in0c14b60; no application behavior or assertions removed. Repeat the FULL workflow
 on the combined fix. No new Release, no distribution of this failed-run IPA.
+
+### Corrected full attempts blocked by hosted Mac allocation
+
+Portable checkpoint43940573931 on429dc052b418f4471c10da4b9a3cb7c5c2f18733
+passed115 Core tests plus source/converter/packaging and4 STUB orchestration cases.
+Corrected full Intel43940652518 and ARM43943685073 both failed BEFORE checkout,
+with no allocated runner or steps. Latest ARM job133567565916 completed at about
+2026-11-16T20:06UTC (17 November00:06 Oman); workflow conclusion failure, job
+cancelled. Check annotations explicitly state:
+`The job was not acquired by Runner of type hosted even after multiple attempts`
+and `Due to capacity constraints, jobs targeting macOS arm64 runners may experience longer queue times.`
+No corrected native/picker execution or IPA artifact resulted. Xcode16.4 and all
+gates are unchanged. No additional production changes while the required B/C/D
+runtime gate remains blocked. E/F/H/I remain unfinished; full batch NOT ready.
+Original-key TV APK remains locally ready with40 tests passed, source99da49a.
+No Release published, old Release untouched. Manual Arabic build guide added;
+use Run workflow on quality branch for fixes, not Re-run jobs on an older SHA.
