@@ -53,7 +53,7 @@ final class OfflineTranslator {
                     TranslationDecision(text:value,origin:origin,fallback:(origin == .argosInference || origin == .argosCache) ? lookup.fallback : nil,game:lookup.game,pack:lookup.pack)
                 }
                 if let localized = lookup.text { result = .success(decision(localized,lookup.origin)) }
-                else if let cached = cache.get(key) { packs?.recordArgos(); result = .success(decision(cached,.argosCache)) }
+                else if let cached = cache.get(key) { packs?.recordArgos(); result = .success(decision(cached,DialogueCommands.cachedOrigin(normalized))) }
                 else {
                     packs?.recordArgos()
                     lock.lock()
@@ -62,8 +62,8 @@ final class OfflineTranslator {
                     lock.unlock()
                     guard isCurrent(generation) else { throw CancellationError() }
                     guard let current else { throw LingoError.invalid("نموذج الترجمة غير جاهز") }
-                    let command = normalized.lowercased().trimmingCharacters(in:CharacterSet(charactersIn:".?!"))
-                    let commands = ["go":"انطلق!","run":"اركض!","wait":"انتظر!","no":"لا!"]
+                    let command = DialogueCommands.key(normalized)
+                    let commands = DialogueCommands.legacy
                     var error: NSError?
                     guard let value = commands[command] ?? current.translate(normalized,error:&error), !value.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty else {
                         throw error ?? LingoError.invalid("الترجمة فارغة") as NSError

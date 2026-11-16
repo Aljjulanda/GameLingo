@@ -2,6 +2,11 @@ import XCTest
 @testable import LingoCore
 
 final class QualityMeasurementTests: XCTestCase {
+    func testCachedCommandsAreNotMisreportedAsArgos() {
+        for text in ["Go","Run!","Wait?","No."] { XCTAssertEqual(DialogueCommands.cachedOrigin(text),.command) }
+        XCTAssertEqual(DialogueCommands.cachedOrigin("Wait by the gate."),.argosCache)
+        XCTAssertEqual(DialogueCommands.legacy[DialogueCommands.key("Wait")],"انتظر!")
+    }
     func testPublishedDenominatorExcludesAttemptsCorrectionsAndSyntheticResults() {
         var metrics = HybridMetrics()
         metrics.lookups = 100; metrics.matches = 100
