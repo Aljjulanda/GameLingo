@@ -140,12 +140,12 @@ final class LocalizationPickerUITests: XCTestCase {
         XCTAssertEqual(app.staticTexts["gamePacks.fileSummary"].label,previous)
         XCTAssertTrue(app.staticTexts["gamePacks.importStatus"].label.hasPrefix("أُلغي اختيار"))
     }
-    func testSandboxFolderImportsWithoutSystemPicker() {
+    func testSandboxFolderImportsWithoutSystemPicker() throws {
         let file = app.buttons["gamePacks.inbox.GLPicker-json.json"]
         reveal(file); XCTAssertTrue(file.isHittable); file.tap()
         // Return to the status above the library after choosing the sandbox file.
         _ = importButton()
-        waitFinished(filename:"GLPicker-json.json")
+        try waitFinished(filename:"GLPicker-json.json")
         XCTAssertTrue(app.staticTexts["gamePacks.importStatus"].label.hasPrefix("تم استيراد"))
     }
 }
