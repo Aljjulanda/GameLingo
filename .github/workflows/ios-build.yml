@@ -2,6 +2,12 @@ name: GameLingo iOS unsigned IPA
 
 on:
   workflow_dispatch:
+    inputs:
+      runner:
+        description: 'Mac architecture only; Xcode stays 16.4 and every release check runs'
+        type: choice
+        default: macos-15-intel
+        options: ['macos-15-intel', 'macos-15']
   push:
     branches: ['main', 'codex/**', '!codex/quality-fixes-1']
     paths: ['iOS/**', 'tools/pack_converter/**', '.github/workflows/ios-build.yml']
@@ -23,7 +29,7 @@ jobs:
   ios:
     # Quality branch pushes use the focused workflow; manual dispatch executes
     # every archive/native/GUI step below. Checkpoints cannot cancel that run.
-    runs-on: macos-15-intel
+    runs-on: ${{ inputs.runner || 'macos-15-intel' }}
     timeout-minutes: 90
     env:
       DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
