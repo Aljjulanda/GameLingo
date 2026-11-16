@@ -37,10 +37,10 @@ import UniformTypeIdentifiers
     }
     func export() -> URL? { do { return try store?.export() } catch { message = "تعذر تصدير الأسماء"; return nil } }
     func importFile(_ url: URL) {
-        guard let store else { return }; let game = store.game
+        guard let store else { return }
         message = "جارٍ قراءة ملف الأسماء"
         UserLibraryFile.read(url) { [weak self] result in
-            guard let self, self.store?.game == game else { return }
+            guard let self, self.store === store else { return }
             do { try store.importData(result.get()); self.message = "استُوردت الأسماء مع حفظ التهجئات اليدوية والمحذوفات"; self.refresh() }
             catch { self.message = error.localizedDescription }
         }
@@ -64,7 +64,8 @@ enum UserLibraryFile {
 
 struct GameNamesView: View {
     @ObservedObject var library: GameNamesLibrary
-    @State private var importing = false, adding = false
+    @State private var importing = false
+    @State private var adding = false
     @State private var exportURL: URL?
     var body: some View {
         List {
@@ -89,6 +90,7 @@ struct GameNamesView: View {
                 }.swipeActions { Button("حذف",role:.destructive) { library.remove(name) } }
             }
         }.navigationTitle("أسماء اللعبة")
+            .onChange(of:library.snapshot.scopeKey) { _ in exportURL = nil }
             .sheet(isPresented:$adding) { NavigationStack { GameNameEditor(library:library,existing:nil) } }
             .fileImporter(isPresented:$importing,allowedContentTypes:[.item]) { result in if case .success(let url) = result { library.importFile(url) } }
     }
@@ -98,8 +100,10 @@ private struct GameNameEditor: View {
     @ObservedObject var library: GameNamesLibrary
     let existing: GameName?
     @Environment(\.dismiss) private var dismiss
-    @State private var english = "", arabic = ""
+    @State private var english = ""
+    @State private var arabic = ""
     @State private var type: GameNameType = .person
+    @State private var editingScope = ""
     var body: some View {
         Form {
             TextField("الاسم الإنجليزي",text:$english).autocorrectionDisabled().textInputAutocapitalization(.never).disabled(existing != nil)
@@ -108,10 +112,11 @@ private struct GameNameEditor: View {
             Button("اقتراح تهجئة تقريبية") { arabic = NameTransliteration.arabic(english) }
             Button("حفظ") {
                 let name = GameName(english:DialogueText.normalized(english),type:type,arabic:arabic.trimmingCharacters(in:.whitespacesAndNewlines),source:.manual,count:existing?.count ?? 0)
-                guard name.valid else { return }; if library.save(name) { dismiss() }
-            }.disabled(!GameName(english:english,type:type,arabic:arabic,source:.manual,count:0).valid)
+                guard name.valid, editingScope == library.snapshot.scopeKey else { return }; if library.save(name) { dismiss() }
+            }.disabled(editingScope != library.snapshot.scopeKey || !GameName(english:english,type:type,arabic:arabic,source:.manual,count:0).valid)
+            if !editingScope.isEmpty && editingScope != library.snapshot.scopeKey { Text("تغيّرت اللعبة؛ ارجع وافتح قائمة الأسماء من جديد").foregroundColor(.orange) }
             if !library.message.isEmpty { Text(library.message).font(.footnote) }
         }.navigationTitle(existing == nil ? "إضافة اسم" : "تعديل التهجئة")
-            .onAppear { if let existing { english = existing.english; arabic = existing.arabic; type = existing.type } }
+            .onAppear { editingScope = library.snapshot.scopeKey; if let existing { english = existing.english; arabic = existing.arabic; type = existing.type } }
     }
 }

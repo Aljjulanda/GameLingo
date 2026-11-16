@@ -43,6 +43,7 @@ final class GameNamesTests: XCTestCase {
     func testImportExportProtectionBackupPolicyAndInvalidScopes() throws {
         let folder = root(); defer { try? FileManager.default.removeItem(at:folder) }
         XCTAssertThrowsError(try GameNamesStore(root:folder,game:"../outside"))
+        XCTAssertThrowsError(try GameNamesStore(root:folder,game:"other",general:true))
         let store = try GameNamesStore(root:folder,game:"general")
         try store.upsert(name(),explicit:true); try store.upsert(name("John","جون"),explicit:true); try store.remove("John")
         var incoming = GameNamesSnapshot(game:"general"); incoming.entries = [name("Arthur","تغيير",.pack),name("John","جون",.auto),name("Dutch","داتش",.pack)]

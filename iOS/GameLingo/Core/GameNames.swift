@@ -27,7 +27,8 @@ struct GameNamesSnapshot: Codable, Equatable {
     var blocked: [String] = []
     var userDeletions = 0
     var words: String { entries.sorted { $0.source.priority == $1.source.priority ? $0.id < $1.id : $0.source.priority > $1.source.priority }.prefix(200).map(\.english).joined(separator:",") }
-    var outputKey: String { (general == true ? "general/" : "game/")+game+"/"+String(version) }
+    var scopeKey: String { (general == true ? "general/" : "game/")+game }
+    var outputKey: String { scopeKey+"/"+String(version) }
     func validate() throws {
         guard schema == 1, UserDataFile.validGame(game), general != true || game == "general", version < UInt64.max,
               entries.count <= 2000, entries.allSatisfy(\.valid), Set(entries.map(\.id)).count == entries.count,
@@ -50,7 +51,7 @@ final class GameNamesStore {
         if FileManager.default.fileExists(atPath:file.path) {
             state = try JSONDecoder().decode(GameNamesSnapshot.self,from:UserDataFile.read(file))
             try state.validate(); guard state.game == game, (state.general == true) == general else { throw LingoError.invalid("ملف أسماء لعبة مختلفة") }
-        } else { state = GameNamesSnapshot(game:game,general:general ? true : nil) }
+        } else { state = GameNamesSnapshot(game:game,general:general ? true : nil); try state.validate() }
     }
     var snapshot: GameNamesSnapshot { lock.lock(); defer { lock.unlock() }; return state }
     private func change(_ operation: (inout GameNamesSnapshot) throws -> Void) throws {

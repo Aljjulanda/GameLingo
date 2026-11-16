@@ -334,3 +334,13 @@ results. Default learning/store-output flag remains OFF. Transliteration uses
 explicit conventional examples plus documented digraph/vowel approximations and
 is editable, not linguistically authoritative. Capture/trace can show the actual
 engine input/raw output only with opt-in diagnostics; reuse caches strip them.
+
+Unit C portable run43886083400 passed all110 Swift cases on aaf9d46, plus source,
+packaging and converter checks. Native43886089955 stopped at build-for-testing:
+SwiftUI property wrappers require one variable per declaration. Split the two
+combined @State declarations; no runtime tests ran in that attempt. Also guard
+async file imports/edit/export by store/scope identity (including a selected game
+literally named general), so a late result cannot apply to a different scope.
+The next focused native run retains all six Vision/production B+C methods and
+four names methods, including real Argos probes/cache controls and protection
+capability reporting. No optional protection form is selected until results.
