@@ -32,15 +32,32 @@ final class QualityCapture {
     }
     func start(consent: Bool, now: Date = Date()) throws {
         guard consent else { return }
+        active = false
         try FileManager.default.createDirectory(at:folder,withIntermediateDirectories:true)
         var url = folder; var values = URLResourceValues(); values.isExcludedFromBackup = true; try url.setResourceValues(values)
         #if os(iOS)
         try FileManager.default.setAttributes([.protectionKey:FileProtectionType.complete],ofItemAtPath:folder.path)
         try Data().write(to:file,options:[.atomic,.completeFileProtection])
+        try FileManager.default.setAttributes([.protectionKey:FileProtectionType.complete],ofItemAtPath:file.path)
+        #if !targetEnvironment(simulator)
+        guard protectionClass == FileProtectionType.complete.rawValue else {
+            throw LingoError.invalid("تعذر تأكيد حماية ملف التسجيل؛ لن تُسجل النصوص")
+        }
+        #endif
         #else
         try Data().write(to:file,options:.atomic)
         #endif
         bytes = 0; deadline = now.addingTimeInterval(30*60); active = true
+    }
+    var protectionClass: String? {
+        #if os(iOS)
+        guard let value = try? FileManager.default.attributesOfItem(atPath:file.path)[.protectionKey] else { return nil }
+        // attributesOfItem is an untyped Objective-C dictionary. Foundation
+        // may return the NSString raw value rather than the imported newtype.
+        return (value as? FileProtectionType)?.rawValue ?? value as? String
+        #else
+        return nil
+        #endif
     }
     func append(_ record: QualityCaptureRecord, now: Date = Date()) throws {
         guard active else { return }

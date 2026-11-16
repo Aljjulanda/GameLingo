@@ -109,8 +109,18 @@ final class AppleIntegrationTests: XCTestCase {
         let folder = try XCTUnwrap(Bundle(for:Self.self).url(forResource:"en_ar",withExtension:nil))
         let translator = OfflineTranslator(folder:folder)
         let loaded = expectation(description:"existing offline model loaded")
-        translator.load { result in if case .failure = result { XCTFail("Model load failed") }; loaded.fulfill() }
-        await fulfillment(of:[loaded],timeout:20)
+        let loadStarted = ProcessInfo.processInfo.systemUptime
+        var modelLoaded = false
+        translator.load { result in
+            print("SYNTHETIC_SMART_READING_COLD_MODEL_LOAD_MS \((ProcessInfo.processInfo.systemUptime-loadStarted)*1000)")
+            if case .failure = result { XCTFail("Model load failed") } else { modelLoaded = true }
+            loaded.fulfill()
+        }
+        // Cold model initialization is not the post-OCR latency assertion. The
+        // Intel hosted Simulator can be heavily contended during its first run.
+        // Retain all fresh-frame/page/negation/number/context checks below.
+        await fulfillment(of:[loaded],timeout:90)
+        guard modelLoaded else { return } // Avoid cascading unrelated assertions.
         let pipeline = FramePipeline(translator:translator,publish:{ _ in })
         var contextEntries = -1
         pipeline.onMetrics = { contextEntries = $0.contextEntries }

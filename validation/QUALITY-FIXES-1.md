@@ -167,3 +167,37 @@ maintenance benchmark that intentionally compiles only legacy dialogue files.
 Move that helper to Core/TranslationCommands.swift; do not weaken or modify the
 benchmark. Native archive/integration/GUI gates have still not run. Retry all
 required checks after correcting source organization.
+
+### Unit A native failures under investigation (no release)
+
+Run 43847957262 compiled/archived the actual iPhone target and passed the
+independent IPA validator: 2,893,765 bytes, SHA-256
+`2ebcde90e285e836ee3d8520d2a3fedef40f672990e1035ffdffd1d3fb4111cc`,
+`dev.gamelingo.ios` 0.3.0 (8), unsigned ARM64. Intermediate only; not published.
+It passed 89 portable tests and original-corpus/maintenance checks, then ran
+32 Apple tests with six assertions failing in **two** cases. Existing TV WSS,
+Keychain/TLS, Vision, native model inference and all 13 pack/import tests passed.
+New real-Argos provenance/cache/equivalence test also passed.
+
+Five assertions were one cascading Smart Reading failure after the original
+20-second cold-model-load expectation timed out on the overloaded Intel
+Simulator. The log contains CoreAudio host-overload warnings; that is evidence
+of contention, not proof of the exact load delay. Do not change production
+background/audio/recovery behavior. The test now reports actual cold-load
+milliseconds, keeps a bounded 90-second startup deadline (separate from
+post-OCR latency), and does not proceed with an unloaded model. All existing
+fresh-frame, translated-page, retained-number and RAM-context checks remain.
+Actual post-OCR/readiness deadlines are unchanged.
+
+The sixth assertion cast Foundation's untyped protection attribute directly to
+FileProtectionType and obtained nil. Read both the imported newtype and its
+NSString raw value; report metadata presence/type to distinguish bridging from
+unsupported metadata. The expected class is still COMPLETE, not relaxed. Also
+set file protection explicitly after the empty-file creation, and fail closed
+on a physical iPhone if read-back does not confirm COMPLETE. No dialogue is
+written before that check. Simulator support is NOT assumed or claimed yet.
+
+Focused native checkpoints can select explicit XCTest identifiers and reject
+an empty/no-executed test result. They do not generate a release IPA and cannot
+substitute for the full unfiltered archive/native/GUI final workflow. Unit A
+still needs the affected native checks to pass before proceeding to B.

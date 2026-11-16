@@ -8,7 +8,9 @@ final class QualityIntegrationTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at:folder) }
         let capture = QualityCapture(folder:folder)
         try capture.start(consent:true)
-        XCTAssertEqual(try FileManager.default.attributesOfItem(atPath:capture.file.path)[.protectionKey] as? FileProtectionType,.complete)
+        let raw = try FileManager.default.attributesOfItem(atPath:capture.file.path)[.protectionKey]
+        print("SYNTHETIC_CAPTURE_PROTECTION present=\(raw != nil) type=\(raw.map{String(reflecting:type(of:$0))} ?? "none") class=\(capture.protectionClass ?? "not reported")")
+        XCTAssertEqual(capture.protectionClass,FileProtectionType.complete.rawValue)
         XCTAssertEqual(try folder.resourceValues(forKeys:[.isExcludedFromBackupKey]).isExcludedFromBackup,true)
         capture.stop()
         XCTAssertFalse(QualityCapture(folder:folder).active)

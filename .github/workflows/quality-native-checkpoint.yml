@@ -1,0 +1,66 @@
+name: GameLingo focused native quality tests
+on:
+  push:
+    branches: ['codex/quality-fixes-1']
+    paths: ['.github/workflows/quality-native-checkpoint.yml']
+  workflow_dispatch:
+    inputs:
+      test_filters:
+        description: 'XCTest class/method identifiers, one per line; focused checks are NOT the release gate'
+        type: string
+        required: false
+permissions:
+  contents: read
+concurrency:
+  group: quality-native-${{ github.ref }}
+  cancel-in-progress: true
+defaults:
+  run:
+    shell: bash
+jobs:
+  native:
+    runs-on: macos-15-intel
+    timeout-minutes: 60
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Install native build tools
+        run: brew install cmake ninja protobuf
+      - name: Restore the existing native libraries
+        uses: actions/cache/restore@v5
+        with:
+          path: |
+            iOS/.build/sources
+            iOS/.build/native
+            iOS/.build/lib
+            iOS/.build/include
+          key: ios-native-xcode16.4-${{ runner.arch }}-${{ hashFiles('iOS/Scripts/bootstrap.py', 'iOS/Scripts/build-native.sh', 'iOS/Scripts/combine-libraries.py', 'iOS/Native/GLRemotePlay.c', 'iOS/Native/GLRemotePlay.h') }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            ios-native-xcode16.4-${{ runner.arch }}-${{ hashFiles('iOS/Scripts/bootstrap.py', 'iOS/Scripts/build-native.sh', 'iOS/Scripts/combine-libraries.py', 'iOS/Native/GLRemotePlay.c', 'iOS/Native/GLRemotePlay.h') }}-
+            ios-native-xcode16.4-${{ runner.arch }}-
+      - name: Prepare the unchanged native build route
+        run: bash iOS/Scripts/prepare.sh
+      - name: Validate source and project
+        run: python3 iOS/Scripts/validate-source.py
+      - name: Focused Apple runtime tests (not release certification)
+        env:
+          SKIP_CORE_TESTS: '1'
+          IOS_TEST_FILTERS: ${{ inputs.test_filters }}
+        run: |
+          if [[ -z "$IOS_TEST_FILTERS" ]]; then
+            export IOS_TEST_FILTERS=$'GameLingoTests/QualityIntegrationTests\nGameLingoTests/AppleIntegrationTests/testManualSmartReadingUsesFreshFrameAndReturnsToDialogue\nGameLingoTests/AppleIntegrationTests/testExistingTVWSSPairingAndReconnectDoNotReplayDialogue'
+          fi
+          bash iOS/Scripts/test.sh
+      - name: Preserve focused test evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: GameLingo-quality-native-validation
+          path: |
+            iOS/build/logs/
+            iOS/build/GameLingoTests.xcresult
+          if-no-files-found: warn
+          retention-days: 14
