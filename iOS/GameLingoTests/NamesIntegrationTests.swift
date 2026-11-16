@@ -84,5 +84,8 @@ final class NamesIntegrationTests: XCTestCase {
         library.select("synthetic-a"); XCTAssertEqual(library.snapshot.entries.first?.source,.manual)
         library.remove(name); library.seed([("Arthur","من الحزمة")]); XCTAssertTrue(library.snapshot.entries.isEmpty)
         XCTAssertEqual(library.snapshot.userDeletions,1)
+        library.select(nil); XCTAssertTrue(library.save(name)); XCTAssertTrue(library.snapshot.general == true)
+        library.select("general"); XCTAssertTrue(library.snapshot.entries.isEmpty); XCTAssertFalse(library.snapshot.general == true)
+        library.select(nil); XCTAssertEqual(library.snapshot.entries.first?.english,"Arthur")
     }
 }

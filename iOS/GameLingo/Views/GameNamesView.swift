@@ -6,20 +6,23 @@ import UniformTypeIdentifiers
     @Published private(set) var message = ""
     private(set) var store: GameNamesStore?
     private let root: URL
+    private var selection: String?
     var onChange: ((GameNamesStore?,GameNamesSnapshot) -> Void)?
     init(root: URL? = nil) {
         self.root = root ?? FileManager.default.urls(for:.applicationSupportDirectory,in:.userDomainMask)[0].appendingPathComponent("names",isDirectory:true)
-        select("general")
+        select(nil)
     }
-    func select(_ game: String) {
-        guard store?.game != game else { return }
+    func select(_ selected: String?) {
+        guard store == nil || selection != selected else { return }
+        let game = selected ?? "general"
         do {
-            let store = try GameNamesStore(root:root,game:game); self.store = store
+            let folder = root.appendingPathComponent(selected == nil ? "general" : "games",isDirectory:true)
+            let store = try GameNamesStore(root:folder,game:game,general:selected == nil); self.store = store; selection = selected
             store.onChange = { [weak self,weak store] in DispatchQueue.main.async {
                 guard let self, let store, self.store === store else { return }; self.refresh()
             } }
             message = ""; refresh()
-        } catch { store = nil; snapshot = GameNamesSnapshot(game:game); message = "تعذر تحميل الأسماء؛ لم يُستبدل الملف السابق"; onChange?(nil,snapshot) }
+        } catch { store = nil; selection = selected; snapshot = GameNamesSnapshot(game:game,general:selected == nil ? true : nil); message = "تعذر تحميل الأسماء؛ لم يُستبدل الملف السابق"; onChange?(nil,snapshot) }
     }
     private func refresh() { if let store { snapshot = store.snapshot }; onChange?(store,snapshot) }
     @discardableResult func save(_ name: GameName) -> Bool {
@@ -66,7 +69,7 @@ struct GameNamesView: View {
     var body: some View {
         List {
             Section {
-                Text("اللعبة: "+library.snapshot.game)
+                Text("اللعبة: "+(library.snapshot.general == true ? "عام · دون لعبة محددة" : library.snapshot.game))
                 Text("الأسماء المحذوفة بقرارك: \(library.snapshot.userDeletions)")
                 Button("إضافة اسم") { adding = true }
                 Button("استيراد أسماء من ملف JSON") { importing = true }

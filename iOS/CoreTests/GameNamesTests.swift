@@ -64,6 +64,14 @@ final class GameNamesTests: XCTestCase {
         XCTAssertEqual(store.snapshot.version,version)
         try store.upsert(name("Arthur","آرثر آخر"),explicit:true); XCTAssertGreaterThan(store.snapshot.version,version)
     }
+    func testGeneralNamespaceCannotCollideWithAGameNamedGeneral() throws {
+        let root = root(); defer { try? FileManager.default.removeItem(at:root) }
+        let shared = try GameNamesStore(root:root.appendingPathComponent("general"),game:"general",general:true)
+        let game = try GameNamesStore(root:root.appendingPathComponent("games"),game:"general")
+        try shared.upsert(name()); XCTAssertTrue(game.snapshot.entries.isEmpty)
+        XCTAssertNotEqual(shared.snapshot.outputKey,game.snapshot.outputKey)
+        XCTAssertThrowsError(try game.importData(JSONEncoder().encode(shared.snapshot)))
+    }
     func testDeterministicEditableTransliteration() {
         for (source,target) in [("Arthur","آرثر"),("John","جون"),("Shawn","شاون"),("Theo","ثيو"),("Chad","تشاد"),("Phil","فيل"),("Lee","لي"),("Cooper","كوبير"),("47","٤٧")] {
             XCTAssertEqual(NameTransliteration.arabic(source),target,source)

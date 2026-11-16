@@ -21,14 +21,15 @@ struct GameName: Codable, Equatable, Identifiable {
 struct GameNamesSnapshot: Codable, Equatable {
     var schema = 1
     var game: String
+    var general: Bool? = nil
     var version: UInt64 = 0
     var entries: [GameName] = []
     var blocked: [String] = []
     var userDeletions = 0
     var words: String { entries.sorted { $0.source.priority == $1.source.priority ? $0.id < $1.id : $0.source.priority > $1.source.priority }.prefix(200).map(\.english).joined(separator:",") }
-    var outputKey: String { game+"/"+String(version) }
+    var outputKey: String { (general == true ? "general/" : "game/")+game+"/"+String(version) }
     func validate() throws {
-        guard schema == 1, UserDataFile.validGame(game), version < UInt64.max,
+        guard schema == 1, UserDataFile.validGame(game), general != true || game == "general", version < UInt64.max,
               entries.count <= 2000, entries.allSatisfy(\.valid), Set(entries.map(\.id)).count == entries.count,
               blocked.count <= 10000, Set(blocked).count == blocked.count,
               blocked.allSatisfy({SpeakerEvidence.shape($0) && $0 == GameName.key($0)}),
@@ -44,12 +45,12 @@ final class GameNamesStore {
     private var state: GameNamesSnapshot
     private var evidence = BoundedLRU<String,Set<String>>(capacity:256)
     var onChange: (() -> Void)?
-    init(root: URL, game: String) throws {
+    init(root: URL, game: String, general: Bool = false) throws {
         self.game = game; file = try UserDataFile.url(root:root,game:game)
         if FileManager.default.fileExists(atPath:file.path) {
             state = try JSONDecoder().decode(GameNamesSnapshot.self,from:UserDataFile.read(file))
-            try state.validate(); guard state.game == game else { throw LingoError.invalid("ملف أسماء لعبة مختلفة") }
-        } else { state = GameNamesSnapshot(game:game) }
+            try state.validate(); guard state.game == game, (state.general == true) == general else { throw LingoError.invalid("ملف أسماء لعبة مختلفة") }
+        } else { state = GameNamesSnapshot(game:game,general:general ? true : nil) }
     }
     var snapshot: GameNamesSnapshot { lock.lock(); defer { lock.unlock() }; return state }
     private func change(_ operation: (inout GameNamesSnapshot) throws -> Void) throws {
@@ -115,7 +116,7 @@ final class GameNamesStore {
     func importData(_ data: Data) throws {
         guard data.count <= UserDataFile.limit else { throw LingoError.invalid("ملف الأسماء كبير جدًا") }
         let imported = try JSONDecoder().decode(GameNamesSnapshot.self,from:data)
-        try imported.validate(); guard imported.game == game else { throw LingoError.invalid("اختر اللعبة المطابقة لملف الأسماء") }
+        try imported.validate(); guard imported.game == game, (imported.general == true) == (snapshot.general == true) else { throw LingoError.invalid("اختر اللعبة المطابقة لملف الأسماء") }
         // Preserve every existing manual spelling and every local deletion.
         try change { next in
             for name in imported.entries where !next.blocked.contains(name.id) {

@@ -137,7 +137,7 @@ final class AppModel: ObservableObject {
         pipeline.configureNames(namesLibrary.store,snapshot:namesLibrary.snapshot)
         packLibrary.onNamesChanged = { [weak self] names in
             guard let self else { return }
-            self.namesLibrary.select(self.packLibrary.state.registry.selectedGame ?? "general")
+            self.namesLibrary.select(self.packLibrary.state.registry.selectedGame)
             self.pipeline.configurePackNames(names); self.refreshPackNamePairs()
         }
         do {
