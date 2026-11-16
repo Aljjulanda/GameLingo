@@ -21,6 +21,12 @@ final class CorrectionsTests: XCTestCase {
         let cueSnapshot = CorrectionsSnapshot(game:"synthetic",entries:[cue])
         XCTAssertEqual(DialogueOverride.resolve(source:"[laughs]",corrections:CorrectionContext(cueSnapshot,enabled:true),reuse:nil,cue:"(ضحك)",rule:{nil})?.text,cue.target)
         XCTAssertNotEqual(CorrectionContext(snapshot,enabled:true).outputKey,CorrectionContext(snapshot,enabled:false).outputKey)
+        var settings = QualitySettings()
+        for flag in QualityFlag.allCases { settings[flag] = true }
+        settings[.corrections] = false
+        XCTAssertEqual(DialogueOverride.resolve(source:entry.source,corrections:CorrectionContext(snapshot,enabled:settings[.corrections]),reuse:cached,cue:nil,rule:{"قاعدة"})?.text,cached.text,"Other quality flags cannot keep corrections enabled")
+        settings = QualitySettings(); settings[.corrections] = true
+        XCTAssertEqual(DialogueOverride.resolve(source:entry.source,corrections:CorrectionContext(snapshot,enabled:settings[.corrections]),reuse:cached,cue:nil,rule:{"قاعدة"})?.text,entry.target,"Corrections work independently of other quality flags")
     }
     func testExplicitSaveReloadExactNormalizedAndAmbiguity() throws {
         let root = folder(); defer { try? FileManager.default.removeItem(at:root) }

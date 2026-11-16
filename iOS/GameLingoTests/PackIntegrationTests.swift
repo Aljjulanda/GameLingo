@@ -8,6 +8,31 @@ import UIKit
 @testable import GameLingo
 
 final class PackIntegrationTests: XCTestCase {
+    func testExplicitCorrectionWinsOverActivePackAndDeletionRestoresExactPack() async throws {
+        let root = try folder(), store = TranslationPackStore(root:root.appendingPathComponent("packs"))
+        try await importFile(pack(),to:store)
+        store.changeSelection(game:"fixture"); try await waitLoaded(store)
+        let corrections = try GameCorrectionsStore(root:root.appendingPathComponent("corrections"),game:"fixture")
+        try corrections.save(source:"Move now.",target:"انطلق الآن.")
+        let translator = OfflineTranslator(folder:root.appendingPathComponent("no-model"),packs:store)
+        func translate(_ source: String) async throws -> TranslationDecision {
+            let result: Result<TranslationDecision,Error> = await withCheckedContinuation { continuation in
+                translator.translateDetailed(source) { result,_ in continuation.resume(returning:result) }
+            }
+            return try result.get()
+        }
+        translator.configureCorrections(corrections.snapshot,enabled:true)
+        let exact = try await translate("Move now."), normalized = try await translate("MOVE NOW!")
+        XCTAssertEqual(exact.text,"انطلق الآن."); XCTAssertEqual(exact.origin,.userCorrection)
+        XCTAssertEqual(normalized.text,exact.text); XCTAssertEqual(normalized.origin,.userCorrection)
+        translator.configureCorrections(corrections.snapshot,enabled:false)
+        let rollback = try await translate("Move now.")
+        XCTAssertEqual(rollback.text,"تحرك الآن."); XCTAssertEqual(rollback.origin,.packExact)
+        try corrections.remove(corrections.snapshot.entries[0].id)
+        translator.configureCorrections(corrections.snapshot,enabled:true)
+        let deleted = try await translate("Move now.")
+        XCTAssertEqual(deleted.text,rollback.text); XCTAssertEqual(deleted.origin,.packExact)
+    }
     func testOversizedSparseInputIsRejectedAndTemporaryFilesAreRemoved() async throws {
         let root = try folder(), file = root.appendingPathComponent("oversized.unknown"), temporary = try folder()
         XCTAssertTrue(FileManager.default.createFile(atPath:file.path,contents:nil))
