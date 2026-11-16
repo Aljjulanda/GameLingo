@@ -17,6 +17,14 @@ final class OfflineTranslator {
     private var cancellationGeneration: UInt64 = 0
     private var cache = BoundedLRU<String,String>(capacity:256)
     private var names = GameNamesSnapshot(game:"general")
+    private var corrections = CorrectionContext(CorrectionsSnapshot(game:"general",general:true),enabled:false)
+    func configureCorrections(_ snapshot: CorrectionsSnapshot, enabled: Bool) {
+        queue.async { [self] in
+            let next = CorrectionContext(snapshot,enabled:enabled)
+            if corrections.outputKey != next.outputKey { cache = BoundedLRU(capacity:256) }
+            corrections = next
+        }
+    }
     private var engineDiagnostics = false
     func configureEngineDiagnostics(_ value: Bool) { queue.async { self.engineDiagnostics = value } }
     func configureNames(_ snapshot: GameNamesSnapshot) {
@@ -57,12 +65,17 @@ final class OfflineTranslator {
                 guard isCurrent(generation) else { throw CancellationError() }
                 let normalized = DialogueText.normalized(text)
                 let key = Self.modelID+"/commands-v2/en/ar/"+normalized
-                let lookup = packs?.lookupDetailed(text,category:category,eventID:eventID) ?? PackLookupOutcome(fallback:.noDatabase)
+                let corrected = corrections.lookup(text)
+                let selected = corrected != nil ? packs?.publication(eventID ?? "",origin:.userCorrection) : nil
+                let lookup = corrected != nil ? PackLookupOutcome(game:selected?.game,pack:selected?.pack) : packs?.lookupDetailed(text,category:category,eventID:eventID) ?? PackLookupOutcome(fallback:.noDatabase)
                 let fallback = category == "dialogue" ? lookup.fallback : TranslationFallback.notDialogue
                 func decision(_ value: String, _ origin: TranslationOrigin) -> TranslationDecision {
                     TranslationDecision(text:value,origin:origin,fallback:(origin == .argosInference || origin == .argosCache) ? fallback : nil,game:lookup.game,pack:lookup.pack)
                 }
-                if let localized = lookup.text {
+                if let corrected {
+                    packs?.recordAttempt(.userCorrection,game:lookup.game,pack:lookup.pack)
+                    result = .success(decision(corrected,.userCorrection))
+                } else if let localized = lookup.text {
                     packs?.recordAttempt(lookup.origin,game:lookup.game,pack:lookup.pack)
                     result = .success(decision(localized,lookup.origin))
                 } else if let cached = cache.get(key) {

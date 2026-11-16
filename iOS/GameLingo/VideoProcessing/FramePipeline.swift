@@ -49,6 +49,16 @@ final class FramePipeline {
     private var namesByKey: [String:String] = [:]
     private var namesConfigured = false
     private var namesCacheKey: String { namesSnapshot.outputKey }
+    private var correctionSnapshot = CorrectionsSnapshot(game:"general",general:true)
+    private var corrections = CorrectionContext(CorrectionsSnapshot(game:"general",general:true),enabled:false)
+    var onRecentPublished: ((RecentPublishedLine) -> Void)?
+    private var outputContextKey: String { namesCacheKey+"|"+corrections.outputKey+"|"+quality.outputKey }
+    func configureCorrections(_ snapshot: CorrectionsSnapshot) { queue.async {
+        self.correctionSnapshot = snapshot
+        let context = CorrectionContext(snapshot,enabled:self.quality[.corrections])
+        if self.corrections.outputKey != context.outputKey { self.translations = BoundedLRU(capacity:8) }
+        self.corrections = context; self.translator.configureCorrections(snapshot,enabled:self.quality[.corrections])
+    } }
     func configureNames(_ store: GameNamesStore?, snapshot: GameNamesSnapshot) { queue.async {
         self.namesStore = store
         self.applyNames(snapshot)
@@ -68,7 +78,10 @@ final class FramePipeline {
     private var pendingCapture: [CaptureLine] = []
     private var pendingSegments: [CaptureLine] = []
     func configureQuality(_ value: QualitySettings) { queue.async {
+        if self.quality.outputKey != value.outputKey { self.translations = BoundedLRU(capacity:8) }
         self.quality = value; self.ocr.quality = value; self.ocr.qualityTrace = value[.punctuationTrace]
+        self.corrections = CorrectionContext(self.correctionSnapshot,enabled:value[.corrections])
+        self.translator.configureCorrections(self.correctionSnapshot,enabled:value[.corrections])
         self.translator.configureNames(self.namesSnapshot)
         self.translator.configureEngineDiagnostics(value[.punctuationTrace] || self.capture.active)
         if !value[.sessionCapture] { self.capture.stop(); self.ocr.captureLines = false; self.reportCapture() }
@@ -263,21 +276,32 @@ final class FramePipeline {
         guard isActive(), !reading, !translating, let job = pending else { return }
         pending = nil; translating = true
         let epoch = runID
-        let namesKey = namesCacheKey
+        let contextKey = outputContextKey
+        let correctionScope = correctionSnapshot.scopeKey
         memory.prune(now:ProcessInfo.processInfo.systemUptime)
         let cached = translations.get(job.id)
         let engineInput = job.engineText ?? job.text
         let reusable = !job.meaningfulCorrection && cached.map { DialogueText.same($0.0,job.text) && !DialogueText.prefix($0.0,job.text) } == true
         let cueOnly = engineInput.isEmpty && job.cue != nil
-        let override = reusable ? cached?.1 : (cueOnly ? job.cue : Terminology.resolve(engineInput,rules:advanced.terminology,context:memory.entries.filter { $0.id != job.id }))
+        let correctionSource = engineInput.isEmpty ? job.text : engineInput
+        let override = DialogueOverride.resolve(source:correctionSource,corrections:corrections,reuse:reusable ? cached?.2 : nil,cue:cueOnly ? job.cue : nil) {
+            Terminology.resolve(engineInput,rules:advanced.terminology,context:memory.entries.filter { $0.id != job.id })
+        }
         let punctuationTrace = metrics.punctuationTrace
         let captureLines = pendingCapture, captureSegments = pendingSegments
-        let selection = override != nil && (quality[.measurement] || quality[.provenanceMarker] || capture.active) ? translator.packs?.publication(job.id,origin:reusable ? .reuse : .rule) : nil
+        let selection = override != nil && (quality[.measurement] || quality[.provenanceMarker] || capture.active) ? translator.packs?.publication(job.id,origin:override?.origin ?? .rule) : nil
         let completion: (Result<TranslationDecision,Error>,Double) -> Void = { [weak self] result,latency in
             guard let self else { return }
             self.queue.async {
                 self.translating = false
                 if self.isActive() && epoch == self.runID && self.tracker.accepts(job) {
+                    if correctionScope != self.correctionSnapshot.scopeKey { self.submit(); return }
+                    // An explicit edit/scope/flag change affects only an unpublished
+                    // job. Never replay an already displayed card or reset clocks.
+                    if contextKey != self.outputContextKey {
+                        if self.pending == nil { self.pending = job }
+                        self.submit(); return
+                    }
                     var delivered = job
                     if let current = self.tracker.current, DialogueText.exactWords(current.text) == DialogueText.exactWords(job.text) { delivered.speaker = current.speaker }
                     delivered.speakerArabic = self.quality[.learnNames] ? delivered.speaker.flatMap { self.namesByKey[GameName.key($0)] } : nil
@@ -287,10 +311,13 @@ final class FramePipeline {
                         if self.stability.shouldPublish(delivered) {
                             if !reusable { self.metrics.translationMilliseconds = latency; self.translationSamples.record(latency); self.metrics.translationP95 = self.translationSamples.p95 }
                             self.stability.didPublish(delivered)
-                            if namesKey == self.namesCacheKey { self.translations.put((job.text,text,decision.withoutEngineTrace),for:job.id) }
+                            self.translations.put((job.text,text,decision.withoutEngineTrace),for:job.id)
                             self.memory.observe(job,now:ProcessInfo.processInfo.systemUptime)
                             var message = TVProtocol.qualityFields(TVProtocol.subtitle(delivered,arabic:text,now:TVHub.now()),settings:self.quality,origin:decision.origin,basis:decision.basis)
-                            if self.quality[.stageCues], let cue = job.cue { message["cue"] = cue; if cueOnly { message["cue_only"] = true } }
+                            if self.quality[.stageCues], let cue = job.cue {
+                                message["cue"] = cueOnly && (decision.origin == .userCorrection || decision.basis == .userCorrection) ? text : cue
+                                if cueOnly { message["cue_only"] = true }
+                            }
                             if self.quality[.measurement] {
                                 self.translator.packs?.recordPublished(PublishedTranslation(eventID:delivered.id,game:decision.game,pack:decision.pack,origin:decision.origin,fallback:decision.fallback,basis:decision.basis))
                             }
@@ -303,6 +330,10 @@ final class FramePipeline {
                                 self.reportCapture()
                             }
                             self.publish(message)
+                            if self.quality[.corrections] {
+                                let recent = RecentPublishedLine(id:delivered.id,scope:self.correctionSnapshot.scopeKey,source:correctionSource,target:message["translated"] as? String ?? text,origin:decision.origin)
+                                DispatchQueue.main.async { self.onRecentPublished?(recent) }
+                            }
                         }
                     case .failure(let error): if !(error is CancellationError) { DispatchQueue.main.async { self.onError?(error.localizedDescription) } }
                     }
@@ -310,11 +341,8 @@ final class FramePipeline {
                 self.submit()
             }
         }
-        if let override {
-            var decision = TranslationDecision(text:override,origin:.rule,fallback:nil,game:selection?.game,pack:selection?.pack)
-            if reusable, let prior = cached?.2 {
-                decision = prior; decision.origin = .reuse; decision.basis = prior.basis ?? prior.origin
-            }
+        if var decision = override {
+            if decision.origin != .reuse { decision.game = selection?.game; decision.pack = selection?.pack }
             if quality[.measurement] { translator.packs?.recordAttempt(decision.origin,fallback:decision.fallback,game:decision.game,pack:decision.pack) }
             completion(.success(decision),0)
         } else { translator.translateDetailed(engineInput,eventID:job.id,completion:completion) }

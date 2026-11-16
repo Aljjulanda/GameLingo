@@ -18,6 +18,7 @@ final class AppModel: ObservableObject {
             quality.save(); pipeline.configureQuality(quality)
             if oldValue[.measurement] != quality[.measurement] { packLibrary.metrics = HybridMetrics(); packLibrary.store.resetMetrics() }
             if !oldValue[.learnNames] && quality[.learnNames] { refreshPackNamePairs() }
+            if !quality[.corrections] { correctionsLibrary.clearRecent() }
         }
     }
     @Published var qualityCaptureActive = false
@@ -66,6 +67,7 @@ final class AppModel: ObservableObject {
     @Published var addresses: [String] = []
     let packLibrary = GamePackLibrary()
     let namesLibrary = GameNamesLibrary()
+    let correctionsLibrary = CorrectionsLibrary()
     private func refreshPackNamePairs() {
         guard quality[.learnNames] else { return }
         packLibrary.store.alignedNamePairs { [weak self] game,pack,pairs in
@@ -135,9 +137,16 @@ final class AppModel: ObservableObject {
         pipeline.captureAction()
         namesLibrary.onChange = { [weak self] store,snapshot in self?.pipeline.configureNames(store,snapshot:snapshot) }
         pipeline.configureNames(namesLibrary.store,snapshot:namesLibrary.snapshot)
+        correctionsLibrary.onChange = { [weak self] snapshot in self?.pipeline.configureCorrections(snapshot) }
+        pipeline.configureCorrections(correctionsLibrary.snapshot)
+        pipeline.onRecentPublished = { [weak self] line in
+            guard let self, self.running, self.quality[.corrections] else { return }
+            self.correctionsLibrary.published(line)
+        }
         packLibrary.onNamesChanged = { [weak self] names in
             guard let self else { return }
             self.namesLibrary.select(self.packLibrary.state.registry.selectedGame)
+            self.correctionsLibrary.select(self.packLibrary.state.registry.selectedGame)
             self.pipeline.configurePackNames(names); self.refreshPackNamePairs()
         }
         do {
@@ -329,6 +338,7 @@ final class AppModel: ObservableObject {
         } catch { policy.stop(); SessionIntentStore.save(false); audio.stop(); errorMessage = error.localizedDescription }
     }
     func stop(reason: String = "أوقفها المستخدم") {
+        correctionsLibrary.clearRecent()
         recordSession("session.stop",reason+"; automatic recovery disabled")
         closeReading()
         policy.stop(); recoveryTask?.cancel(); recoveryTask = nil; endExecutionGrace(); audio.stop()

@@ -389,3 +389,29 @@ not a native test result. Keep Xcode16.4; retry available Intel capacity. Also
 serialize first names-file export under the store lock, preventing an empty
 first-export write from racing a concurrent explicit edit. Native experiment
 logs now identify ARM64 versus Intel Simulator instead of hardcoding Intel.
+
+### Unit D: explicit corrections (provisional native verification)
+
+The isolated store checkpoint43903003194/job133424306406 passed the full portable
+suite, including three new store/RAM tests. Corrections use the existing v1
+normalization (including its terminal dot/exclamation normalization), exact wins,
+and conflicting normalized targets reject instead of choosing arbitrarily. JSON
+validation is atomic and game/general role scoped; only explicit save/import
+writes a protected, backup-excluded file. No automatic dialogue persistence.
+
+The next change wires the tested store into a shared correction/reuse/rule
+priority helper and the live pipeline, plus direct translator lookup ahead of
+pack/model/cache. Independent persisted `corrections` defaults OFF. A bounded20
+published-line RAM list clears on Stop, disabling the feature and scope change.
+Explicit edits affect future/unpublished work, never replay expired cards or
+reset the tracker/TV clocks. Editor/import callbacks retain store identity. A
+changed correction/flag invalidates both caches; delayed old-context results are
+recomputed only while still unpublished and accepted by the tracker, and old
+scope results are discarded. Required native tests cover no-model priority,
+actual Argos cache edit/delete/OFF/scope, UI library RAM/persistence, and a real
+Vision->FramePipeline correction-before-rule fixture. These are NOT yet passed.
+
+B/C native Intel43902723228 is still queued without a runner at this writing.
+No new release or IPA/APK has been published. D production wiring remains
+provisional pending build/native/legacy verification; do not move on to E until
+its required tests are resolved or the incomplete unit is explicitly isolated.

@@ -7,10 +7,11 @@ struct QualitySettingsSection: View {
         Section("إصلاحات الجودة") {
             // Show only implemented units. Later units add their flags here
             // after their tests pass; the storage enum alone is not a feature.
-            ForEach([QualityFlag.measurement,.provenanceMarker,.punctuationTrace,.sessionCapture,.stageCues,.speakerClassification,.speakerGeometry,.visionNames,.learnNames],id:\.rawValue) { flag in
+            ForEach([QualityFlag.measurement,.provenanceMarker,.punctuationTrace,.sessionCapture,.stageCues,.speakerClassification,.speakerGeometry,.visionNames,.learnNames,.corrections],id:\.rawValue) { flag in
                 Toggle(flag.title,isOn:Binding(get:{model.quality[flag]},set:{model.quality[flag] = $0}))
             }
             NavigationLink("أسماء اللعبة") { GameNamesView(library:model.namesLibrary) }
+            NavigationLink("تصحيحاتي · الحوارات الأخيرة") { CorrectionsView(library:model.correctionsLibrary) }
             DisclosureGroup("متقدم") {
                 Stepper("تنبيه غياب المطابقة: \(model.quality.noHitThreshold) حوار",value:$model.quality.noHitThreshold,in:1...1000)
                 Stepper("ارتفاع الاسم: \(model.quality.nameHeightRatio,specifier:"%.2f")",value:$model.quality.nameHeightRatio,in:0.8...2,step:0.1)

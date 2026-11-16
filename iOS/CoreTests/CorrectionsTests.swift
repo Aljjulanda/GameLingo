@@ -3,6 +3,25 @@ import XCTest
 
 final class CorrectionsTests: XCTestCase {
     private func folder() -> URL { FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString) }
+    func testCorrectionPriorityRollbackAndReuseProvenance() throws {
+        let entry = UserCorrection(id:UUID().uuidString,source:"We should leave.",normalized:PackLookupKey.normalized("We should leave."),target:"حان وقت الرحيل.")
+        let snapshot = CorrectionsSnapshot(game:"synthetic",entries:[entry])
+        let cached = TranslationDecision(text:"ترجمة الحزمة",origin:.packExact,game:"synthetic",pack:"fixture")
+        var ruleCalls = 0
+        func choose(_ enabled: Bool, _ reuse: TranslationDecision?) -> TranslationDecision? {
+            DialogueOverride.resolve(source:"We should leave.",corrections:CorrectionContext(snapshot,enabled:enabled),reuse:reuse,cue:nil) { ruleCalls += 1; return "قاعدة" }
+        }
+        XCTAssertEqual(choose(true,cached)?.origin,.userCorrection)
+        XCTAssertEqual(choose(true,cached)?.text,entry.target); XCTAssertEqual(ruleCalls,0)
+        let rollback = choose(false,cached)
+        XCTAssertEqual(rollback?.origin,.reuse); XCTAssertEqual(rollback?.basis,.packExact)
+        XCTAssertEqual(rollback?.text,cached.text); XCTAssertEqual(ruleCalls,0)
+        XCTAssertEqual(choose(false,nil)?.origin,.rule); XCTAssertEqual(ruleCalls,1)
+        let cue = UserCorrection(id:UUID().uuidString,source:"[laughs]",normalized:"[laughs]",target:"(ضحكة هادئة)")
+        let cueSnapshot = CorrectionsSnapshot(game:"synthetic",entries:[cue])
+        XCTAssertEqual(DialogueOverride.resolve(source:"[laughs]",corrections:CorrectionContext(cueSnapshot,enabled:true),reuse:nil,cue:"(ضحك)",rule:{nil})?.text,cue.target)
+        XCTAssertNotEqual(CorrectionContext(snapshot,enabled:true).outputKey,CorrectionContext(snapshot,enabled:false).outputKey)
+    }
     func testExplicitSaveReloadExactNormalizedAndAmbiguity() throws {
         let root = folder(); defer { try? FileManager.default.removeItem(at:root) }
         let store = try GameCorrectionsStore(root:root,game:"synthetic")

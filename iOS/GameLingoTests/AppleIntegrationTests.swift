@@ -153,6 +153,39 @@ final class AppleIntegrationTests: XCTestCase {
             }
         }
     }
+    func testQualityPipelineExplicitCorrectionPrecedesBodyRuleAndRollsBack() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at:root) }
+        let store = try GameCorrectionsStore(root:root,game:"synthetic")
+        try store.save(source:"We should leave now.",target:"حان وقت الرحيل.")
+        for enabled in [true,false] {
+            try autoreleasepool {
+                let pixels = try visionFixture { _ in
+                    let text = "[laughs] We should leave now." as NSString
+                    let font = UIFont.systemFont(ofSize:31)
+                    let width = text.size(withAttributes:[.font:font]).width
+                    text.draw(at:CGPoint(x:(1280-width)/2,y:530),withAttributes:[.font:font,.foregroundColor:UIColor.white])
+                }
+                try autoreleasepool { _ = try VisionDialogueOCR().recognize(pixels,roi:.dialogue) }
+                let translator = OfflineTranslator(folder:root.appendingPathComponent("no-model"))
+                XCTAssertFalse(translator.installed)
+                let shown = expectation(description:"Actual correction/rule pipeline without model")
+                let pipeline = FramePipeline(translator:translator) { message in
+                    guard message["type"] as? String == "subtitle_show" else { return }
+                    XCTAssertEqual(message["translated"] as? String,enabled ? "حان وقت الرحيل." : "علينا المغادرة الآن.")
+                    XCTAssertEqual(message["cue"] as? String,"(ضحك)")
+                    XCTAssertEqual(message["provenance"] as? String,enabled ? "userCorrection" : "rule")
+                    shown.fulfill()
+                }
+                var q = QualitySettings(); q[.corrections] = enabled; q[.stageCues] = true; q[.provenanceMarker] = true
+                pipeline.configureQuality(q); pipeline.configureCorrections(store.snapshot)
+                var advanced = AdvancedSettings(); advanced.terminology = "We should leave now.=علينا المغادرة الآن."
+                pipeline.configureAdvanced(advanced); pipeline.start(roi:.dialogue,mode:.balanced)
+                DispatchQueue.global().asyncAfter(deadline:.now()+0.5) { pipeline.offer(pixels) }
+                wait(for:[shown],timeout:45); pipeline.stop()
+            }
+        }
+    }
     func testQualityVisionStoredDictionaryRefreshAndRollback() throws {
         let source = "We should leave now."
         let pixels = try visionFixture { _ in

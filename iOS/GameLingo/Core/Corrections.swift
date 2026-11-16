@@ -36,6 +36,27 @@ struct CorrectionLookup {
         return values?.count == 1 ? values?.first : nil
     }
 }
+struct CorrectionContext {
+    let snapshot: CorrectionsSnapshot
+    let enabled: Bool
+    private let index: CorrectionLookup
+    init(_ snapshot: CorrectionsSnapshot, enabled: Bool) {
+        self.snapshot = snapshot; self.enabled = enabled; index = CorrectionLookup(snapshot)
+    }
+    var outputKey: String { snapshot.outputKey + (enabled ? "/on" : "/off") }
+    func lookup(_ source: String) -> String? { enabled ? index.lookup(source) : nil }
+}
+
+/// Shared by the live post-OCR pipeline and deterministic priority fixtures.
+/// A user edit is authoritative; no rule/reuse/cue may replace it.
+enum DialogueOverride {
+    static func resolve(source: String, corrections: CorrectionContext, reuse: TranslationDecision?, cue: String?, rule: () -> String?) -> TranslationDecision? {
+        if let text = corrections.lookup(source) { return TranslationDecision(text:text,origin:.userCorrection) }
+        if var reuse { reuse.basis = reuse.basis ?? reuse.origin; reuse.origin = .reuse; return reuse }
+        if let text = cue ?? rule() { return TranslationDecision(text:text,origin:.rule) }
+        return nil
+    }
+}
 final class GameCorrectionsStore {
     let file: URL
     private let lock = NSLock()
