@@ -82,3 +82,25 @@ remained queued for over eight minutes without a runner, annotations or test
 output. Portable checkpoints use the supported Linux Swift package to avoid
 that queue; this does not replace Xcode 16.4/native/Simulator release checks.
 No unit is certified yet and no release was published.
+
+### A focused results so far
+
+- Portable Swift: 86 XCTest cases passed on Swift 6.4.2/Linux, run
+  https://github.com/Aljjulanda/GameLingo/actions/runs/43840385496 at `684f1dc`.
+  The final Swift Testing line reports zero tests because these are XCTest
+  cases executed by the parallel runner, not Swift Testing declarations.
+- Android: 31 JVM tests passed, zero failures/errors; production-package APK
+  built locally using the original keystore. Verified APK signer fingerprint
+  matches the installed baseline. This is an intermediate APK, not a release.
+- A subsequent optional rendered trace now returns a strictly validated,
+  bounded content-free signature in an existing render ACK; no new message
+  type, transport layer, authentication, timer or pairing behavior changes.
+  A new trace flag OFF emits no optional request field. Native tests pending.
+- Physical TCL ADB at its last known address did not respond; no physical
+  rendering or gameplay validation is claimed for these changes.
+- Release baseline's picker UI harness taps filename captions. Previous
+  importer attempts improved this to thumbnail taps but mistook the ZIP icon's
+  own text for the filename. The harness now requires filename-specific OCR
+  patterns, waits for provider dismissal before querying AUT accessibility,
+  and still verifies the delegate-delivered filename. These test-only changes
+  remain unverified until the actual native GUI run passes.

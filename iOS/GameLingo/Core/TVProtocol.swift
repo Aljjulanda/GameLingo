@@ -35,6 +35,7 @@ enum TVProtocol {
     static func qualityFields(_ message: [String:Any], settings: QualitySettings, origin: TranslationOrigin) -> [String:Any] {
         var message = message
         if settings[.provenanceMarker] { message["provenance"] = origin.rawValue }
+        if settings[.punctuationTrace] { message["quality_trace"] = true }
         return message
     }
 }

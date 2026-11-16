@@ -12,6 +12,8 @@ import org.json.JSONObject
 
 class SubtitleCanvas(context: Context, private val report: (String)->Unit) : View(context) {
     var onRendered: ((String)->Unit)? = null
+    var onRenderedTrace: ((String,String)->Unit)? = null
+    private val traceRequested = java.util.LinkedHashSet<String>()
     private val acknowledged=java.util.LinkedHashSet<String>()
     private var document:JSONObject?=null
     var measuredDocument:RectF?=null;private set
@@ -81,6 +83,9 @@ class SubtitleCanvas(context: Context, private val report: (String)->Unit) : Vie
             }
             "subtitle_show", "subtitle_update" -> {
                 previewUntil=0
+                val eventId = message.getString("id")
+                if(message.optBoolean("quality_trace",false)) traceRequested.add(eventId) else traceRequested.remove(eventId)
+                while(traceRequested.size > 64) traceRequested.remove(traceRequested.first())
                 val text=message.getString("translated")
                 val duration=state.duration(text,b("adaptive",true),n("reading_speed",13.0).toDouble(),
                     (n("min_seconds",4.0)*1000).toLong(),(n("max_seconds",8.0)*1000).toLong(),(n("fixed_seconds",5.0)*1000).toLong()).coerceAtMost((n("hard_seconds",8.0)*1000).toLong())
@@ -180,7 +185,9 @@ class SubtitleCanvas(context: Context, private val report: (String)->Unit) : Vie
             ink.style=Paint.Style.FILL;ink.color=color("text_color","#FFFFFF",n("text_opacity",100.0)*alpha);layout.draw(canvas);canvas.restore()
             if(previewUntil<=now && acknowledged.add(renderEntries[i].id)) {
                 if(acknowledged.size>128) acknowledged.remove(acknowledged.first())
-                onRendered?.invoke(renderEntries[i].id)
+                if(traceRequested.contains(renderEntries[i].id) && onRenderedTrace != null) {
+                    onRenderedTrace?.invoke(renderEntries[i].id,PunctuationTrace.signature(texts[i].toString(),layouts[i].getParagraphDirection(0)))
+                } else onRendered?.invoke(renderEntries[i].id)
             }
             top-=gap;used+=h+gap;drawn++
         }

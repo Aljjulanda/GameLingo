@@ -13,6 +13,7 @@ final class TVHub {
     var onDiagnostics: (([String]) -> Void)?
     var onListening: ((Bool) -> Void)?
     var onCapabilities: (([String]) -> Void)?
+    var onRenderSignature: ((String) -> Void)?
     var onDisplayAck: ((String) -> Void)?
     var onListenerFailure: (() -> Void)?
     private let queue = DispatchQueue(label:"dev.gamelingo.tv")
@@ -252,7 +253,11 @@ final class TVHub {
                     switch message["type"] as? String {
                     case "subtitle_ack":
                         if let id = message["id"] as? String, self.pendingDisplay.remove(id) != nil {
-                            DispatchQueue.main.async { self.onDisplayAck?(id) }
+                            let trace = message["render_signature"] as? String
+                            DispatchQueue.main.async {
+                                self.onDisplayAck?(id)
+                                if let trace, SubtitlePresentation.isSafeRenderSignature(trace) { self.onRenderSignature?(trace) }
+                            }
                         }
                     case "heartbeat": self.enqueue(TVProtocol.envelope("heartbeat",fields:["time_ms":Self.now()]))
                     case "settings_ack":

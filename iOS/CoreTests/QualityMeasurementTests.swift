@@ -54,6 +54,9 @@ final class QualityMeasurementTests: XCTestCase {
         XCTAssertTrue(SubtitlePresentation.punctuation("(نعم!)").contains("first=R"))
         XCTAssertTrue(SubtitlePresentation.punctuation("123").contains("none"))
         XCTAssertEqual(SubtitlePresentation.clean(input),input)
+        XCTAssertTrue(SubtitlePresentation.isSafeRenderSignature("visual=RTL; logical first=L; ::middle (:middle ؟:end"))
+        XCTAssertFalse(SubtitlePresentation.isSafeRenderSignature("visual=RTL; logical first=L; private-dialogue"))
+        XCTAssertFalse(SubtitlePresentation.isSafeRenderSignature(String(repeating:"!",count:1025)))
     }
     func testOptionalTransportAllOffAndIndependentMarkerRollback() throws {
         let baseline: [String:Any] = ["v":1,"type":"subtitle_show","id":"fixture","translated":"تحرك الآن.","source":"Move now."]
@@ -63,7 +66,12 @@ final class QualityMeasurementTests: XCTestCase {
         for flag in QualityFlag.allCases { all[flag] = true }
         XCTAssertEqual(TVProtocol.qualityFields(baseline,settings:all,origin:.packExact)["provenance"] as? String,"packExact")
         all[.provenanceMarker] = false
-        XCTAssertEqual(try TVProtocol.encode(TVProtocol.qualityFields(baseline,settings:all,origin:.packExact)),try TVProtocol.encode(baseline))
+        let markerOff = TVProtocol.qualityFields(baseline,settings:all,origin:.packExact)
+        XCTAssertNil(markerOff["provenance"])
+        XCTAssertEqual(try TVProtocol.encode(markerOff.filter{baseline.keys.contains($0.key)}),try TVProtocol.encode(baseline))
+        all[.provenanceMarker] = true; all[.punctuationTrace] = false
+        let traceOff = TVProtocol.qualityFields(baseline,settings:all,origin:.packExact)
+        XCTAssertNil(traceOff["quality_trace"]); XCTAssertEqual(traceOff["provenance"] as? String,"packExact")
     }
     func testCaptureConsentBoundsStopRetentionAndReplay() throws {
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)

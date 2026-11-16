@@ -23,6 +23,7 @@ final class AppModel: ObservableObject {
     @Published var discovered: [DiscoveredConsole] = []
     @Published var remoteStatus = "البث متوقف"
     @Published var tvStatus = "التلفزيون غير متصل"
+    @Published var tvRenderSignature = ""
     @Published var tvDiagnostics: [String] = []
     @Published var tvListening = false
     @Published var sessionStatus = "متوقفة"
@@ -97,7 +98,8 @@ final class AppModel: ObservableObject {
             "Speaker readings detected: \(metrics.speakersDetected)", "Speaker readings uncertain: \(metrics.speakersUncertain)",
             "Battery percentage change: \(batteryUsed.map(NumericInput.format) ?? "unavailable")",
             "Smart Reading: \(NumericInput.format(metrics.documentMilliseconds)) ms, sampled extra RSS \(NumericInput.format(metrics.documentExtraMegabytes)) MB",
-            "Punctuation stages (logical order, no dialogue): \(metrics.punctuationTrace)"
+            "Punctuation stages (logical order, no dialogue): \(metrics.punctuationTrace)",
+            "TV actual-render signature: \(tvRenderSignature)"
         ]
         return (values+[packLibrary.metrics.summary]+sessionDiagnostics).joined(separator:"\n")
     }
@@ -196,6 +198,7 @@ final class AppModel: ObservableObject {
         }
         hub.onConnected = { [weak self] in self?.tvConnected = true }
         hub.onCapabilities = { [weak self] in self?.tvDocuments = $0.contains("document_v1"); self?.tvSpeakers = $0.contains("speaker_v1") }
+        hub.onRenderSignature = { [weak self] in self?.tvRenderSignature = $0 }
         hub.onDisplayAck = { [weak self] id in
             guard let self, self.policy.wanted, !self.displayedIDs.contains(id) else { return }
             if self.displayedIDs.count >= 128 { self.displayedIDs.removeAll() }

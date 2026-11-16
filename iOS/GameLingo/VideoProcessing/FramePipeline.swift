@@ -45,7 +45,7 @@ final class FramePipeline {
     private var captureGeneration = UUID()
     private var pendingCapture: [CaptureLine] = []
     func configureQuality(_ value: QualitySettings) { queue.async {
-        self.quality = value
+        self.quality = value; self.ocr.qualityTrace = value[.punctuationTrace]
         if !value[.sessionCapture] { self.capture.stop(); self.reportCapture() }
     } }
     func captureAction(start: Bool = false, delete: Bool = false) {
@@ -144,7 +144,7 @@ final class FramePipeline {
     }
     private func reset(preservingState: Bool = false) {
         finishReading()
-        timer?.cancel(); timer = nil; runID = UUID(); pending = nil; ocr = VisionDialogueOCR(); ocr.setBackground(isBackground); signature = FrameSignature()
+        timer?.cancel(); timer = nil; runID = UUID(); pending = nil; ocr = VisionDialogueOCR(); ocr.setBackground(isBackground); ocr.qualityTrace = quality[.punctuationTrace]; signature = FrameSignature()
         if preservingState { tracker.markInterrupted(); memory.prune(now:ProcessInfo.processInfo.systemUptime) }
         else { tracker.reset(); memory.clear(); stability.clear(); translations = BoundedLRU(capacity:8) }
         // An already running inference still owns the single worker until its callback.
@@ -186,7 +186,7 @@ final class FramePipeline {
             let content = ocr.content
             if content.speaker != nil { metrics.speakersDetected += 1 }
             if content.uncertainSpeaker { metrics.speakersUncertain += 1 }
-            metrics.punctuationTrace = "OCR " + ocr.punctuationTrace + " | parsed " + SubtitlePresentation.punctuation(content.text)
+            metrics.punctuationTrace = quality[.punctuationTrace] ? "OCR " + ocr.punctuationTrace + " | parsed " + SubtitlePresentation.punctuation(content.text) : ""
             metrics.recognitions &+= 1
             metrics.actualOCRRate = Double(metrics.recognitions)/max(0.001,ProcessInfo.processInfo.systemUptime-startedAt)
             metrics.ocrMilliseconds = (ProcessInfo.processInfo.systemUptime-now)*1000
@@ -236,7 +236,6 @@ final class FramePipeline {
                             if !reusable { self.metrics.translationMilliseconds = latency; self.translationSamples.record(latency); self.metrics.translationP95 = self.translationSamples.p95 }
                             self.stability.didPublish(delivered)
                             self.translations.put((job.text,text),for:job.id)
-                            self.metrics.punctuationTrace = punctuationTrace + " | model " + SubtitlePresentation.punctuation(text) + " | wire " + SubtitlePresentation.punctuation(SubtitlePresentation.clean(text))
                             self.memory.observe(job,now:ProcessInfo.processInfo.systemUptime)
                             let message = TVProtocol.qualityFields(TVProtocol.subtitle(delivered,arabic:text,now:TVHub.now()),settings:self.quality,origin:decision.origin)
                             if self.quality[.measurement] {

@@ -22,4 +22,19 @@ enum SubtitlePresentation {
         }
         return "logical first=\(direction); " + positions.prefix(64).joined(separator:" ")
     }
+    static func isSafeRenderSignature(_ value: String) -> Bool {
+        guard value.count <= 1024 else { return false }
+        for visual in ["RTL","LTR"] { for logical in ["L","R","none"] {
+            let prefix = "visual=\(visual); logical first=\(logical); "
+            if value.hasPrefix(prefix) {
+                let tokens = value.dropFirst(prefix.count).split(separator:" ")
+                return tokens.count <= 64 && tokens.allSatisfy { token in
+                    guard let separator = token.lastIndex(of:":") else { return false }
+                    let mark = token[..<separator], location = token[token.index(after:separator)...]
+                    return mark.count == 1 && mark.first.map { "()[]:\"'?؟!.…،؛«»-—".contains($0) } == true && ["start","middle","end"].contains(String(location))
+                }
+            }
+        } }
+        return false
+    }
 }

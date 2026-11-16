@@ -53,6 +53,7 @@ class OverlayService : Service() {
             if (existing == null) {
                 val label = SubtitleCanvas(this, ::status).apply {
                     onRendered={ id -> receiver?.acknowledge(id) }
+                    onRenderedTrace={ id,trace -> receiver?.acknowledge(id,trace) }
                     val saved=prefs.getString("display_settings",null)
                     if(saved!=null) style=org.json.JSONObject(saved)
                 }

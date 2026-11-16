@@ -10,6 +10,7 @@ final class VisionDialogueOCR {
         request.usesLanguageCorrection = true; request.minimumTextHeight = 0.012
         return request
     }()
+    var qualityTrace = false
     private var previousSignature: [String] = []
     private(set) var lastLines: [OCRLine] = []
     private(set) var confidence: Double = 0
@@ -71,7 +72,7 @@ final class VisionDialogueOCR {
             return visualLines(candidate,box:b,roi:roi,knownNames:knownNames)
         }
         lastLines = Array(lines.prefix(150))
-        punctuationTrace = SubtitlePresentation.punctuation(lines.map(\.text).joined(separator:" "))
+        punctuationTrace = qualityTrace ? SubtitlePresentation.punctuation(lines.map(\.text).joined(separator:" ")) : ""
         if let reading = StructuredDialogue.resolve(lines,roi:roi,knownNames:knownNames) {
             confidence = reading.confidence; content = reading.content; separateSpeakerLabel = reading.content.speaker != nil
             return (content.text,reading.box)

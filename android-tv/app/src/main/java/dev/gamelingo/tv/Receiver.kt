@@ -81,8 +81,12 @@ class Receiver(context: Context, private val render: (JSONObject?) -> Unit, priv
             connect()
         }
     }
-    fun acknowledge(id: String) {
-        if (displayAcknowledgement && session.isNotEmpty()) socket?.send(JSONObject().put("v",1).put("type","subtitle_ack").put("id",id).toString())
+    fun acknowledge(id: String, renderedTrace: String? = null) {
+        if (displayAcknowledgement && session.isNotEmpty()) {
+            val ack=JSONObject().put("v",1).put("type","subtitle_ack").put("id",id)
+            if(renderedTrace != null && renderedTrace.length <= 1024) ack.put("render_signature",renderedTrace)
+            socket?.send(ack.toString())
+        }
     }
     private fun diagnostic(code: String, text: String, show: Boolean = true) {
         val line = "${System.currentTimeMillis()} [$code] $text"

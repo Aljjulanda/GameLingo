@@ -32,7 +32,16 @@ final class LocalizationPickerUITests: XCTestCase {
         for _ in 0..<20 { if button.isHittable { break }; app.swipeDown() }
         return button
     }
-    private func waitFinished(filename: String) {
+    private func waitFinished(filename: String) throws {
+        var dismissed = false
+        for _ in 0..<60 {
+            let labels = try visiblePickerText()
+            let header = labels.contains { $0.0.contains("gamelingo") && $0.1.midY > 0.82 }
+            if !header { dismissed = true; break }
+            Thread.sleep(forTimeInterval:0.25)
+        }
+        XCTAssertTrue(dismissed,"Native provider did not dismiss after thumbnail tap")
+        guard dismissed else { return }
         let summary = app.staticTexts["gamePacks.fileSummary"]
         let finished = NSPredicate { [self] _,_ in
             summary.exists && summary.label.contains(filename) && app.buttons["gamePacks.import"].isEnabled && app.buttons["gamePacks.import"].isHittable
@@ -72,23 +81,40 @@ final class LocalizationPickerUITests: XCTestCase {
         try waitForNativePicker()
         // Tap the status-bar clock to return the provider's scroll view to top.
         screenCoordinate(CGPoint(x:0.15,y:0.025)).tap()
-        Thread.sleep(forTimeInterval:0.3)
+        Thread.sleep(forTimeInterval:1.0)
         let aliases: [String]
         switch ext {
         case "": aliases = ["extension"]
         case "po": aliases = ["popo","glpickerpo"]
-        case "7z": aliases = ["7z","72"]
-        case "glpack": aliases = ["glpack","gipack"]
-        case "unknownformat": aliases = ["unknownformat","unknownforrnat"]
-        default: aliases = [ext]
+        case "7z": aliases = ["7z7z","7272","glpicker7z","glpicker72"]
+        case "glpack": aliases = ["glpackglpack","gipackgipack","glpickerglpack","glpickergipack"]
+        case "unknownformat": aliases = ["unknownformat","unknownforrnat","unknoformat"]
+        default: aliases = [ext+ext,"glpicker"+ext]
         }
-        for _ in 0..<12 {
+        func target(_ rows: [(String,CGRect)]) -> CGRect? {
+            rows.first(where:{ row in row.1.midY < 0.80 && row.1.midY > 0.11 && aliases.contains(where:{row.0.contains($0)}) })?.1
+        }
+        for _ in 0..<20 {
             let text = try visiblePickerText()
             print("PICKER_VISIBLE_LABELS "+text.map{$0.0}.joined(separator:" | "))
-            if let item = text.first(where:{ row in row.1.midY < 0.80 && row.1.midY > 0.11 && aliases.contains(where:{row.0.contains($0)}) }) {
-                return CGPoint(x:item.1.midX,y:1-item.1.midY)
+            if let first = target(text) {
+                // AUT idle does not include the remote provider's deceleration.
+                // Confirm a stable label in a second screen frame before tapping.
+                Thread.sleep(forTimeInterval:0.35)
+                guard let box = target(try visiblePickerText()), abs(first.midY-box.midY) < 0.006, abs(first.midX-box.midX) < 0.01 else { continue }
+                // Files' grid caption is not the primary hit region. Tap the
+                // thumbnail above the recognized caption, never an AUT element.
+                let point = CGPoint(x:box.midX,y:1-box.midY-60/screenHeight)
+                if point.y < 0.21 {
+                    screenCoordinate(CGPoint(x:0.5,y:0.35)).press(forDuration:0.05,thenDragTo:screenCoordinate(CGPoint(x:0.5,y:0.52)))
+                    Thread.sleep(forTimeInterval:1.0)
+                    continue
+                }
+                print("PICKER_THUMBNAIL_TAP \(ext) \(point)")
+                return point
             }
             screenCoordinate(CGPoint(x:0.5,y:0.74)).press(forDuration:0.05,thenDragTo:screenCoordinate(CGPoint(x:0.5,y:0.40)))
+            Thread.sleep(forTimeInterval:1.0)
         }
         XCTFail("Visible picker label not found: "+ext)
         return CGPoint(x:0.5,y:0.5)
@@ -100,7 +126,8 @@ final class LocalizationPickerUITests: XCTestCase {
             let point = try pickerFilePoint(ext)
             let screenshot = XCTAttachment(screenshot:app.screenshot()); screenshot.name = "Picker-"+name; screenshot.lifetime = .keepAlways; add(screenshot)
             screenCoordinate(point).tap()
-            waitFinished(filename:ext.isEmpty ? name : name+"."+ext)
+            Thread.sleep(forTimeInterval:1.0)
+            try waitFinished(filename:ext.isEmpty ? name : name+"."+ext)
             print("PICKER_SELECTION_VERIFIED "+(ext.isEmpty ? "extensionless" : ext))
         }
         let previous = app.staticTexts["gamePacks.fileSummary"].label
