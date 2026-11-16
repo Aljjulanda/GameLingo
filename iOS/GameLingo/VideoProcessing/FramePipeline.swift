@@ -42,13 +42,22 @@ final class FramePipeline {
     private var quality = QualitySettings()
     private let capture = QualityCapture(folder:FileManager.default.urls(for:.cachesDirectory,in:.userDomainMask)[0].appendingPathComponent("QualityCapture",isDirectory:true))
     var onCaptureState: ((Bool,URL?) -> Void)?
+    private var captureGeneration = UUID()
     private var pendingCapture: [CaptureLine] = []
-    func configureQuality(_ value: QualitySettings) { queue.async { self.quality = value } }
+    func configureQuality(_ value: QualitySettings) { queue.async {
+        self.quality = value
+        if !value[.sessionCapture] { self.capture.stop(); self.reportCapture() }
+    } }
     func captureAction(start: Bool = false, delete: Bool = false) {
         queue.async { [self] in
-            do { if delete { try capture.delete() } else if start { try capture.start(consent:true) } else { capture.stop() } }
+            captureGeneration = UUID(); let ticket = captureGeneration
+            do { if delete { try capture.delete() } else if start && quality[.sessionCapture] { try capture.start(consent:true) } else { capture.stop() } }
             catch { DispatchQueue.main.async { self.onError?("تعذر حفظ تسجيل الاختبار المحلي") } }
             reportCapture()
+            if capture.active { queue.asyncAfter(deadline:.now()+1800) { [weak self] in
+                guard let self, self.captureGeneration == ticket else { return }
+                self.capture.stop(); self.reportCapture()
+            } }
         }
     }
     private func reportCapture() {

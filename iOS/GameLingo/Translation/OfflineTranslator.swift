@@ -50,7 +50,7 @@ final class OfflineTranslator {
                 let key = Self.modelID+"/commands-v2/en/ar/"+normalized
                 let lookup = packs?.lookupDetailed(text,category:category,eventID:eventID) ?? PackLookupOutcome(fallback:.noDatabase)
                 func decision(_ value: String, _ origin: TranslationOrigin) -> TranslationDecision {
-                    TranslationDecision(text:value,origin:origin,fallback:lookup.fallback,game:lookup.game,pack:lookup.pack)
+                    TranslationDecision(text:value,origin:origin,fallback:(origin == .argosInference || origin == .argosCache) ? lookup.fallback : nil,game:lookup.game,pack:lookup.pack)
                 }
                 if let localized = lookup.text { result = .success(decision(localized,lookup.origin)) }
                 else if let cached = cache.get(key) { packs?.recordArgos(); result = .success(decision(cached,.argosCache)) }

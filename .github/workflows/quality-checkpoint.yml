@@ -5,12 +5,15 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: quality-checkpoint-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   core:
-    runs-on: macos-15
+    # Portable package checks need no Apple SDK. Final iOS native/Simulator
+    # verification still runs with Xcode 16.4 in ios-build.yml.
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
-    env:
-      DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
     steps:
       - uses: actions/checkout@v6
         with:
@@ -20,7 +23,8 @@ jobs:
           python3 iOS/Scripts/validate-source.py
           python3 iOS/Scripts/test-build-tools.py
           python3 tools/pack_converter/test_converter.py
-          find iOS/GameLingo -name '*.swift' -print0 | xargs -0 xcrun swiftc -frontend -parse
+          swift --version
+          find iOS/GameLingo -name '*.swift' -print0 | xargs -0 swiftc -frontend -parse
       - name: All portable Swift tests, including the current quality unit
         working-directory: iOS
         run: swift test --parallel

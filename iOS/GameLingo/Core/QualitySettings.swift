@@ -3,7 +3,7 @@ import Foundation
 /// Each behavior can be independently reverted. Absence of a saved key never
 /// enables a new behavior. Recording consent is deliberately NOT persisted.
 enum QualityFlag: String, CaseIterable, Codable {
-    case measurement, provenanceMarker, punctuationTrace
+    case measurement, provenanceMarker, punctuationTrace, sessionCapture
     case stageCues, speakerClassification, speakerGeometry, visionNames
     case learnNames, protectNames, corrections, packMarkup, packPunctuation
     case packLabels, punctuationRepair, commandPunctuation, typewriter, lineLimits
@@ -12,6 +12,7 @@ enum QualityFlag: String, CaseIterable, Codable {
         switch self {
         case .measurement: return "قياس مصدر الحوارات المنشورة"
         case .provenanceMarker: return "علامة مصدر الترجمة على التلفزيون"
+        case .sessionCapture: return "إتاحة تسجيل الاختبار المحلي · بموافقة منفصلة"
         case .punctuationTrace: return "تشخيص مواضع الترقيم بلا نصوص"
         case .stageCues: return "الأصوات والوصف بين الأقواس"
         case .speakerClassification: return "تحسين تمييز أسماء المتحدثين"

@@ -7,7 +7,7 @@ struct QualitySettingsSection: View {
         Section("إصلاحات الجودة") {
             // Show only implemented units. Later units add their flags here
             // after their tests pass; the storage enum alone is not a feature.
-            ForEach([QualityFlag.measurement,.provenanceMarker,.punctuationTrace],id:\.rawValue) { flag in
+            ForEach([QualityFlag.measurement,.provenanceMarker,.punctuationTrace,.sessionCapture],id:\.rawValue) { flag in
                 Toggle(flag.title,isOn:Binding(get:{model.quality[flag]},set:{model.quality[flag] = $0}))
             }
             DisclosureGroup("متقدم") {
@@ -17,7 +17,7 @@ struct QualitySettingsSection: View {
             if model.qualityCaptureActive {
                 Label("تسجيل نصوص الاختبار محليًا قيد التشغيل",systemImage:"record.circle").foregroundColor(.red)
                 Button("إيقاف تسجيل الاختبار") { model.qualityCapture() }
-            } else { Button("تسجيل جلسة اختبار محلية…") { consent = true } }
+            } else if model.quality[.sessionCapture] { Button("تسجيل جلسة اختبار محلية…") { consent = true } }
             if let file = model.qualityCaptureFile {
                 ShareLink("تصدير تسجيل الاختبار",item:file)
                 Button("حذف تسجيل الاختبار",role:.destructive) { model.qualityCapture(delete:true) }

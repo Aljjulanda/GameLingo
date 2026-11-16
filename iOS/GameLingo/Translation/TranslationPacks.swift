@@ -122,7 +122,8 @@ final class TranslationPackStore {
         queue.async { [self] in
             // A completed request from an earlier selection cannot contaminate
             // this game's denominator or display a false active-pack status.
-            guard event.game == state.registry.selectedGame else { return }
+            let activePack = state.loaded ? state.registry.packs.first{$0.manifest.gameId == state.registry.selectedGame && $0.enabled}?.id : nil
+            guard event.game == state.registry.selectedGame, event.pack == activePack else { return }
             metrics.recordPublished(event)
         }
     }
