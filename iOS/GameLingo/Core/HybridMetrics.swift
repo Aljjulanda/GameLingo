@@ -4,6 +4,20 @@ enum TranslationOrigin: String, Codable, CaseIterable {
     case userCorrection, rule, packExact, packNormalized, packPunctuationless
     case reuse, argosCache, argosInference, command, apple
     var isPack: Bool { self == .packExact || self == .packNormalized || self == .packPunctuationless }
+    var title: String {
+        switch self {
+        case .userCorrection: return "تصحيحك المحفوظ"
+        case .rule: return "قاعدة مصطلحات"
+        case .packExact: return "الحزمة · حرفي"
+        case .packNormalized: return "الحزمة · بعد توحيد المسافات"
+        case .packPunctuationless: return "الحزمة · دون ترقيم"
+        case .reuse: return "إعادة استخدام السطر نفسه"
+        case .argosCache: return "Argos · نتيجة مؤقتة"
+        case .argosInference: return "Argos · ترجمة جديدة"
+        case .command: return "أمر قصير"
+        case .apple: return "Apple · تجريبي"
+        }
+    }
 }
 enum TranslationFallback: String, Codable, CaseIterable {
     case noDatabase, missing, ambiguous, unsupported, notDialogue
@@ -82,6 +96,11 @@ struct PackSelfTest {
     var active = false
     var reasons: [String:Int] = [:]
     var summary: String {
-        "اختبار اصطناعي فقط: طابقت \(matched) من \(count) · أزواج صالحة: \(usablePairs) · نشطة: \(active ? "نعم" : "لا") · \(reasons.sorted{$0.key < $1.key}.map{"\($0.key):\($0.value)"}.joined(separator:"، "))"
+        let outcome = count == 0 ? "لا توجد أزواج حوار صالحة للاختبار" : "طابقت \(matched) من \(count)"
+        let details = reasons.sorted{$0.key < $1.key}.map { item -> String in
+            let title = TranslationFallback(rawValue:item.key)?.title ?? (item.key == "damaged" ? "تعذر قراءة الحزمة" : "لا أزواج حوار")
+            return "\(title): \(item.value)"
+        }.joined(separator:"، ")
+        return "اختبار اصطناعي فقط: \(outcome) · أزواج صالحة: \(usablePairs) · نشطة: \(active ? "نعم" : "لا") · \(details)"
     }
 }

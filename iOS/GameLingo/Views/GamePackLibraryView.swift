@@ -67,7 +67,7 @@ struct GamePackLibraryView: View {
                 Text(library.metrics.status(active:library.state.loaded,damaged:library.state.error != nil,threshold:model.quality.noHitThreshold))
                 Text("المقام هو عدد معرّفات الحوار التي نُشرت للمرة الأولى منذ تفعيل اللعبة؛ لا يشمل محاولات OCR أو الاختبار الاصطناعي.").font(.footnote)
                 ForEach(TranslationOrigin.allCases,id:\.rawValue) { origin in
-                    LabeledContent(origin.rawValue,value:String(library.metrics.origins[origin,default:0]))
+                    LabeledContent(origin.title,value:String(library.metrics.origins[origin,default:0]))
                 }
                 Button("اختبار الحزمة · اصطناعي") { library.testPack() }.disabled(!library.state.loaded)
                 if !library.selfTestReport.isEmpty { Text(library.selfTestReport).font(.footnote) }

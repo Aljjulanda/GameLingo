@@ -8,6 +8,6 @@ let package = Package(
     targets: [
         .systemLibrary(name: "CSQLite", path: "CSQLite"),
         .target(name: "LingoCore", dependencies: ["CSQLite"], path: "GameLingo/Core", resources: [.process("Resources")]),
-        .testTarget(name: "LingoCoreTests", dependencies: ["LingoCore"], path: "CoreTests")
+        .testTarget(name: "LingoCoreTests", dependencies: ["LingoCore"], path: "CoreTests", resources: [.process("Fixtures")])
     ]
 )

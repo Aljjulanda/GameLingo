@@ -3,7 +3,7 @@ name: GameLingo iOS unsigned IPA
 on:
   workflow_dispatch:
   push:
-    branches: ['main', 'codex/**']
+    branches: ['main', 'codex/**', '!codex/quality-fixes-1']
     paths: ['iOS/**', 'tools/pack_converter/**', '.github/workflows/ios-build.yml']
   pull_request:
     paths: ['iOS/**', 'tools/pack_converter/**', '.github/workflows/ios-build.yml']
@@ -21,9 +21,8 @@ concurrency:
 
 jobs:
   ios:
-    # Unit checkpoints use the focused workflow. Manual dispatch still executes
-    # the entire unchanged archive/native/GUI route and is the release gate.
-    if: github.ref != 'refs/heads/codex/quality-fixes-1' || github.event_name != 'push'
+    # Quality branch pushes use the focused workflow; manual dispatch executes
+    # every archive/native/GUI step below. Checkpoints cannot cancel that run.
     runs-on: macos-15
     timeout-minutes: 90
     env:

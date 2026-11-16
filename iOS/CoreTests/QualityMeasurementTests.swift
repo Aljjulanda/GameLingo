@@ -104,4 +104,14 @@ final class QualityMeasurementTests: XCTestCase {
         XCTAssertFalse(capture.active)
         XCTAssertEqual(try Data(contentsOf:capture.file).count,0)
     }
+    func testDeterministicSyntheticJSONLReplayUsesExplicitStub() throws {
+        let url = try XCTUnwrap(Bundle.module.url(forResource:"quality-replay",withExtension:"jsonl"))
+        let data = try Data(contentsOf:url)
+        let records = try data.split(separator:10).map { try JSONDecoder().decode(QualityCaptureRecord.self,from:Data($0)) }
+        let authored = Dictionary(uniqueKeysWithValues:records.map{($0.engineInput,$0.engineOutput)})
+        let first = try QualityReplay.run(data,translate:{authored[$0] ?? "MISSING STUB"})
+        XCTAssertEqual(first,records.map(\.engineOutput))
+        XCTAssertEqual(first,try QualityReplay.run(data,translate:{authored[$0] ?? "MISSING STUB"}))
+        XCTAssertEqual(records.count,6)
+    }
 }

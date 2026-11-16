@@ -242,6 +242,7 @@ struct PerformanceView: View {
                     LabeledContent("تسميات اسم غير مؤكدة",value:String(model.metrics.speakersUncertain))
                     DisclosureGroup("تتبع علامات الترقيم · أعداد فقط") {
                         Text(model.metrics.punctuationTrace).font(.system(.caption,design:.monospaced)).textSelection(.enabled)
+                        if !model.tvRenderSignature.isEmpty { Text(model.tvRenderSignature).font(.system(.caption,design:.monospaced)).textSelection(.enabled) }
                         Text("عدد الأقواس والعلامات في OCR والنص المفصول وخرج الترجمة والرسالة؛ لا يتضمن نص الحوار.").font(.footnote)
                     }
                 }
