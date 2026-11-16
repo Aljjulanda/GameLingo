@@ -5,7 +5,7 @@ package dev.gamelingo.tv
 internal object PunctuationTrace {
     fun signature(value: String, paragraphDirection: Int): String {
         val text = TextPresentation.clean(value).trim()
-        val first = text.firstOrNull { it.isLetter() }
+        val first = text.codePoints().toArray().firstOrNull { Character.isLetter(it) }
         val direction = if(first == null) "none" else when(Character.getDirectionality(first)) {
             Character.DIRECTIONALITY_RIGHT_TO_LEFT, Character.DIRECTIONALITY_RIGHT_TO_LEFT_ARABIC -> "R"
             else -> "L"

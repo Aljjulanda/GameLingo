@@ -69,7 +69,7 @@ struct GamePackLibraryView: View {
                 ForEach(TranslationOrigin.allCases,id:\.rawValue) { origin in
                     LabeledContent(origin.title,value:String(library.metrics.origins[origin,default:0]))
                 }
-                Button("اختبار الحزمة · اصطناعي") { library.testPack() }.disabled(!library.state.loaded)
+                Button("اختبار الحزمة · اصطناعي") { library.testPack() }.disabled(!library.state.loaded || model.running)
                 if !library.selfTestReport.isEmpty { Text(library.selfTestReport).font(.footnote) }
             }
                 if let game = library.state.registry.packs.first(where:{ $0.manifest.gameId == library.state.registry.selectedGame }) { LabeledContent("اللعبة المختارة",value:game.manifest.gameTitle) }
@@ -178,7 +178,7 @@ struct HybridStatisticsView: View {
                 ForEach(TranslationOrigin.allCases,id:\.rawValue) { origin in
                     LabeledContent(origin.rawValue,value:String(library.metrics.origins[origin,default:0]))
                 }
-                Button("اختبار الحزمة · اصطناعي") { library.testPack() }.disabled(!library.state.loaded)
+                Button("اختبار الحزمة · اصطناعي") { library.testPack() }.disabled(!library.state.loaded || model.running)
                 if !library.selfTestReport.isEmpty { Text(library.selfTestReport).font(.footnote) }
             }
             LabeledContent("أحداث الحوار",value:String(library.metrics.dialogueEvents))

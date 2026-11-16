@@ -14,7 +14,10 @@ final class AppModel: ObservableObject {
         }
     }
     @Published var quality = QualitySettings.load() {
-        didSet { quality.save(); pipeline.configureQuality(quality) }
+        didSet {
+            quality.save(); pipeline.configureQuality(quality)
+            if oldValue[.measurement] != quality[.measurement] { packLibrary.store.resetMetrics() }
+        }
     }
     @Published var qualityCaptureActive = false
     @Published var qualityCaptureFile: URL?
@@ -198,7 +201,7 @@ final class AppModel: ObservableObject {
         }
         hub.onConnected = { [weak self] in self?.tvConnected = true }
         hub.onCapabilities = { [weak self] in self?.tvDocuments = $0.contains("document_v1"); self?.tvSpeakers = $0.contains("speaker_v1") }
-        hub.onRenderSignature = { [weak self] in self?.tvRenderSignature = $0 }
+        hub.onRenderSignature = { [weak self] trace in if self?.quality[.punctuationTrace] == true { self?.tvRenderSignature = trace } }
         hub.onDisplayAck = { [weak self] id in
             guard let self, self.policy.wanted, !self.displayedIDs.contains(id) else { return }
             if self.displayedIDs.count >= 128 { self.displayedIDs.removeAll() }

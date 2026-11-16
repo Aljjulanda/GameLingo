@@ -46,17 +46,18 @@ final class FramePipeline {
     private var pendingCapture: [CaptureLine] = []
     func configureQuality(_ value: QualitySettings) { queue.async {
         self.quality = value; self.ocr.qualityTrace = value[.punctuationTrace]
-        if !value[.sessionCapture] { self.capture.stop(); self.reportCapture() }
+        if !value[.sessionCapture] { self.capture.stop(); self.ocr.captureLines = false; self.reportCapture() }
     } }
     func captureAction(start: Bool = false, delete: Bool = false) {
         queue.async { [self] in
             captureGeneration = UUID(); let ticket = captureGeneration
             do { if delete { try capture.delete() } else if start && quality[.sessionCapture] { try capture.start(consent:true) } else { capture.stop() } }
             catch { DispatchQueue.main.async { self.onError?("تعذر حفظ تسجيل الاختبار المحلي") } }
+            ocr.captureLines = capture.active
             reportCapture()
             if capture.active { queue.asyncAfter(deadline:.now()+1800) { [weak self] in
                 guard let self, self.captureGeneration == ticket else { return }
-                self.capture.stop(); self.reportCapture()
+                self.capture.stop(); self.ocr.captureLines = false; self.reportCapture()
             } }
         }
     }
@@ -132,7 +133,7 @@ final class FramePipeline {
         tracker.markInterrupted()
     } }
     func stop() {
-        queue.async { self.capture.stop(); self.reportCapture() }
+        queue.async { self.capture.stop(); self.ocr.captureLines = false; self.reportCapture() }
         translator.cancel()
         slotLock.lock(); active = false; latest = nil; slotLock.unlock()
         queue.async { [self] in reset(); publish(TVProtocol.envelope("subtitle_clear")) }
@@ -144,7 +145,7 @@ final class FramePipeline {
     }
     private func reset(preservingState: Bool = false) {
         finishReading()
-        timer?.cancel(); timer = nil; runID = UUID(); pending = nil; ocr = VisionDialogueOCR(); ocr.setBackground(isBackground); ocr.qualityTrace = quality[.punctuationTrace]; signature = FrameSignature()
+        timer?.cancel(); timer = nil; runID = UUID(); pending = nil; pendingCapture = []; ocr = VisionDialogueOCR(); ocr.setBackground(isBackground); ocr.qualityTrace = quality[.punctuationTrace]; ocr.captureLines = capture.active; signature = FrameSignature()
         if preservingState { tracker.markInterrupted(); memory.prune(now:ProcessInfo.processInfo.systemUptime) }
         else { tracker.reset(); memory.clear(); stability.clear(); translations = BoundedLRU(capacity:8) }
         // An already running inference still owns the single worker until its callback.
@@ -221,7 +222,7 @@ final class FramePipeline {
         let override = reusable ? cached?.1 : Terminology.resolve(job.text,rules:advanced.terminology,context:memory.entries.filter { $0.id != job.id })
         let punctuationTrace = metrics.punctuationTrace
         let captureLines = pendingCapture
-        let selection = translator.packs?.publication(job.id,origin:reusable ? .reuse : .rule)
+        let selection = override != nil && (quality[.measurement] || quality[.provenanceMarker] || capture.active) ? translator.packs?.publication(job.id,origin:reusable ? .reuse : .rule) : nil
         let completion: (Result<TranslationDecision,Error>,Double) -> Void = { [weak self] result,latency in
             guard let self else { return }
             self.queue.async {

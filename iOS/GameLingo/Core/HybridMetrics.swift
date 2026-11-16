@@ -67,7 +67,7 @@ struct HybridMetrics {
     var average: Double { lookups == 0 ? 0 : lookupTotal/Double(lookups) }
     mutating func recordAttempt(_ origin: TranslationOrigin) { attemptOrigins[origin,default:0] += 1 }
     /// Y = first accepted publication of each stable dialogue ID, in the current
-    /// selected game/pack activation. Corrections/retries never increment Y.
+    /// selected game/pack activation or explicit measurement reset. Corrections/retries never increment Y.
     mutating func recordPublished(_ event: PublishedTranslation) {
         guard !seen.contains(event.eventID) else { return }
         guard seen.count < 50000 else { saturated = true; return }

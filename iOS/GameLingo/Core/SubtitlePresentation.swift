@@ -13,7 +13,7 @@ enum SubtitlePresentation {
         let first = text.unicodeScalars.first { CharacterSet.letters.contains($0) }
         let direction: String
         if let first {
-            direction = (0x0590...0x08ff).contains(first.value) || (0xfb1d...0xfdff).contains(first.value) || (0xfe70...0xfefc).contains(first.value) ? "R" : "L"
+            direction = (0x0590...0x08ff).contains(first.value) || (0xfb1d...0xfdff).contains(first.value) || (0xfe70...0xfefc).contains(first.value) || (0x1ee00...0x1eeff).contains(first.value) ? "R" : "L"
         } else { direction = "none" }
         let positions = characters.enumerated().compactMap { index, mark -> String? in
             guard marks.contains(mark) else { return nil }

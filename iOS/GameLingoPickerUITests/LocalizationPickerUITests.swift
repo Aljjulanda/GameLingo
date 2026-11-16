@@ -33,11 +33,12 @@ final class LocalizationPickerUITests: XCTestCase {
         return button
     }
     private func waitFinished(filename: String) throws {
-        var dismissed = false
+        var dismissed = false, clearFrames = 0
         for _ in 0..<60 {
             let labels = try visiblePickerText()
             let header = labels.contains { $0.0.contains("gamelingo") && $0.1.midY > 0.82 }
-            if !header { dismissed = true; break }
+            if !header { clearFrames += 1 } else { clearFrames = 0 }
+            if clearFrames >= 2 { dismissed = true; break }
             Thread.sleep(forTimeInterval:0.25)
         }
         XCTAssertTrue(dismissed,"Native provider did not dismiss after thumbnail tap")
