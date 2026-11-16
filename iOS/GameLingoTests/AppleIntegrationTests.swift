@@ -90,7 +90,7 @@ final class AppleIntegrationTests: XCTestCase {
     func testQualityPipelineCueBypassAndBodyRuleWorkWithoutAModel() throws {
         for only in [false,true] {
             let pixels = try visionFixture { _ in
-                ((only ? "[laughs]" : "[laughs] We should leave now.") as NSString).draw(at:CGPoint(x:350,y:530),withAttributes:[.font:UIFont.systemFont(ofSize:31),.foregroundColor:UIColor.white])
+                ((only ? "[laughs]" : "[laughs] We should leave now.") as NSString).draw(at:CGPoint(x:only ? 550 : 350,y:530),withAttributes:[.font:UIFont.systemFont(ofSize:31),.foregroundColor:UIColor.white])
             }
             let translator = OfflineTranslator(folder:FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString))
             XCTAssertFalse(translator.installed)
