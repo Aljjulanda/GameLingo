@@ -265,3 +265,16 @@ Geometry preferences are independently persisted and bounded in Advanced.
 Vision's existing language-correction setting remains enabled; customWords are
 deduplicated/capped at 200 and cleared when the dictionary flag is OFF. Real
 Vision comparisons and portable regression checks are pending before unit C.
+
+Unit B portable checkpoint 43865241302 passed all 100 Swift cases, 4 packaging
+cases and 17 converter cases on a5f70ad, including Latin accents/curly apostrophes
+and dictionary HUD/invalid-digit exclusions. Native run 43863620579 (f9a7ec9)
+executed five methods: actual production pipeline cue-only/body-rule with NO
+installed model passed, and both original above/side/wrapped Vision cases passed.
+The new dictionary comparison and direct cue fixture failed because selected text
+was empty; ordinary examples failed both with dictionary OFF and ON, while both
+name examples passed in each mode. Fixed fixture left coordinates were not centered
+inside the existing conservative dialogue gate. Center synthetic samples, assert
+raw Vision words separately from selected dialogue, and rerun. Production ROI,
+sampling, selector thresholds and model paths remain unchanged. These failures
+are not waived and B is not yet accepted for progression to C.

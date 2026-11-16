@@ -54,12 +54,16 @@ final class AppleIntegrationTests: XCTestCase {
         var nameCorrect = [0,0], ordinaryCorrect = [0,0]
         for source in ["Quillan: We should leave now.","The Stranger: We should leave now.","Wait: do not open the door.","Look: the river is deep."] {
             let pixels = try visionFixture { _ in
-                (source as NSString).draw(at:CGPoint(x:230,y:530),withAttributes:[.font:UIFont.systemFont(ofSize:30),.foregroundColor:UIColor.white])
+                let font = UIFont.systemFont(ofSize:30)
+                let width = (source as NSString).size(withAttributes:[.font:font]).width
+                (source as NSString).draw(at:CGPoint(x:(1280-width)/2,y:530),withAttributes:[.font:font,.foregroundColor:UIColor.white])
             }
             for enabled in [false,true] {
                 let ocr = VisionDialogueOCR(); ocr.quality[.visionNames] = enabled
                 ocr.quality[.speakerClassification] = true
+                ocr.captureLines = true // Synthetic fixture observations only; no file recorder.
                 let (text,_) = try ocr.recognize(pixels,roi:.dialogue,knownNames:"Quillan,The Stranger")
+                XCTAssertEqual(DialogueText.exactWords(ocr.lastLines.map(\.text).joined(separator:" ")),DialogueText.exactWords(source),"Compare raw Vision output separately from dialogue-region selection")
                 XCTAssertTrue(ocr.usesLanguageCorrection)
                 XCTAssertEqual(ocr.configuredCustomWords,enabled ? ["Quillan","The Stranger"] : [])
                 let index = enabled ? 1 : 0
@@ -80,7 +84,9 @@ final class AppleIntegrationTests: XCTestCase {
     }
     func testQualityVisionRecognizedCueDoesNotEnterEngineInput() throws {
         let pixels = try visionFixture { _ in
-            ("[laughs] We should leave now." as NSString).draw(at:CGPoint(x:240,y:530),withAttributes:[.font:UIFont.systemFont(ofSize:31),.foregroundColor:UIColor.white])
+            let source = "[laughs] We should leave now." as NSString, font = UIFont.systemFont(ofSize:31)
+            let width = source.size(withAttributes:[.font:font]).width
+            source.draw(at:CGPoint(x:(1280-width)/2,y:530),withAttributes:[.font:font,.foregroundColor:UIColor.white])
         }
         let ocr = VisionDialogueOCR(); ocr.quality[.stageCues] = true; ocr.quality[.speakerClassification] = true
         _ = try ocr.recognize(pixels,roi:.dialogue)
