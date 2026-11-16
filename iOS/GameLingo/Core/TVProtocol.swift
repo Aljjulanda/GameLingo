@@ -41,6 +41,7 @@ enum TVProtocol {
         if settings[.provenanceMarker] { message["provenance"] = origin.rawValue }
         if settings[.provenanceMarker], let basis { message["provenance_basis"] = basis.rawValue }
         if settings[.punctuationTrace] { message["quality_trace"] = true }
+        if settings[.arabicParagraphDirection] { message["arabic_paragraph_direction"] = true }
         return message
     }
 }

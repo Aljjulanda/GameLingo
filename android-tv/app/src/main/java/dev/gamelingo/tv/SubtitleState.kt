@@ -15,6 +15,8 @@ class SubtitleState {
     }
     var visualCompactions=0;private set
     var coalesced=0;private set
+    // Read-only presentation lookup. Does not change aliasing, clocks or dedup.
+    internal fun renderEntry(id:String):SubtitleEntry?=entries.firstOrNull {it.id==(aliases[id] ?: id)}
     private fun remember(id:String) {seen.add(id);if(seen.size>128)seen.remove(seen.first())}
     private fun sourceWords(s:String)=Regex("[+-]?\\d+(?:[.,]\\d+)*|\\p{L}+").findAll(
         java.text.Normalizer.normalize(s,java.text.Normalizer.Form.NFKC).replace('\u2212','-').lowercase(java.util.Locale.ROOT).replace(Regex("['’`]"),""))

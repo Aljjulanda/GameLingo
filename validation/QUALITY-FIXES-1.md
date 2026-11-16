@@ -437,3 +437,34 @@ explicitly cancelled before acquiring a runner so the newer callback guard and
 pack-priority fixture are included; it is not a failed runtime result. Freeze
 production changes until this native checkpoint provides build/runtime evidence.
 The Arabic status document is provisional and does not advertise a new build.
+
+### User-prioritized independent TV preparation (unit G)
+
+The owner explicitly requested preparing the APK while Apple hosted capacity is
+unavailable, then revisiting iOS builds. This overrides the previous unit order
+for the independently testable receiver renderer; E/F/H/I are not advertised as
+complete. Latest prior native43905189703 ended before any runner/step: hosted
+runner not acquired after multiple attempts. No B/C/D native result was obtained.
+
+TV0.6.2-quality.1/code10 builds locally with the original signer. All40 Android
+cases pass (31existing+3policy+6nativegraphics). Pinned Robolectric4.13/API28
+StaticLayout/Skia runs on Windows; no local emulator or connected ADB device.
+Saved synthetic screenshots visually inspected. The published-release Canvas
+oracle is exact bf3675e6 source with class identifier references renamed, test
+only. Pixel-equivalence all-OFF, old renderer ignoring new optional fields,
+rollback, physical alignment, font/color/outline opacity, multiline wrapping,
+cue-only duplicate avoidance, aliases/tombstones/clock preservation tested.
+Receiver/WSS/pairing/discovery/desktop and duplicate/display-clock algorithms
+unchanged; SubtitleState exposes a read-only canonical entry accessor only.
+
+Optional metadata cue/cue_only, speaker.arabic, provenance/basis are rendered
+inside bidi isolates; small provenance badge only for pack/correction paths.
+No metadata -> original SpeakerText path. A rejected frozen paraphrase retains
+its actual old provenance; absent optional fields clear decoration on rollback.
+A separate optional arabic_paragraph_direction bool maps to the existing persisted
+OFF-by-default iOSflag; AR body RTL, no AR letters LTR, physical alignment fixed.
+A new portable Core contract test covers independent rollback/required wire data.
+Future IPA native verification remains mandatory. No source/pack/capture data or
+keys are bundled into test images/APK. See Arabic TV report for exact APK hash,
+original certificate, package/version, limitations and installation steps.
+No new GitHub Release, no replacement of old release or physical TV installation.

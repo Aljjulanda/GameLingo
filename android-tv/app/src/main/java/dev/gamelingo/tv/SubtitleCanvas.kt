@@ -21,7 +21,9 @@ class SubtitleCanvas(context: Context, private val report: (String)->Unit) : Vie
     var measuredBoxes: List<Pair<Float,Float>> = emptyList(); private set
     var measuredAnchor: Pair<Float,Float> = Pair(0f,0f); private set
     var measuredContext: RectF? = null; private set
-    private data class Queued(val id:String,val text:String,val duration:Long,val receivedAt:Long,val source:String,val box:SourceBox?,val speaker:String,val fresh:Boolean,val meaningful:Boolean,val boundary:String?,val gap:Long)
+    var measuredParagraphDirections:List<Int> = emptyList();private set
+    private val decorations=java.util.LinkedHashMap<String,SubtitleQuality>()
+    private data class Queued(val id:String,val text:String,val duration:Long,val receivedAt:Long,val source:String,val box:SourceBox?,val speaker:String,val fresh:Boolean,val meaningful:Boolean,val boundary:String?,val gap:Long,val quality:SubtitleQuality)
     private val pending=java.util.ArrayDeque<Queued>()
     var style = JSONObject()
     private val ink = TextPaint(Paint.ANTI_ALIAS_FLAG)
@@ -52,12 +54,12 @@ class SubtitleCanvas(context: Context, private val report: (String)->Unit) : Vie
     }
     fun message(message: JSONObject?) {
         val now=SystemClock.elapsedRealtime()
-        if (message==null) { state.clear(); pending.clear(); previewUntil=0;contextLabel=null;contextUntil=0;document=null; invalidate(); return }
+        if (message==null) { state.clear(); pending.clear();decorations.clear(); previewUntil=0;contextLabel=null;contextUntil=0;document=null; invalidate(); return }
         if(message.has("settings")) style=message.getJSONObject("settings")
         when(message.optString("type")) {
             "document_show" -> {
                 if(message.optString("translated").length !in 1..2400) return
-                document=message;state.clear();pending.clear();previewUntil=0;contextLabel=null;contextUntil=0
+                document=message;state.clear();pending.clear();decorations.clear();previewUntil=0;contextLabel=null;contextUntil=0
                 removeCallbacks(tick);invalidate()
             }
             "document_hide" -> { document=null;invalidate() }
@@ -91,11 +93,11 @@ class SubtitleCanvas(context: Context, private val report: (String)->Unit) : Vie
                     (n("min_seconds",4.0)*1000).toLong(),(n("max_seconds",8.0)*1000).toLong(),(n("fixed_seconds",5.0)*1000).toLong()).coerceAtMost((n("hard_seconds",8.0)*1000).toLong())
                 val box=if(listOf("x","y","w","h").all {message.has(it)}) SourceBox(message.optDouble("x"),message.optDouble("y"),message.optDouble("w"),message.optDouble("h")) else null
                 val speaker=message.optJSONObject("speaker")?.optString("name","")?.take(40) ?: ""
-                pending.add(Queued(message.getString("id"),text,duration,now,message.optString("source",""),box,speaker,message.optBoolean("event_fresh",false),message.optBoolean("meaningful_correction",false),if(message.has("event_boundary")) message.optString("event_boundary") else null,message.optLong("source_gap_ms",0)))
+                pending.add(Queued(message.getString("id"),text,duration,now,message.optString("source",""),box,speaker,message.optBoolean("event_fresh",false),message.optBoolean("meaningful_correction",false),if(message.has("event_boundary")) message.optString("event_boundary") else null,message.optLong("source_gap_ms",0),SubtitleQuality.parse(message)))
                 while(pending.size>3) pending.removeFirst()
                 removeCallbacks(tick); post(tick)
             }
-            "subtitle_clear", "subtitle_hide" -> { state.clear();pending.clear();contextLabel=null;contextUntil=0;document=null; invalidate() }
+            "subtitle_clear", "subtitle_hide" -> { state.clear();pending.clear();decorations.clear();contextLabel=null;contextUntil=0;document=null; invalidate() }
         }
     }
     override fun onDetachedFromWindow() { removeCallbacks(tick); super.onDetachedFromWindow() }
@@ -103,6 +105,7 @@ class SubtitleCanvas(context: Context, private val report: (String)->Unit) : Vie
         super.onDraw(canvas)
         val now=SystemClock.elapsedRealtime()
         measuredDocument=null
+        measuredParagraphDirections=emptyList()
         if(document!=null) { drawDocument(canvas);return }
         state.expire(now)
         val hadPending=pending.isNotEmpty()
@@ -111,6 +114,18 @@ class SubtitleCanvas(context: Context, private val report: (String)->Unit) : Vie
             if(now-entry.receivedAt>(n("hard_seconds",8.0)*1000).toLong()) continue
             val merges=state.coalesced
             state.show(entry.id,entry.text,now,entry.duration,n("max_entries",3.0).toInt(),entry.source,entry.box,entry.speaker,entry.fresh,entry.meaningful,entry.boundary,entry.gap)
+            state.renderEntry(entry.id)?.let { shown ->
+                val prior=decorations[shown.id] ?: SubtitleQuality()
+                // A frozen cosmetic paraphrase must not acquire a new source
+                // badge/cue. Explicit OFF (field absent) still clears decoration.
+                decorations[shown.id]=if(shown.text==entry.text) entry.quality else entry.quality.copy(
+                    cue=if(entry.quality.cue.isEmpty()) "" else prior.cue,
+                    cueOnly=entry.quality.cue.isNotEmpty() && prior.cueOnly,
+                    provenance=if(entry.quality.provenance.isEmpty()) "" else prior.provenance,
+                    basis=if(entry.quality.provenance.isEmpty()) "" else prior.basis,
+                    arabicName=if(shown.speaker==entry.speaker) entry.quality.arabicName else prior.arabicName
+                )
+            }
             if(state.coalesced>merges) android.util.Log.i("GameLingoDedup","coalesced="+state.coalesced+" incoming="+entry.id+" active="+state.entries.size)
             android.util.Log.i("GameLingoEntries","visible=" + state.entries.map {it.id} + " newestUntil=" + state.entries.lastOrNull()?.until)
         }
@@ -119,11 +134,12 @@ class SubtitleCanvas(context: Context, private val report: (String)->Unit) : Vie
         if(hadPending) { removeCallbacks(tick); postDelayed(tick,50) }
         val compactions=state.visualCompactions
         val renderEntries=state.visibleEntries()
+        decorations.keys.retainAll(state.entries.map {it.id}.toSet())
         if(state.visualCompactions>compactions) android.util.Log.i("GameLingoDedup","visual_compactions="+state.visualCompactions+" visible="+renderEntries.size+" active_events="+state.entries.size)
         val texts:List<CharSequence> = if(previewUntil>now) listOf(
             SpeakerText.inline("جملة سابقة للمعاينة","Morgan",b("show_speakers",false),color("speaker_color","#A6C7D8")),
             SpeakerText.inline(sample,"Alex",b("show_speakers",false),color("speaker_color","#A6C7D8"))) else renderEntries.map {
-            SpeakerText.inline(it.text,it.speaker,b("show_speakers",true),color("speaker_color","#A6C7D8"))
+            QualitySubtitleText.inline(it.text,it.speaker,b("show_speakers",true),color("speaker_color","#A6C7D8"),Color.rgb(160,172,180),decorations[it.id] ?: SubtitleQuality())
         }
         drawContext(canvas,now)
         if(texts.isEmpty()) return
@@ -133,15 +149,18 @@ class SubtitleCanvas(context: Context, private val report: (String)->Unit) : Vie
         val px=n("padding_x",18.0).coerceIn(0f,100f); val py=n("padding_y",8.0).coerceIn(0f,100f)
         val safe=n("margin",24.0).coerceIn(0f,width/4f)
         val boxWidth=(width*n("max_width",60.0).coerceIn(10f,100f)/100).toInt().coerceAtMost((width-2*safe).toInt()).coerceAtLeast(100)
-        val align=when(style.optString("alignment","center")) { "right"->Layout.Alignment.ALIGN_NORMAL; "left"->Layout.Alignment.ALIGN_OPPOSITE; else->Layout.Alignment.ALIGN_CENTER }
-        val layouts=texts.map {
+        val layouts=texts.mapIndexed { index,it ->
+            val rtl=if(previewUntil>now) true else QualityRenderPolicy.rtl(renderEntries[index].text,decorations[renderEntries[index].id] ?: SubtitleQuality())
+            val alignment=style.optString("alignment","center")
+            val align=if(alignment!in listOf("right","left")) Layout.Alignment.ALIGN_CENTER else if(QualityRenderPolicy.normalAlignment(alignment,rtl)) Layout.Alignment.ALIGN_NORMAL else Layout.Alignment.ALIGN_OPPOSITE
             val available=(boxWidth-2*px).coerceAtLeast(30f)
             val desired=Layout.getDesiredWidth(it,ink)+2f
             val contentWidth=if(b("fit_background",true)) minOf(available,desired) else available
             StaticLayout.Builder.obtain(it,0,it.length,ink,(if(b("wrap",true)) contentWidth else maxOf(contentWidth,desired)).toInt().coerceAtLeast(30))
-                .setAlignment(align).setTextDirection(TextDirectionHeuristics.RTL).setIncludePad(false).setLineSpacing(n("line_spacing",3.0),1f)
+                .setAlignment(align).setTextDirection(if(rtl) TextDirectionHeuristics.RTL else TextDirectionHeuristics.LTR).setIncludePad(false).setLineSpacing(n("line_spacing",3.0),1f)
                 .setBreakStrategy(if(b("wrap",true)) Layout.BREAK_STRATEGY_HIGH_QUALITY else Layout.BREAK_STRATEGY_SIMPLE).build()
         }
+        measuredParagraphDirections=layouts.map {it.getParagraphDirection(0)}
         val widths=layouts.map { minOf(boxWidth.toFloat(),it.width+2*px) }
         measuredBoxes=layouts.indices.map { Pair(widths[it],layouts[it].height+2*py) }
         // Reserve the configured width for the anchor clamp. Content-sized boxes

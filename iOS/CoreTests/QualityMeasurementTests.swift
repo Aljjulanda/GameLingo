@@ -2,6 +2,22 @@ import XCTest
 @testable import LingoCore
 
 final class QualityMeasurementTests: XCTestCase {
+    func testTVParagraphDirectionIsOptionalAndIndependentlyReversible() throws {
+        let message = TVProtocol.envelope("subtitle_show",fields:["id":"synthetic","translated":"John، هل وصلت؟"])
+        var settings = QualitySettings()
+        XCTAssertNil(TVProtocol.qualityFields(message,settings:settings,origin:.argosInference)["arabic_paragraph_direction"])
+        settings[.arabicParagraphDirection] = true
+        let on = TVProtocol.qualityFields(message,settings:settings,origin:.argosInference)
+        XCTAssertEqual(on["arabic_paragraph_direction"] as? Bool,true)
+        XCTAssertEqual(on["translated"] as? String,message["translated"] as? String,"Direction is presentation metadata, never a Unicode reversal")
+        XCTAssertEqual(try TVProtocol.encode(on.filter{$0.key != "arabic_paragraph_direction"}),try TVProtocol.encode(message))
+        for flag in QualityFlag.allCases { settings[flag] = true }
+        settings[.arabicParagraphDirection] = false
+        let rollback = TVProtocol.qualityFields(message,settings:settings,origin:.packExact)
+        XCTAssertNil(rollback["arabic_paragraph_direction"])
+        XCTAssertEqual(rollback["provenance"] as? String,"packExact")
+        XCTAssertEqual(rollback["quality_trace"] as? Bool,true)
+    }
     func testCaptureRefusesUnconfirmedOrWeakerPhysicalProtection() {
         for value in [nil,"NSFileProtectionNone","NSFileProtectionCompleteUnlessOpen","NSFileProtectionCompleteUntilFirstUserAuthentication","unknown"] as [String?] {
             XCTAssertFalse(QualityCapture.permitsProtectedRecording(value))

@@ -7,7 +7,7 @@ struct QualitySettingsSection: View {
         Section("إصلاحات الجودة") {
             // Show only implemented units. Later units add their flags here
             // after their tests pass; the storage enum alone is not a feature.
-            ForEach([QualityFlag.measurement,.provenanceMarker,.punctuationTrace,.sessionCapture,.stageCues,.speakerClassification,.speakerGeometry,.visionNames,.learnNames,.corrections],id:\.rawValue) { flag in
+            ForEach([QualityFlag.measurement,.provenanceMarker,.punctuationTrace,.sessionCapture,.stageCues,.speakerClassification,.speakerGeometry,.visionNames,.learnNames,.corrections,.arabicParagraphDirection],id:\.rawValue) { flag in
                 Toggle(flag.title,isOn:Binding(get:{model.quality[flag]},set:{model.quality[flag] = $0}))
             }
             NavigationLink("أسماء اللعبة") { GameNamesView(library:model.namesLibrary) }
