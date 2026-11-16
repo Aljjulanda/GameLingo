@@ -89,6 +89,8 @@ final class SpeakerQualityTests: XCTestCase {
         var counts = NameConfidenceCounts()
         counts.observe([OCRLine(text:"Arthur",box:.dialogue,confidence:0.3),OCRLine(text:"Dutch",box:.dialogue,confidence:0.7),OCRLine(text:"John",box:.dialogue,confidence:0.9),OCRLine(text:"Health",box:.dialogue)])
         XCTAssertEqual(counts.low,1); XCTAssertEqual(counts.medium,1); XCTAssertEqual(counts.high,1)
+        counts.observe([OCRLine(text:"Arthur: We should go.",box:.dialogue,confidence:0.8),OCRLine(text:"We should go",box:.dialogue),OCRLine(text:"Wait: do not go.",box:.dialogue)])
+        XCTAssertEqual(counts.high,2,"Only actual name candidates, not short ordinary dialogue")
         XCTAssertFalse(counts.summary.contains("Arthur"))
     }
     func testGeometryPreferencesPersistAndRejectNonFiniteValues() {

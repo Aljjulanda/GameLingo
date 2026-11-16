@@ -120,7 +120,16 @@ enum SpeakerEvidence {
 struct NameConfidenceCounts {
     private(set) var low = 0, medium = 0, high = 0
     mutating func observe(_ lines: [OCRLine]) {
-        for line in lines where SpeakerEvidence.shape(line.text) && !SpeakerEvidence.excluded(line.text) {
+        for line in lines {
+            let value = line.text.trimmingCharacters(in:.whitespacesAndNewlines)
+            let label: String
+            if let colon = value.firstIndex(of:":") { label = String(value[..<colon]) }
+            else if let open = value.first, open == "[" || open == "(", let end = value.firstIndex(of:open == "[" ? "]" : ")") { label = String(value[...end]) }
+            else {
+                guard SpeakerEvidence.isName(value,knownNames:"",confidence:1) else { continue }
+                label = value
+            }
+            guard SpeakerEvidence.shape(label), !SpeakerEvidence.excluded(label) else { continue }
             if line.confidence < 0.5 { low += 1 } else if line.confidence < 0.8 { medium += 1 } else { high += 1 }
         }
     }

@@ -240,10 +240,14 @@ struct PerformanceView: View {
                     LabeledContent("تصحيحات OCR مدمجة",value:String(model.metrics.correctionsMerged))
                     LabeledContent("قراءات اسم متحدث مقبولة",value:String(model.metrics.speakersDetected))
                     LabeledContent("تسميات اسم غير مؤكدة",value:String(model.metrics.speakersUncertain))
-                    DisclosureGroup("تتبع علامات الترقيم · أعداد فقط") {
+                    if model.quality[.speakerClassification] {
+                        LabeledContent("تسميات مؤكدة أُخفي اسمها",value:String(model.metrics.speakerHidden))
+                    }
+                    if !model.metrics.nameConfidence.isEmpty { Text(model.metrics.nameConfidence).font(.caption) }
+                    DisclosureGroup("تتبع مواضع الترقيم · بلا نصوص") {
                         Text(model.metrics.punctuationTrace).font(.system(.caption,design:.monospaced)).textSelection(.enabled)
                         if !model.tvRenderSignature.isEmpty { Text(model.tvRenderSignature).font(.system(.caption,design:.monospaced)).textSelection(.enabled) }
-                        Text("عدد الأقواس والعلامات في OCR والنص المفصول وخرج الترجمة والرسالة؛ لا يتضمن نص الحوار.").font(.footnote)
+                        Text("مواضع العلامات في ترتيب النص واتجاه أول حرف قوي عبر مراحل الترجمة، واتجاه الفقرة المرسومة عند دعمه؛ لا يتضمن نص الحوار.").font(.footnote)
                     }
                 }
                 HybridStatisticsView(library:model.packLibrary)
