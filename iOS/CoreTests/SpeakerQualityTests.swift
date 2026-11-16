@@ -33,7 +33,7 @@ final class SpeakerQualityTests: XCTestCase {
     }
     func testRelaxedNamesRequireDistinctiveTokenOrExplicitDigitPattern() {
         let q = flags(.speakerClassification)
-        for name in ["The Stranger","Arthur Morgan","47","2B","9S","BT-7274","Agent 47"] {
+        for name in ["The Stranger","Arthur Morgan","47","2B","9S","BT-7274","Agent 47","O’Driscoll","José"] {
             XCTAssertTrue(DialogueContent.isName(name,knownNames:"",confidence:0.9,quality:q),name)
             XCTAssertEqual(DialogueContent.parse(name+": We must go.",knownNames:"",quality:q).speaker,name)
         }

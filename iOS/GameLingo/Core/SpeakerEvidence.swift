@@ -37,7 +37,7 @@ enum SpeakerEvidence {
     static func shape(_ value: String) -> Bool {
         let label = DialogueContent.speakerLabel(value), words = label.split(separator:" ")
         return !label.isEmpty && label.count <= 40 && (1...3).contains(words.count) &&
-            label.allSatisfy { $0.isASCII && ($0.isLetter || $0.isNumber || " '’-.".contains($0)) }
+            label.range(of:"^[\\p{Latin}0-9 '’.-]+$",options:.regularExpression) != nil
     }
     static func excluded(_ value: String) -> Bool {
         let key = DialogueContent.speakerLabel(value).lowercased()
