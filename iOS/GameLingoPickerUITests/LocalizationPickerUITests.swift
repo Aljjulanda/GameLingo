@@ -10,9 +10,13 @@ final class LocalizationPickerUITests: XCTestCase {
     // the delegate-delivered filename in the AUT. No picker acceptance is mocked.
     private var screenHeight: CGFloat = 852
     private var headerY: CGFloat = 0.115
+    private var listPresentation = false
     override func setUpWithError() throws {
         continueAfterFailure = false
-        app.launchArguments = ["-AppleLanguages","(ar)","-AppleLocale","ar_OM"]
+        // Only the system provider menu uses English, which Vision supports on
+        // the pinned runtime. GameLingo's Arabic UI and RTL rendering stay tested
+        // by the native presentation fixtures, separately from file selection.
+        app.launchArguments = ["-AppleLanguages","(en)","-AppleLocale","en_US"]
         app.launch()
         app.tabBars.buttons["الترجمة"].tap()
         let library = app.buttons["gamePacks.library"]
@@ -80,6 +84,25 @@ final class LocalizationPickerUITests: XCTestCase {
     }
     private func pickerFilePoints(_ ext: String) throws -> (thumbnail: CGPoint, caption: CGPoint) {
         try waitForNativePicker()
+        if !listPresentation {
+            // Files owns its presentation and hit regions. Use its actual List
+            // command instead of guessing the hit area of a Quick Look thumbnail.
+            screenCoordinate(CGPoint(x:0.08,y:headerY)).tap()
+            var listPoint: CGPoint?
+            for _ in 0..<10 {
+                let labels = try visiblePickerText()
+                print("PICKER_VIEW_MENU "+labels.map{$0.0}.joined(separator:" | "))
+                if let row = labels.first(where:{["list","قائمة"].contains($0.0)}) {
+                    listPoint = CGPoint(x:row.1.midX,y:1-row.1.midY); break
+                }
+                Thread.sleep(forTimeInterval:0.25)
+            }
+            let menu = XCTAttachment(screenshot:XCUIScreen.main.screenshot())
+            menu.name = "Picker-view-menu"; menu.lifetime = .keepAlways; add(menu)
+            screenCoordinate(try XCTUnwrap(listPoint,"Files List command not visible")).tap()
+            listPresentation = true
+            try waitForNativePicker()
+        }
         // Tap the status-bar clock to return the provider's scroll view to top.
         screenCoordinate(CGPoint(x:0.15,y:0.025)).tap()
         Thread.sleep(forTimeInterval:1.0)
@@ -103,9 +126,9 @@ final class LocalizationPickerUITests: XCTestCase {
                 // Confirm a stable label in a second screen frame before tapping.
                 Thread.sleep(forTimeInterval:0.35)
                 guard let box = target(try visiblePickerText()), abs(first.midY-box.midY) < 0.006, abs(first.midX-box.midX) < 0.01 else { continue }
-                // Files' grid caption is not the primary hit region. Tap the
-                // thumbnail above the recognized caption, never an AUT element.
-                let point = CGPoint(x:box.midX,y:1-box.midY-60/screenHeight)
+                // In List presentation the visible filename is inside its row.
+                // No assumptions about preview size or thumbnail offsets.
+                let point = CGPoint(x:box.midX,y:1-box.midY)
                 if point.y < 0.21 {
                     screenCoordinate(CGPoint(x:0.5,y:0.35)).press(forDuration:0.05,thenDragTo:screenCoordinate(CGPoint(x:0.5,y:0.52)))
                     Thread.sleep(forTimeInterval:1.0)

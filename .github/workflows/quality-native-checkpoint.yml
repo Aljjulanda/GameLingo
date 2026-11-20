@@ -11,6 +11,10 @@ on:
         description: 'XCTest class/method identifiers, one per line; focused checks are NOT the release gate'
         type: string
         required: false
+      picker_ui:
+        description: 'Also run the real Files picker UI checks; not a release build'
+        type: boolean
+        default: false
 permissions:
   contents: read
 concurrency:
@@ -56,6 +60,9 @@ jobs:
             export IOS_TEST_FILTERS=$'GameLingoTests/QualityIntegrationTests\nGameLingoTests/AppleIntegrationTests/testManualSmartReadingUsesFreshFrameAndReturnsToDialogue\nGameLingoTests/AppleIntegrationTests/testExistingTVWSSPairingAndReconnectDoNotReplayDialogue'
           fi
           bash iOS/Scripts/test.sh
+      - name: Focused native Files picker investigation
+        if: inputs.picker_ui
+        run: bash iOS/Scripts/test-picker-ui.sh
       - name: Preserve focused test evidence
         if: always()
         uses: actions/upload-artifact@v7
@@ -64,5 +71,6 @@ jobs:
           path: |
             iOS/build/logs/
             iOS/build/GameLingoTests.xcresult
+            iOS/build/GameLingoPickerUI.xcresult
           if-no-files-found: warn
           retention-days: 14
