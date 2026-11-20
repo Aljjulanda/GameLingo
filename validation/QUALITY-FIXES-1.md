@@ -603,3 +603,23 @@ Also added strict raw aligned-name lookup during profile derivation/validation:
 known AR prefixes can be safely removed; unknown ones stay. New Core regression
 covers matching ambiguity after split, raw rollback and exact name evidence.
 Native import fixture now exercises aligned AR prefix (not only English prefix).
+
+Full44722281933 onbb02183 passed Xcode16.4 Core and actual RDR2 v2 validation,
+native dependency preparation, tracker benchmark and physical archive; native/
+picker tests still running. Observed live DOM metrics (get final artifact later):
+228174records/209459raw usable;1102 allOFF-equivalent independently expected
+samples (1000matches/102rejections); upgrade82527.57ms, v2validation102451.65ms,
+original validation14068.67ms; database174120960bytes; cleaned32680/excluded13,
+markup usable219624; possible-visual-order-warning false. These timings are NOT
+phone performance. They expose a real problem: cumulative work exceeds the
+importer's existing120second control on this test host. Do NOT publish this as a
+ready large-pack import or increase the timeout to hide it.
+
+Optimize unchanged rows: avoid regex/JSON/normalization/content checks repeated
+for every profile when already-validated raw text has no relevant marker; decode
+flags only on demand; reuse static warning dictionaries. Targeted cleanup now
+preserves ordinary whitespace unless a SUPPORTED token actually changes text,
+preventing unnecessary sparse copies (the old measured count includes whitespace
+rewrites). New regression checks zero extra variants for ordinary spaced lines.
+Raw source validation, strict derived validation, ambiguity checks/page caps/
+cancellation/deadlines remain. Re-measure on same Intel environment before gate.

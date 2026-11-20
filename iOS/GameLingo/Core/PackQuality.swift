@@ -27,17 +27,23 @@ enum PackQualityPolicy {
     private static func matches(_ regex: NSRegularExpression, _ text: String) -> [NSTextCheckingResult] {
         regex.matches(in:text,range:NSRange(text.startIndex...,in:text))
     }
-    static func hasPlaceholder(_ text: String) -> Bool { !matches(placeholder,text).isEmpty }
+    static func hasPlaceholder(_ text: String) -> Bool {
+        (text.utf8.contains(123) || text.utf8.contains(37)) && !matches(placeholder,text).isEmpty
+    }
+    private static func hasUnresolved(_ text: String) -> Bool {
+        (text.utf8.contains(126) || text.utf8.contains(60)) && !matches(unresolved,text).isEmpty
+    }
     static func cleanMarkup(_ text: String) -> String {
         // Only ~z~, ~n~, ~s~ and balanced <C> wrappers are documented here.
         // A newline token separates words; color/state controls do not add words.
+        guard text.utf8.contains(126) || text.utf8.contains(60) else { return text }
         var value = text
-        for match in matches(controls,text).reversed() {
+        for match in (text.utf8.contains(126) ? matches(controls,text) : []).reversed() {
             guard let range = Range(match.range,in:value) else { continue }
             let replacement = String(value[range]).lowercased() == "~n~" ? " " : ""
             value.replaceSubrange(range,with:replacement)
         }
-        let tags = matches(color,value)
+        let tags = value.utf8.contains(60) ? matches(color,value) : []
         var depth = 0, balanced = true
         for tag in tags {
             guard let range = Range(tag.range,in:value) else { balanced = false; break }
@@ -47,10 +53,12 @@ enum PackQualityPolicy {
         if balanced && depth == 0 {
             for tag in tags.reversed() { if let range = Range(tag.range,in:value) { value.removeSubrange(range) } }
         }
+        // No ordinary whitespace rewrite without an actual supported token.
+        guard value != text else { return text }
         return SubtitlePresentation.clean(value).split(whereSeparator:\.isWhitespace).joined(separator:" ")
     }
     static func label(_ text: String) -> (name:String,body:String)? {
-        guard let colon = text.firstIndex(of:":"), text.distance(from:text.startIndex,to:colon) <= 40 else { return nil }
+        guard text.utf8.contains(58), let colon = text.prefix(41).firstIndex(of:":") else { return nil }
         let name = String(text[..<colon]).trimmingCharacters(in:.whitespacesAndNewlines)
         let body = String(text[text.index(after:colon)...]).trimmingCharacters(in:.whitespacesAndNewlines)
         guard !body.isEmpty, (name == "47" || name.range(of:"[\\p{Latin}]",options:.regularExpression) != nil),
@@ -60,7 +68,11 @@ enum PackQualityPolicy {
     static func transform(source: String, target: String, flags: String, usable: Bool, options: PackQualityOptions, alignedArabicName: String? = nil) -> PackQualityText {
         var result = PackQualityText(source:source,target:target,flags:flags,usable:usable)
         guard options.profile != 0 else { return result }
-        let originalFlags = (try? JSONSerialization.jsonObject(with:Data(flags.utf8))) as? [String]
+        var readFlags = false, originalFlags: [String]?
+        func decodedFlags() -> [String]? {
+            if !readFlags { originalFlags = (try? JSONSerialization.jsonObject(with:Data(flags.utf8))) as? [String]; readFlags = true }
+            return originalFlags
+        }
         var added: [String] = []
         if options.markup {
             result.source = cleanMarkup(source); result.target = cleanMarkup(target)
@@ -78,16 +90,19 @@ enum PackQualityPolicy {
             }
         }
         if options.markup {
-            let blocked = hasPlaceholder(result.source) || hasPlaceholder(result.target) ||
-                !matches(unresolved,result.source).isEmpty || !matches(unresolved,result.target).isEmpty
-            if hasPlaceholder(result.source) || hasPlaceholder(result.target) { added.append("quality_placeholder") }
+            let placeholder = hasPlaceholder(result.source) || hasPlaceholder(result.target)
+            let blocked = placeholder || hasUnresolved(result.source) || hasUnresolved(result.target)
+            if placeholder { added.append("quality_placeholder") }
             if blocked { result.usable = false }
-            else if !usable, let old = originalFlags,
+            else if !usable, let old = decodedFlags(),
                     old.contains("unresolved_markup_or_placeholder"),
                     Set(old).isSubset(of:["unresolved_markup_or_placeholder","presentation_forms_converted"]) {
                 result.usable = true
             }
         }
+        // Raw rows were validated before derivation. Avoid re-normalizing and
+        // re-parsing every unchanged source/target three times per profile scan.
+        if added.isEmpty && result.source == source && result.target == target && result.usable == usable { return result }
         if result.source.isEmpty || result.target.isEmpty || PackLookupKey.normalized(result.source).isEmpty ||
             !result.target.unicodeScalars.contains(where:{(0x0600...0x06ff).contains($0.value)}) ||
             result.target.unicodeScalars.contains(where:{(0xfb50...0xfdff).contains($0.value) || (0xfe70...0xfefc).contains($0.value)}) {
@@ -96,7 +111,7 @@ enum PackQualityPolicy {
         if !added.isEmpty {
             // Unknown legacy flag encodings are retained verbatim as one value;
             // they can never qualify a previously unusable row for recovery.
-            let combined = (originalFlags ?? [flags])+added
+            let combined = (decodedFlags() ?? [flags])+added
             if let data = try? JSONSerialization.data(withJSONObject:combined,options:.sortedKeys), let value = String(data:data,encoding:.utf8), value.count <= 2048 {
                 result.flags = value
             } else { result.usable = false; result.flags = flags }
@@ -127,14 +142,14 @@ enum PackQualityPolicy {
 struct PackArabicOrderEvidence {
     private(set) var words = 0, reversed = 0, logical = 0
     private var distinct = Set<String>()
+    private static let reverse: Set<String> = ["نم","يف","ىلع","اذه","كلذ","انأ","وه","يه"]
+    private static let normal: Set<String> = ["من","في","على","هذا","ذلك","أنا","هو","هي"]
     mutating func observe(_ target: String) {
-        let reverse: Set<String> = ["نم","يف","ىلع","اذه","كلذ","انأ","وه","يه"]
-        let normal: Set<String> = ["من","في","على","هذا","ذلك","أنا","هو","هي"]
         for word in target.split(whereSeparator:{!$0.isLetter}) {
             guard word.unicodeScalars.contains(where:{(0x0600...0x06ff).contains($0.value)}) else { continue }
             words += 1
-            if reverse.contains(String(word)) { reversed += 1; distinct.insert(String(word)) }
-            if normal.contains(String(word)) { logical += 1 }
+            if Self.reverse.contains(String(word)) { reversed += 1; distinct.insert(String(word)) }
+            if Self.normal.contains(String(word)) { logical += 1 }
         }
     }
     var warning: Bool { words >= 12 && reversed >= 4 && distinct.count >= 3 && reversed > logical*3 }

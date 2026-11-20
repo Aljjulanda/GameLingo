@@ -96,6 +96,14 @@ final class PackV2Tests: XCTestCase {
         XCTAssertEqual(variants["Arthur"],"ابق هنا."); XCTAssertEqual(variants["John"],"جون: ابق هنا.")
         XCTAssertEqual(try db.lookup("Arthur: Stay here.",category:"dialogue").text,"آرثر: ابق هنا.")
     }
+    func testOrdinaryWhitespaceDoesNotCreateUnnecessarySparseProfiles() throws {
+        let (original,manifest) = try fixture([("  Stay\n  here.  ","ابق هنا.")])
+        let (output,next) = try upgrade(original,manifest)
+        XCTAssertEqual(next.quality?.cleaned,0)
+        let db = try PackDatabase(url:output)
+        try db.forEachRawRow { _,row,_ in XCTAssertTrue(try db.qualityVariants(row).isEmpty) }
+        XCTAssertEqual(try db.lookup("  Stay\n  here.  ",category:"dialogue",quality:PackQualityOptions(markup:true,labels:true)).kind,.exact)
+    }
     func testDerivedRowsKeysAndReportsAreValidatedNotTrusted() throws {
         for sql in ["UPDATE quality_variants SET target='تغيير غير موثوق' WHERE profile=1", "DELETE FROM quality_variants WHERE profile=3", "UPDATE entries SET punctuationless='wrong'", "INSERT INTO quality_variants SELECT 99,profile,source,normalized,target,flags,usable,punctuationless FROM quality_variants WHERE profile=1"] {
             let (original,manifest) = try fixture([("Arthur: Stay here.","<C>ابق هنا.</C>")])

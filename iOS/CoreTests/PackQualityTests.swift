@@ -23,6 +23,9 @@ final class PackQualityTests: XCTestCase {
         XCTAssertEqual(PackLookupKey.normalized("  CAN’T...! "),"can't")
     }
     func testTargetedMarkupPreservesUnknownContentAndBalancedInnerText() {
+        for text in ["  Keep\n this spacing  ","Only ordinary text.","Literal ~a story~ with  spaces"] {
+            XCTAssertEqual(PackQualityPolicy.cleanMarkup(text),text)
+        }
         XCTAssertEqual(PackQualityPolicy.cleanMarkup("<C>One <C>two</C> three</C>"),"One two three")
         for text in ["<C>unfinished", "</C>before<C>", "literal ~a story~", "Use {name}", "<Other>visible</Other>"] {
             XCTAssertEqual(PackQualityPolicy.cleanMarkup(text),text)
