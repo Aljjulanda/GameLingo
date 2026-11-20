@@ -45,6 +45,9 @@ final class PackQualityTests: XCTestCase {
     }
     func testUnusableRowsRecoverOnlyWhenTheirSoleBlockerWasKnownMarkup() {
         XCTAssertTrue(row("Stay.","<C>ابق.</C>",markup:true,flags:"[\"unresolved_markup_or_placeholder\"]",usable:false).usable)
+        for source in ["Stay.","Arthur: Stay.","<C>Take ~1~ cows.</C>","<C>Take {player}.</C>"] {
+            XCTAssertFalse(row(source,"ابق.",markup:true,labels:true,flags:"[\"unresolved_markup_or_placeholder\"]",usable:false).usable)
+        }
         for flags in ["[]","not-json","[\"invalid_text\"]","[\"unresolved_markup_or_placeholder\",\"complex_visual_order\"]"] {
             XCTAssertFalse(row("Stay.","<C>ابق.</C>",markup:true,flags:flags,usable:false).usable)
         }

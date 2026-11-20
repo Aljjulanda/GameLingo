@@ -73,10 +73,11 @@ enum PackQualityPolicy {
             if !readFlags { originalFlags = (try? JSONSerialization.jsonObject(with:Data(flags.utf8))) as? [String]; readFlags = true }
             return originalFlags
         }
-        var added: [String] = []
+        var added: [String] = [], markupChanged = false
         if options.markup {
             result.source = cleanMarkup(source); result.target = cleanMarkup(target)
-            if result.source != source || result.target != target { added.append("quality_markup_cleaned") }
+            markupChanged = result.source != source || result.target != target
+            if markupChanged { added.append("quality_markup_cleaned") }
         }
         if options.labels, let label = label(result.source) {
             result.source = label.body; result.speaker = label.name
@@ -94,7 +95,10 @@ enum PackQualityPolicy {
             let blocked = placeholder || hasUnresolved(result.source) || hasUnresolved(result.target)
             if placeholder { added.append("quality_placeholder") }
             if blocked { result.usable = false }
-            else if !usable, let old = decodedFlags(),
+            else if !usable, markupChanged,
+                    !result.source.utf8.contains(where:{[UInt8(126),123,125,60,62,37].contains($0)}),
+                    !result.target.utf8.contains(where:{[UInt8(126),123,125,60,62,37].contains($0)}),
+                    let old = decodedFlags(),
                     old.contains("unresolved_markup_or_placeholder"),
                     Set(old).isSubset(of:["unresolved_markup_or_placeholder","presentation_forms_converted"]) {
                 result.usable = true
