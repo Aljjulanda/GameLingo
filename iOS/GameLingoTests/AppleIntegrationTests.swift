@@ -303,6 +303,11 @@ final class AppleIntegrationTests: XCTestCase {
             let width = text.size(withAttributes:[.font:font]).width
             text.draw(at:CGPoint(x:(1280-width)/2,y:530),withAttributes:[.font:font,.foregroundColor:UIColor.white])
         }
+        // Verify and initialize the native Vision fixture before the timed
+        // pipeline observation, as in the paired first/second-read test.
+        let recognized = VisionDialogueOCR()
+        _ = try recognized.recognize(pixels,roi:.dialogue)
+        XCTAssertEqual(recognized.content.text,"Please wait here")
         let firstRead = expectation(description:"First actual OCR read"), shown = expectation(description:"Updated explicit correction")
         let translator = OfflineTranslator(folder:root.appendingPathComponent("no-model"))
         let pipeline = FramePipeline(translator:translator) { message in

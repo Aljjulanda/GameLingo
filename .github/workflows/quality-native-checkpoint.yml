@@ -61,7 +61,7 @@ jobs:
           fi
           bash iOS/Scripts/test.sh
       - name: Focused native Files picker investigation
-        if: inputs.picker_ui
+        if: ${{ !cancelled() && inputs.picker_ui }}
         run: bash iOS/Scripts/test-picker-ui.sh
       - name: Preserve focused test evidence
         if: always()
