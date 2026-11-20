@@ -71,7 +71,7 @@ final class FramePipeline {
         if oldKey != context.outputKey { self.retryHeldPublication(sameScope:sameScope) }
     } }
     func configureNames(_ store: GameNamesStore?, snapshot: GameNamesSnapshot) { queue.async {
-        let changed = self.namesCacheKey != snapshot.outputKey, sameScope = self.namesSnapshot.game == snapshot.game
+        let changed = self.namesCacheKey != snapshot.outputKey, sameScope = self.namesSnapshot.scopeKey == snapshot.scopeKey
         self.namesStore = store
         self.applyNames(snapshot)
         if changed { self.retryHeldPublication(sameScope:sameScope) }
@@ -282,7 +282,9 @@ final class FramePipeline {
             ocrSamples.record(metrics.ocrMilliseconds); metrics.ocrP95 = ocrSamples.p95
             metrics.contextEntries = memory.entries.count
             if quality[.typewriter] {
-                let selectedGame = translator.packs == nil ? (namesConfigured && namesSnapshot.game != "general" ? namesSnapshot.game : nil) : translator.packs?.publication("",origin:.rule).game
+                let selectedGame: String?
+                if let packs = translator.packs { selectedGame = packs.publication("",origin:.rule).game }
+                else { selectedGame = namesConfigured && namesSnapshot.general != true ? namesSnapshot.game : nil }
                 let scope = selectedGame ?? ""
                 if typewriterScope != scope {
                     typewriter = TypewriterPublication(knownTypewriter:selectedGame.map{quality.typewriterGames.contains($0)} ?? false)

@@ -56,7 +56,10 @@ struct QualitySettings: Equatable {
         var value = Self()
         for flag in QualityFlag.allCases { value[flag] = defaults.bool(forKey:"quality."+flag.rawValue) }
         if let n = defaults.object(forKey:"quality.noHitThreshold") as? Int { value.noHitThreshold = max(1,min(1000,n)) }
-        if defaults.object(forKey:"quality.settleSeconds") != nil { value.settleSeconds = max(0,min(3,defaults.double(forKey:"quality.settleSeconds"))) }
+        if defaults.object(forKey:"quality.settleSeconds") != nil {
+            let duration = defaults.double(forKey:"quality.settleSeconds")
+            value.settleSeconds = duration.isFinite ? max(0,min(3,duration)) : 3
+        }
         if let n = defaults.object(forKey:"quality.typewriterWindow") as? Int { value.typewriterWindow = max(3,min(20,n)) }
         for game in (defaults.stringArray(forKey:"quality.typewriterGames") ?? []).prefix(256) { value.rememberTypewriter(game:game) }
         if let n = defaults.object(forKey:"quality.anchoredLineCap") as? Int { value.anchoredLineCap = max(3,min(5,n)) }

@@ -80,6 +80,9 @@ final class TypewriterPublicationTests: XCTestCase {
         XCTAssertFalse(restored.typewriterGames.contains("synthetic-game-b")); XCTAssertFalse(restored[.typewriter])
         for index in 0..<300 { quality.rememberTypewriter(game:"synthetic-\(index)") }
         XCTAssertEqual(quality.typewriterGames.count,256)
+        defaults.set(Double.nan,forKey:"quality.settleSeconds"); defaults.set(100,forKey:"quality.typewriterWindow")
+        XCTAssertEqual(QualitySettings.load(defaults).settleSeconds,3)
+        XCTAssertEqual(QualitySettings.load(defaults).typewriterWindow,20)
         QualitySettings().save(defaults)
         XCTAssertTrue(QualitySettings.load(defaults).typewriterGames.isEmpty)
     }
