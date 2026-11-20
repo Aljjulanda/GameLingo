@@ -56,6 +56,17 @@ final class LineLimitQualityTests: XCTestCase {
             XCTAssertEqual(b.select(input,roi:.dialogue,quality:quality),a.select(input,roi:.dialogue))
         }
     }
+    func testLongRegionsWithMostlyShortDialogueNeedMoreThanLineLengthEvidence() {
+        for texts in [["Wait!","What?","No!","Please!","Go!","Now!"],["I am here","You know me","We should go","Come on","Let's go"]] {
+            let input = rows(texts); var selector = DialogueSelection()
+            XCTAssertTrue(selector.select(input,roi:.dialogue,quality:quality).isEmpty)
+            XCTAssertEqual(selector.select(input,roi:.dialogue,quality:quality),input)
+        }
+        var selector = DialogueSelection()
+        let ambiguous = rows(["One","Two","Three","Four","Five"])
+        XCTAssertTrue(selector.select(ambiguous,roi:.dialogue,quality:quality).isEmpty)
+        XCTAssertTrue(selector.select(ambiguous,roi:.dialogue,quality:quality).isEmpty)
+    }
     func testAdvancedCapsArePersistedBoundedAndDefaultOff() throws {
         let key = "synthetic.line-limits."+UUID().uuidString
         let defaults = try XCTUnwrap(UserDefaults(suiteName:key)); defer { defaults.removePersistentDomain(forName:key) }

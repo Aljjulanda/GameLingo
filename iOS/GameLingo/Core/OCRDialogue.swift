@@ -151,9 +151,14 @@ struct DialogueSelection {
             // menu; they remain eligible with a genuine sentence anchor. The
             // pre-existing menu/HUD filters above are retained.
             let bounds = StructuredDialogue.union(group)
-            let sentence = group.contains { DialogueText.words($0.text).count >= 5 }
+            let tokens = group.map { DialogueText.exactWords($0.text) }
+            let pronouns: Set<String> = ["i","you","we","he","she","they","dont","cant","wont"]
+            let punctuated = group.filter { line in
+                line.text.trimmingCharacters(in:.whitespacesAndNewlines).last.map{".!?؟…".contains($0)} == true
+            }.count
+            let dialogueAnchor = tokens.contains{$0.count >= 5} || punctuated >= 2 || tokens.filter{!pronouns.isDisjoint(with:$0)}.count >= 2
             let compact = bounds.h <= 0.85*roi.h && group.count == candidates.count
-            accepted = reliable && compact && sentence && signature == previousSignature
+            accepted = reliable && compact && dialogueAnchor && signature == previousSignature
         }
         previousSignature = signature
         return accepted ? group.sorted(by:{ $0.box.y < $1.box.y }) : []
