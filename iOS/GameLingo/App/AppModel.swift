@@ -141,6 +141,10 @@ final class AppModel: ObservableObject {
         try? LocalizationInbox().prepare()
         packLibrary.store.configureQuality(PackQualityOptions(quality)); packLibrary.configureQuality(quality); pipeline.configureQuality(quality)
         pipeline.onCaptureState = { [weak self] active,file in self?.qualityCaptureActive = active; self?.qualityCaptureFile = file }
+        pipeline.onTypewriterDetected = { [weak self] game in
+            guard let self, self.quality[.typewriter], !self.quality.typewriterGames.contains(game) else { return }
+            self.quality.rememberTypewriter(game:game)
+        }
         pipeline.captureAction()
         namesLibrary.onChange = { [weak self] store,snapshot in self?.pipeline.configureNames(store,snapshot:snapshot) }
         pipeline.configureNames(namesLibrary.store,snapshot:namesLibrary.snapshot)

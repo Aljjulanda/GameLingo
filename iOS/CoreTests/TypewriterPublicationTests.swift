@@ -23,7 +23,7 @@ final class TypewriterPublicationTests: XCTestCase {
         guard case .dialogue(let old,_) = tracker.observe(text:first.text,box:first.box,now:0,frameMilliseconds:0) else { return XCTFail("Missing actual tracker job") }
         XCTAssertFalse(gate.canPublish(old)) // Result is ready at0.1s, held in RAM.
         let ready = gate.observe(next,now:0.5,enabled:true)
-        if TypewriterPublication.canFlush(old,ready:ready), tracker.accepts(old), stability.shouldPublish(old) {
+        if TypewriterPublication.canFlush(old,ready:ready,current:next), tracker.accepts(old), stability.shouldPublish(old) {
             published.append(old.text); stability.didPublish(old)
         }
         guard case .dialogue(let current,_) = tracker.observe(text:next.text,box:next.box,now:0.5,frameMilliseconds:500) else { return XCTFail("Missing next tracker job") }
@@ -36,8 +36,10 @@ final class TypewriterPublicationTests: XCTestCase {
         var gate = TypewriterPublication(knownTypewriter:true)
         _ = gate.observe(reading("We should"),now:0,enabled:true)
         _ = gate.observe(reading("We should leave"),now:0.5,enabled:true)
-        _ = gate.observe(reading("We should leave"),now:1,enabled:true)
+        let current = reading("We should leave")
+        let ready = gate.observe(current,now:1,enabled:true)
         XCTAssertFalse(gate.canPublish(job("We should")))
+        XCTAssertFalse(TypewriterPublication.canFlush(job("We should"),ready:ready,current:current))
         XCTAssertTrue(gate.canPublish(job("We should leave")))
     }
     func testTerminalUnknownGameOffAndZeroDurationAreImmediate() {
@@ -47,6 +49,9 @@ final class TypewriterPublicationTests: XCTestCase {
         var unknown = TypewriterPublication()
         _ = unknown.observe(reading("Wait here"),now:0,enabled:true)
         XCTAssertTrue(unknown.canPublish(job("Wait here")))
+        _ = unknown.observe(reading("Wait here now"),now:0.5,enabled:true)
+        XCTAssertFalse(unknown.detected)
+        XCTAssertTrue(unknown.canPublish(job("Wait here")),"Learning must not delay the legacy worker before actual growth evidence")
         for enabled in [true,false] {
             var gate = TypewriterPublication(knownTypewriter:true)
             _ = gate.observe(reading("Wait here"),now:0,enabled:enabled,maxWait:0)
@@ -56,9 +61,9 @@ final class TypewriterPublicationTests: XCTestCase {
     func testNewSpeakerAndRemoteRegionCannotFlushAnUnrelatedHeldResult() {
         var other = reading("Wait here now"); other.speaker = "John"
         var old = job("Wait here"); old.speaker = "Arthur"
-        XCTAssertFalse(TypewriterPublication.canFlush(old,ready:[other]))
+        XCTAssertFalse(TypewriterPublication.canFlush(old,ready:[other],current:other))
         other.speaker = nil; other.box.x = 0.8
-        XCTAssertFalse(TypewriterPublication.canFlush(old,ready:[other]))
+        XCTAssertFalse(TypewriterPublication.canFlush(old,ready:[other],current:other))
     }
     func testOnlyBoundedSelectedGameIDsAreRememberedAndResetDoesNotEnableWaiting() throws {
         let suite = "synthetic.typewriter."+UUID().uuidString
@@ -77,5 +82,16 @@ final class TypewriterPublicationTests: XCTestCase {
         XCTAssertEqual(quality.typewriterGames.count,256)
         QualitySettings().save(defaults)
         XCTAssertTrue(QualitySettings.load(defaults).typewriterGames.isEmpty)
+    }
+    func testTerminalPunctuationChangeReleasesHeldJobWithoutChangingTrackerIdentity() {
+        var gate = TypewriterPublication(knownTypewriter:true), tracker = DialogueTracker()
+        _ = gate.observe(reading("Wait here"),now:0,enabled:true)
+        guard case .dialogue(let original,_) = tracker.observe(text:"Wait here",box:.dialogue,now:0,frameMilliseconds:0) else { return XCTFail("Missing original") }
+        let current = reading("Wait here!")
+        let ready = gate.observe(current,now:0.5,enabled:true)
+        XCTAssertTrue(TypewriterPublication.canFlush(original,ready:ready,current:current))
+        XCTAssertTrue(gate.canPublish(original))
+        if case .unchanged = tracker.observe(text:current.text,box:.dialogue,now:0.5,frameMilliseconds:500) {} else { XCTFail("Punctuation must not change the legacy tracker") }
+        XCTAssertTrue(tracker.accepts(original))
     }
 }

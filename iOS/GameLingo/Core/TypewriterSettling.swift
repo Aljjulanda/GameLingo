@@ -19,8 +19,9 @@ struct TypewriterPublication {
     var detected: Bool { settling.detected }
     init(knownTypewriter: Bool = false) { settling = TypewriterSettling(knownTypewriter:knownTypewriter) }
     mutating func observe(_ reading: TypewriterReading, now: Double, enabled: Bool, maxWait: Double = 3, window: Int = 5) -> [TypewriterReading] {
-        active = enabled && maxWait > 0
-        let result = settling.observe(reading,now:now,enabled:enabled,maxWait:maxWait,window:window)
+        let duration = maxWait.isFinite ? max(0,min(3,maxWait)) : 3
+        active = enabled && duration > 0
+        let result = settling.observe(reading,now:now,enabled:enabled,maxWait:duration,window:window)
         if let last = result.ready.last, last.text == reading.text, last.box.isAdjacent(to:reading.box) { permitted = reading }
         else { permitted = nil }
         return result.ready
@@ -29,10 +30,13 @@ struct TypewriterPublication {
         job.box.isAdjacent(to:reading.box) && (job.speaker == nil || reading.speaker == nil || job.speaker == reading.speaker)
     }
     func canPublish(_ job: DialogueJob) -> Bool {
-        !active || permitted.map { $0.text == job.text && Self.compatible(job,$0) } == true
+        !active || !settling.detected || permitted.map { DialogueText.exactWords($0.text) == DialogueText.exactWords(job.text) && Self.compatible(job,$0) } == true
     }
-    static func canFlush(_ job: DialogueJob, ready: [TypewriterReading]) -> Bool {
-        ready.contains { Self.compatible(job,$0) && ($0.text == job.text || $0.text.hasPrefix(job.text)) }
+    static func canFlush(_ job: DialogueJob, ready: [TypewriterReading], current: TypewriterReading) -> Bool {
+        ready.contains { reading in
+            let interrupted = reading.text != current.text || !reading.box.isAdjacent(to:current.box) || reading.speaker != current.speaker
+            return Self.compatible(job,reading) && (DialogueText.exactWords(reading.text) == DialogueText.exactWords(job.text) || (interrupted && reading.text.hasPrefix(job.text)))
+        }
     }
 }
 
