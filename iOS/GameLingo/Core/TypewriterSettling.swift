@@ -21,7 +21,8 @@ struct TypewriterPublication {
     mutating func observe(_ reading: TypewriterReading, now: Double, enabled: Bool, maxWait: Double = 3, window: Int = 5) -> [TypewriterReading] {
         active = enabled && maxWait > 0
         let result = settling.observe(reading,now:now,enabled:enabled,maxWait:maxWait,window:window)
-        permitted = result.ready.last.flatMap { $0.text == reading.text && $0.box.isAdjacent(to:reading.box) ? reading : nil }
+        if let last = result.ready.last, last.text == reading.text, last.box.isAdjacent(to:reading.box) { permitted = reading }
+        else { permitted = nil }
         return result.ready
     }
     private static func compatible(_ job: DialogueJob, _ reading: TypewriterReading) -> Bool {

@@ -18,7 +18,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: quality-native-${{ github.ref }}
+  group: quality-native-${{ github.ref }}-${{ inputs.runner }}
   cancel-in-progress: true
 defaults:
   run:

@@ -29,9 +29,10 @@ struct BenchmarkReading {
             [[OCRLine(text:"Arthur",box:SourceBox(x:0.26,y:0.70,w:0.10,h:0.038)),OCRLine(text:"We need to leave now.",box:SourceBox(x:0.38,y:0.78,w:0.4,h:0.03))]]
         ]
         var canonical: [[String]] = [], durations: [Double] = [], traces = 0
+        var perFixture = Array(repeating:[Double](),count:fixtures.count)
         for repeatIndex in 0..<101 {
             var streams: [[String]] = []
-            for stream in fixtures {
+            for (fixtureIndex,stream) in fixtures.enumerated() {
                 #if QUALITY_CURRENT
                 var selector = DialogueSelection()
                 #else
@@ -76,7 +77,10 @@ struct BenchmarkReading {
                             stability.didPublish(job)
                         }
                     }
-                    if repeatIndex > 0 { durations.append((ProcessInfo.processInfo.systemUptime-start)*1000) }
+                    if repeatIndex > 0 {
+                        let duration = (ProcessInfo.processInfo.systemUptime-start)*1000
+                        durations.append(duration); perFixture[fixtureIndex].append(duration)
+                    }
                 }
                 streams.append(messages)
             }
@@ -84,7 +88,11 @@ struct BenchmarkReading {
             else { precondition(streams == canonical,"Non-deterministic fixture output") }
         }
         durations.sort()
-        let result: [String:Any] = ["enabled":enabled,"fixture_streams":canonical,"observations":durations.count,"median_ms":durations[durations.count/2],"p95_ms":durations[Int(Double(durations.count-1)*0.95)],"trace_work":traces]
+        let fixtureTimings: [[String:Any]] = perFixture.enumerated().map { index,values in
+            let sorted = values.sorted()
+            return ["fixture":index,"observations":sorted.count,"median_ms":sorted[sorted.count/2],"p95_ms":sorted[Int(Double(sorted.count-1)*0.95)]]
+        }
+        let result: [String:Any] = ["enabled":enabled,"fixture_streams":canonical,"observations":durations.count,"median_ms":durations[durations.count/2],"p95_ms":durations[Int(Double(durations.count-1)*0.95)],"fixture_timings":fixtureTimings,"trace_work":traces]
         print(String(decoding:try JSONSerialization.data(withJSONObject:result,options:[.sortedKeys]),as:UTF8.self))
     }
 }
