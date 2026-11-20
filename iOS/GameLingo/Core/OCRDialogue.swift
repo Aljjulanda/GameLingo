@@ -27,6 +27,20 @@ enum StructuredDialogue {
             let hud = quality[.lineLimits] && key.range(of:"^(hp|ammo|fps|xp|level)\\s*\\d",options:.regularExpression) != nil
             return !hud && $0.box.isValid && $0.confidence >= 0.2 && !key.isEmpty && !menu.contains(key) && !key.hasPrefix("press ") && !key.hasPrefix("hold ") && !key.hasPrefix("tap ")
         }
+        // Expanded regions revisit the same at-most-eight observations while
+        // testing label/body geometry. Reuse classification within this read;
+        // no text or classification survives to another OCR observation.
+        var names: [(OCRLine,Bool)] = [], counts: [(OCRLine,Int)] = []
+        func isName(_ line: OCRLine) -> Bool {
+            if quality[.lineLimits], let cached = names.first(where:{$0.0 == line}) { return cached.1 }
+            let value = DialogueContent.isName(line.text,knownNames:knownNames,confidence:line.confidence,quality:quality)
+            if quality[.lineLimits] { names.append((line,value)) }; return value
+        }
+        func wordCount(_ line: OCRLine) -> Int {
+            if quality[.lineLimits], let cached = counts.first(where:{$0.0 == line}) { return cached.1 }
+            let value = DialogueText.words(line.text).count
+            if quality[.lineLimits] { counts.append((line,value)) }; return value
+        }
         func group(_ anchor: OCRLine, excluding: OCRLine?) -> [OCRLine] {
             if quality[.lineLimits] {
                 // A five-line body extends beyond the first line's immediate
@@ -35,7 +49,7 @@ enum StructuredDialogue {
                 var connected = [anchor]
                 while connected.count < max(3,min(5,quality.anchoredLineCap)) {
                     guard let next = safe.first(where:{ line in
-                        guard line != excluding, !connected.contains(line), !DialogueContent.isName(line.text,knownNames:knownNames,confidence:line.confidence,quality:quality) else { return false }
+                        guard line != excluding, !connected.contains(line), !isName(line) else { return false }
                         return connected.contains { near in
                             let b = line.box, a = near.box
                             let gap = max(b.y-a.y-a.h,a.y-b.y-b.h,0)
@@ -53,7 +67,7 @@ enum StructuredDialogue {
                 let b = line.box, a = anchor.box
                 let gap = max(b.y-a.y-a.h,a.y-b.y-b.h,0)
                 let overlap = min(b.x+b.w,a.x+a.w)-max(b.x,a.x)
-                return abs(b.y-a.y)>min(a.h,b.h)*0.45 && gap <= 1.4*max(a.h,b.h) && overlap>min(a.w,b.w)*0.3 && !DialogueContent.isName(line.text,knownNames:knownNames,confidence:line.confidence,quality:quality)
+                return abs(b.y-a.y)>min(a.h,b.h)*0.45 && gap <= 1.4*max(a.h,b.h) && overlap>min(a.w,b.w)*0.3 && !isName(line)
             }.sorted { $0.box.y < $1.box.y }.prefix(3).map { $0 }
         }
         for line in safe {
@@ -66,11 +80,10 @@ enum StructuredDialogue {
                 return Reading(content:content,box:union(body),confidence:body.map(\.confidence).min() ?? 0)
             }
         }
-        for label in safe where DialogueContent.isName(label.text,knownNames:knownNames,confidence:label.confidence,quality:quality) || (quality[.speakerClassification] && SpeakerEvidence.shape(label.text) && !SpeakerEvidence.excluded(label.text) && label.text.first?.isUppercase == true) {
+        for label in safe where isName(label) || (quality[.speakerClassification] && SpeakerEvidence.shape(label.text) && !SpeakerEvidence.excluded(label.text) && label.text.first?.isUppercase == true) {
             let known = knownNames.split(separator:",").contains { $0.trimmingCharacters(in:.whitespacesAndNewlines).lowercased() == label.text.lowercased() }
             let matches = safe.filter { line in
-                guard line != label, DialogueText.words(line.text).count >= 2,
-                      !DialogueContent.isName(line.text,knownNames:knownNames,confidence:line.confidence,quality:quality) else { return false }
+                guard line != label, wordCount(line) >= 2, !isName(line) else { return false }
                 let a = label.box, b = line.box
                 let verticalGap = b.y-a.y-a.h
                 let overlap = min(a.x+a.w,b.x+b.w)-max(a.x,b.x)
@@ -105,7 +118,12 @@ struct DialogueSelection {
     mutating func select(_ lines: [OCRLine], roi: SourceBox, quality: QualitySettings = QualitySettings()) -> [OCRLine] {
         let menus: Set<String> = ["settings","options","inventory","resume","resume game","load game","save game","new game","quit","quit game","main menu","graphics","audio","controls","objectives","equipment","skills","map"]
         let context: Set<String> = ["search","interact","pick up","open","talk","examine","use","climb"]
-        func term(_ text: String) -> String { DialogueText.matches(text.lowercased(),"[\\p{L}\\p{N}_]+").joined(separator:" ") }
+        var terms: [String:String] = [:]
+        func term(_ text: String) -> String {
+            if quality[.lineLimits], let value = terms[text] { return value }
+            let value = DialogueText.matches(text.lowercased(),"[\\p{L}\\p{N}_]+").joined(separator:" ")
+            if quality[.lineLimits] { terms[text] = value }; return value
+        }
         let cap = quality[.lineLimits] ? max(4,min(6,quality.fallbackLineCap)) : 4
         guard lines.count <= cap, lines.filter({ menus.contains(term($0.text)) }).count < 2 else { previousSignature = []; return [] }
         let candidates = lines.filter { line in
