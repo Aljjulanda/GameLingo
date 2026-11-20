@@ -10,6 +10,11 @@ import AVFAudio
 @testable import GameLingo
 
 final class AppleIntegrationTests: XCTestCase {
+    private func stopAndDrain(_ pipeline: FramePipeline) {
+        let stopped = expectation(description:"Stopped pipeline drained its OCR queue")
+        pipeline.stop(completion:{ stopped.fulfill() })
+        wait(for:[stopped],timeout:45)
+    }
     private func visionFixture(_ draw: (UIGraphicsImageRendererContext) -> Void) throws -> CVPixelBuffer {
         let image = UIGraphicsImageRenderer(size:CGSize(width:1280,height:720)).image { context in
             UIColor.black.setFill();context.fill(CGRect(x:0,y:0,width:1280,height:720));draw(context)
@@ -149,7 +154,7 @@ final class AppleIntegrationTests: XCTestCase {
             var advanced = AdvancedSettings(); advanced.terminology = "We should leave now.=علينا المغادرة الآن."
             pipeline.configureAdvanced(advanced); pipeline.start(roi:.dialogue,mode:.balanced)
             DispatchQueue.global().asyncAfter(deadline:.now()+0.5) { pipeline.offer(pixels) }
-            wait(for:[published],timeout:45); pipeline.stop()
+            wait(for:[published],timeout:45); stopAndDrain(pipeline)
             }
         }
     }
@@ -182,7 +187,7 @@ final class AppleIntegrationTests: XCTestCase {
                 var advanced = AdvancedSettings(); advanced.terminology = "We should leave now.=علينا المغادرة الآن."
                 pipeline.configureAdvanced(advanced); pipeline.start(roi:.dialogue,mode:.balanced)
                 DispatchQueue.global().asyncAfter(deadline:.now()+0.5) { pipeline.offer(pixels) }
-                wait(for:[shown],timeout:45); pipeline.stop()
+                wait(for:[shown],timeout:45); stopAndDrain(pipeline)
             }
         }
     }
@@ -229,7 +234,7 @@ final class AppleIntegrationTests: XCTestCase {
             wait(for:[shown],timeout:15)
             pipeline.offer(pixels)
             wait(for:[duplicate],timeout:0.8)
-            pipeline.stop()
+            stopAndDrain(pipeline)
         }
     }
     func testTypewriterInterruptedShortLineKeepsBothReadyTranslationsInOrder() throws {
@@ -261,7 +266,7 @@ final class AppleIntegrationTests: XCTestCase {
         DispatchQueue.main.asyncAfter(deadline:.now()+0.4) { ready.fulfill() }
         wait(for:[ready],timeout:2)
         pipeline.offer(second)
-        wait(for:[shown],timeout:15); pipeline.stop()
+        wait(for:[shown],timeout:15); stopAndDrain(pipeline)
         lock.lock(); let actual = sources; lock.unlock()
         XCTAssertEqual(actual,["Please wait here","Run!"])
     }
@@ -292,7 +297,7 @@ final class AppleIntegrationTests: XCTestCase {
         pipeline.onMetrics = nil
         pipeline.stop(); pipeline.start(roi:.dialogue,mode:.balanced)
         DispatchQueue.global().asyncAfter(deadline:.now()+0.5) { pipeline.offer(second) }
-        wait(for:[restarted],timeout:15); wait(for:[old],timeout:0.4); pipeline.stop()
+        wait(for:[restarted],timeout:15); wait(for:[old],timeout:0.4); stopAndDrain(pipeline)
     }
     func testTypewriterHeldResultUsesNewExplicitCorrectionBeforePublication() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
@@ -333,7 +338,7 @@ final class AppleIntegrationTests: XCTestCase {
         pipeline.configureCorrections(store.snapshot,completion:{ applied.fulfill() })
         wait(for:[applied],timeout:5)
         pipeline.offer(pixels)
-        wait(for:[shown],timeout:15); pipeline.stop()
+        wait(for:[shown],timeout:15); stopAndDrain(pipeline)
     }
     func testQualityVisionStoredDictionaryRefreshAndRollback() throws {
         let source = "We should leave now."

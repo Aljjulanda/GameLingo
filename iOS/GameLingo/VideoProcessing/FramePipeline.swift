@@ -205,11 +205,14 @@ final class FramePipeline {
         runID = UUID(); pending = nil
         tracker.markInterrupted()
     } }
-    func stop() {
+    func stop(completion: (() -> Void)? = nil) {
         queue.async { self.capture.stop(); self.ocr.captureLines = false; self.reportCapture() }
         translator.cancel()
         slotLock.lock(); active = false; latest = nil; slotLock.unlock()
-        queue.async { [self] in reset(); publish(TVProtocol.envelope("subtitle_clear")) }
+        // Optional queue-drain notification lets native tests retire their
+        // in-flight Vision request before beginning the next fixture. Existing
+        // callers retain the same asynchronous Stop behavior.
+        queue.async { [self] in reset(); publish(TVProtocol.envelope("subtitle_clear")); completion?() }
     }
     func pause() {
         translator.cancel()

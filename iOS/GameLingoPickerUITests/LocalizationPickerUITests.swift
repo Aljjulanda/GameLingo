@@ -71,6 +71,10 @@ final class LocalizationPickerUITests: XCTestCase {
         let shot = app.screenshot(), image = try XCTUnwrap(shot.image.cgImage)
         screenshotPixels = CGSize(width:CGFloat(image.width),height:CGFloat(image.height))
         let request = VNRecognizeTextRequest(); request.recognitionLevel = .accurate
+        // This OCR locates controls in the system Files UI; it does not exercise
+        // GameLingo's foreground video OCR. Avoid the Intel Simulator's unstable
+        // MTLSimDriver image conversion for these screenshot-only lookups.
+        request.usesCPUOnly = true
         request.recognitionLanguages = ["en-US"]; request.usesLanguageCorrection = false
         request.customWords = ["GameLingo","GLPicker","glpack","unknownformat","no-extension"]
         try VNImageRequestHandler(cgImage:image,options:[:]).perform([request])
