@@ -29,3 +29,5 @@ jobs:
       - name: All portable Swift tests, including the current quality unit
         working-directory: iOS
         run: swift test --parallel
+      - name: Compare real post-OCR Core with the approved Release
+        run: python3 iOS/Benchmarks/benchmark-quality.py

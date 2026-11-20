@@ -74,6 +74,8 @@ jobs:
         run: |
           git fetch --depth=1 origin tag stable/real-device-0.2.0
           python3 iOS/Benchmarks/benchmark-maintenance.py
+      - name: Compare post-OCR behavior and latency with approved Release
+        run: python3 iOS/Benchmarks/benchmark-quality.py
       - name: Validate Apple project
         run: |
           plutil -lint iOS/GameLingo/Resources/Info.plist
