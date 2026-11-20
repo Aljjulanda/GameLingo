@@ -87,7 +87,10 @@ final class LocalizationPickerUITests: XCTestCase {
         if !listPresentation {
             // Files owns its presentation and hit regions. Use its actual List
             // command instead of guessing the hit area of a Quick Look thumbnail.
-            screenCoordinate(CGPoint(x:0.08,y:headerY)).tap()
+            // The English system provider puts More at the trailing edge.
+            // The Arabic grid recording used the opposite edge; reusing that
+            // coordinate activates Back rather than opening the view menu.
+            screenCoordinate(CGPoint(x:0.92,y:headerY)).tap()
             var listPoint: CGPoint?
             for _ in 0..<10 {
                 let labels = try visiblePickerText()
@@ -168,7 +171,9 @@ final class LocalizationPickerUITests: XCTestCase {
         let previous = app.staticTexts["gamePacks.fileSummary"].label
         importButton().tap()
         try waitForNativePicker()
-        screenCoordinate(CGPoint(x:0.20,y:headerY)).tap()
+        let cancelLabels = try visiblePickerText()
+        let cancel = try XCTUnwrap(cancelLabels.first(where:{$0.0 == "cancel" && $0.1.midY > 0.82}),"Native Cancel command not visible")
+        screenCoordinate(CGPoint(x:cancel.1.midX,y:1-cancel.1.midY)).tap()
         expectation(for:NSPredicate { [self] _,_ in app.buttons["gamePacks.import"].isHittable },evaluatedWith:app)
         waitForExpectations(timeout:15)
         XCTAssertEqual(app.staticTexts["gamePacks.fileSummary"].label,previous)
