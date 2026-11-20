@@ -89,9 +89,11 @@ final class QualityCapture {
 /// Deterministic post-OCR replay. It intentionally does not claim OCR/model or
 /// hardware coverage; native integration tests exercise those separately.
 enum QualityReplay {
-    static func run(_ data: Data, quality: QualitySettings = QualitySettings(), translate: (String) -> String) throws -> [String] {
+    static func run(_ data: Data, quality: QualitySettings = QualitySettings(), game: String? = nil, translate: (String) -> String) throws -> [String] {
         guard data.count <= 4*1024*1024 else { throw LingoError.invalid("ملف الاختبار كبير") }
         var selector = DialogueSelection(), tracker = DialogueTracker(), stability = PublicationStability()
+        var typewriter = TypewriterPublication(knownTypewriter:game.map{quality.typewriterGames.contains($0)} ?? false)
+        var held: (job:DialogueJob,text:String)?
         var result: [String] = [], clock = 0.0
         let records = try data.split(separator:10).map { try JSONDecoder().decode(QualityCaptureRecord.self,from:Data($0)) }
         // A real capture contains raw candidates AND publication outcomes.
@@ -102,10 +104,22 @@ enum QualityReplay {
             clock = record.timestamp.map{max(clock,$0)} ?? clock+0.6
             let lines = (record.segments ?? record.lines).map{OCRLine(text:$0.text,box:$0.box,confidence:$0.confidence)}
             let reading = DialogueObservation.resolve(lines,roi:.dialogue,knownNames:"",selector:&selector,quality:quality)
+            if quality[.typewriter] {
+                let observed = TypewriterReading(text:reading.content.text,speaker:reading.content.speaker,box:reading.box,confidence:reading.confidence)
+                let ready = typewriter.observe(observed,now:clock,enabled:!(reading.content.engineText == "" && reading.content.cue != nil),maxWait:quality.settleSeconds,window:quality.typewriterWindow)
+                if let previous = held, TypewriterPublication.canFlush(previous.job,ready:ready,current:observed), tracker.accepts(previous.job), stability.shouldPublish(previous.job) {
+                    result.append(previous.text); stability.didPublish(previous.job); held = nil
+                }
+            }
             if case .dialogue(let job,_) = tracker.observe(text:reading.content.text,box:reading.box,now:clock,frameMilliseconds:Int64(clock*1000),speaker:reading.content.speaker,confidence:reading.confidence), stability.shouldPublish(job) {
                 let input = reading.content.engineText ?? job.text
-                result.append(input.isEmpty && reading.content.cue != nil ? reading.content.cue! : translate(input)); stability.didPublish(job)
+                let value = input.isEmpty && reading.content.cue != nil ? reading.content.cue! : translate(input)
+                // Synchronous stub completion; shares the production publication
+                // gate, not asynchronous worker timing or real model latency.
+                if quality[.typewriter] && !typewriter.canPublish(job) { held = (job,value) }
+                else { result.append(value); stability.didPublish(job) }
             }
+            if let previous = held, tracker.current?.id != previous.job.id { held = nil }
         }
         return result
     }

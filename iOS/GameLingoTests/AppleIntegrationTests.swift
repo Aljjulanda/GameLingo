@@ -195,9 +195,10 @@ final class AppleIntegrationTests: XCTestCase {
         let recognized = VisionDialogueOCR()
         _ = try recognized.recognize(pixels,roi:.dialogue)
         XCTAssertEqual(recognized.content.text,"Please wait here")
-        for enabled in [true,false] {
+        for (enabled,duration) in [(true,3.0),(false,3.0),(true,0.0)] {
+            let waiting = enabled && duration > 0
             let firstRead = expectation(description:"First actual OCR read"), shown = expectation(description:"Typewriter published with flag \(enabled)")
-            let tooEarly = enabled ? expectation(description:"Known typewriter did not publish from one read") : nil; tooEarly?.isInverted = true
+            let tooEarly = waiting ? expectation(description:"Known typewriter did not publish from one read") : nil; tooEarly?.isInverted = true
             let duplicate = expectation(description:"Stable text did not publish again"); duplicate.isInverted = true
             let lock = NSLock(); var secondOffered = false, count = 0
             let translator = OfflineTranslator(folder:FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString))
@@ -206,17 +207,19 @@ final class AppleIntegrationTests: XCTestCase {
                 lock.lock(); count += 1; let observed = count, early = !secondOffered; lock.unlock()
                 XCTAssertEqual(message["translated"] as? String,"انتظر هنا")
                 if observed > 1 { duplicate.fulfill() }
-                else { if enabled && early { tooEarly?.fulfill() }; shown.fulfill() }
+                else { if waiting && early { tooEarly?.fulfill() }; shown.fulfill() }
             }
             pipeline.onMetrics = { metrics in if metrics.recognitions == 1 { firstRead.fulfill() } }
-            var quality = QualitySettings(); quality[.typewriter] = enabled; quality.rememberTypewriter(game:"synthetic-typewriter")
+            var quality = QualitySettings()
+            if !waiting { for flag in QualityFlag.allCases { quality[flag] = true } }
+            quality[.typewriter] = enabled; quality.settleSeconds = duration; quality.rememberTypewriter(game:"synthetic-typewriter")
             pipeline.configureQuality(quality)
             pipeline.configureNames(nil,snapshot:GameNamesSnapshot(game:"synthetic-typewriter"))
             var advanced = AdvancedSettings(); advanced.terminology = "Please wait here=انتظر هنا"
             pipeline.configureAdvanced(advanced); pipeline.start(roi:.dialogue,mode:.balanced)
             DispatchQueue.global().asyncAfter(deadline:.now()+0.5) { pipeline.offer(pixels) }
             wait(for:[firstRead],timeout:45)
-            if enabled {
+            if waiting {
                 if let tooEarly { wait(for:[tooEarly],timeout:0.4) }
                 lock.lock(); secondOffered = true; lock.unlock()
                 // Identical pixels, freshly offered; the signature itself must
@@ -290,6 +293,40 @@ final class AppleIntegrationTests: XCTestCase {
         pipeline.stop(); pipeline.start(roi:.dialogue,mode:.balanced)
         DispatchQueue.global().asyncAfter(deadline:.now()+0.5) { pipeline.offer(second) }
         wait(for:[restarted],timeout:15); wait(for:[old],timeout:0.4); pipeline.stop()
+    }
+    func testTypewriterHeldResultUsesNewExplicitCorrectionBeforePublication() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at:root) }
+        let store = try GameCorrectionsStore(root:root,game:"synthetic-typewriter")
+        let pixels = try visionFixture { _ in
+            let text = "Please wait here" as NSString, font = UIFont.systemFont(ofSize:31)
+            let width = text.size(withAttributes:[.font:font]).width
+            text.draw(at:CGPoint(x:(1280-width)/2,y:530),withAttributes:[.font:font,.foregroundColor:UIColor.white])
+        }
+        let firstRead = expectation(description:"First actual OCR read"), shown = expectation(description:"Updated explicit correction")
+        let translator = OfflineTranslator(folder:root.appendingPathComponent("no-model"))
+        let pipeline = FramePipeline(translator:translator) { message in
+            guard message["type"] as? String == "subtitle_show" else { return }
+            XCTAssertEqual(message["translated"] as? String,"ابق هنا")
+            XCTAssertEqual(message["provenance"] as? String,"userCorrection")
+            shown.fulfill()
+        }
+        pipeline.onMetrics = { metrics in if metrics.recognitions == 1 { firstRead.fulfill() } }
+        var quality = QualitySettings(); quality[.typewriter] = true; quality[.corrections] = true; quality[.provenanceMarker] = true
+        quality.rememberTypewriter(game:"synthetic-typewriter")
+        pipeline.configureQuality(quality); pipeline.configureNames(nil,snapshot:GameNamesSnapshot(game:"synthetic-typewriter"))
+        pipeline.configureCorrections(store.snapshot)
+        var advanced = AdvancedSettings(); advanced.terminology = "Please wait here=انتظر هنا"
+        pipeline.configureAdvanced(advanced); pipeline.start(roi:.dialogue,mode:.balanced)
+        DispatchQueue.global().asyncAfter(deadline:.now()+0.5) { pipeline.offer(pixels) }
+        wait(for:[firstRead],timeout:45)
+        let ready = expectation(description:"Initial rule worker had a chance to finish")
+        DispatchQueue.main.asyncAfter(deadline:.now()+0.4) { ready.fulfill() }
+        wait(for:[ready],timeout:2)
+        try store.save(source:"Please wait here",target:"ابق هنا")
+        pipeline.configureCorrections(store.snapshot)
+        pipeline.offer(pixels)
+        wait(for:[shown],timeout:15); pipeline.stop()
     }
     func testQualityVisionStoredDictionaryRefreshAndRollback() throws {
         let source = "We should leave now."
