@@ -11,6 +11,12 @@ final class LocalizationPickerUITests: XCTestCase {
     private var screenHeight: CGFloat = 852
     private var headerY: CGFloat = 0.115
     private var listPresentation = false
+    private func diagnosticScreen(_ name: String) {
+        // A CI-side simctl watcher captures the actual provider independently
+        // of XCTest's screenshot attachment XPC, which failed on this runtime.
+        print("PICKER_DIAGNOSTIC "+name)
+        Thread.sleep(forTimeInterval:3)
+    }
     override func setUpWithError() throws {
         continueAfterFailure = false
         // Only the system provider menu uses English, which Vision supports on
@@ -90,7 +96,9 @@ final class LocalizationPickerUITests: XCTestCase {
             // The English system provider puts More at the trailing edge.
             // The Arabic grid recording used the opposite edge; reusing that
             // coordinate activates Back rather than opening the view menu.
+            diagnosticScreen("before-view-menu")
             screenCoordinate(CGPoint(x:0.92,y:headerY)).tap()
+            diagnosticScreen("after-view-menu")
             var listPoint: CGPoint?
             for _ in 0..<10 {
                 let labels = try visiblePickerText()
@@ -100,8 +108,8 @@ final class LocalizationPickerUITests: XCTestCase {
                 }
                 Thread.sleep(forTimeInterval:0.25)
             }
-            let menu = XCTAttachment(screenshot:XCUIScreen.main.screenshot())
-            menu.name = "Picker-view-menu"; menu.lifetime = .keepAlways; add(menu)
+            // Preserve the host PNG even if XCTest cannot encode an attachment.
+            diagnosticScreen("view-menu-result")
             screenCoordinate(try XCTUnwrap(listPoint,"Files List command not visible")).tap()
             listPresentation = true
             try waitForNativePicker()
@@ -151,7 +159,7 @@ final class LocalizationPickerUITests: XCTestCase {
             importButton().tap()
             let name = ext.isEmpty ? "GLPicker-no-extension" : "GLPicker-"+ext
             let points = try pickerFilePoints(ext)
-            let screenshot = XCTAttachment(screenshot:app.screenshot()); screenshot.name = "Picker-"+name; screenshot.lifetime = .keepAlways; add(screenshot)
+            diagnosticScreen("before-file-"+name)
             screenCoordinate(points.thumbnail).tap()
             Thread.sleep(forTimeInterval:1.0)
             // The recorded XML preview stayed in Files after a correctly placed
@@ -161,8 +169,7 @@ final class LocalizationPickerUITests: XCTestCase {
             // exact filename below; no extension, import or cancel check is skipped.
             if try visiblePickerText().contains(where:{ $0.0.contains("gamelingo") && $0.1.midY > 0.82 }) {
                 print("PICKER_CAPTION_TAP \(ext) \(points.caption)")
-                let remaining = XCTAttachment(screenshot:XCUIScreen.main.screenshot())
-                remaining.name = "Picker-before-caption-"+name; remaining.lifetime = .keepAlways; add(remaining)
+                diagnosticScreen("before-caption-"+name)
                 screenCoordinate(points.caption).tap()
             }
             try waitFinished(filename:ext.isEmpty ? name : name+"."+ext)
