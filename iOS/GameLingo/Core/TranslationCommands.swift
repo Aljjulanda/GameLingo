@@ -10,5 +10,11 @@ enum DialogueCommands {
     static func cachedOrigin(_ normalized: String) -> TranslationOrigin {
         legacy[key(normalized)] == nil ? .argosCache : .command
     }
+    static func value(_ normalized: String, sourcePunctuation: Bool) -> String? {
+        guard let value = legacy[key(normalized)] else { return nil }
+        guard sourcePunctuation else { return value }
+        let tail = SourceGuidedPunctuation.terminalRun(normalized).replacingOccurrences(of:"?",with:"؟")
+        return String(value.dropLast())+tail
+    }
 }
 
