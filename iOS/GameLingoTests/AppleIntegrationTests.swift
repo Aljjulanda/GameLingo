@@ -1,4 +1,5 @@
 import XCTest
+import Combine
 import UIKit
 import CoreVideo
 import VideoToolbox
@@ -480,26 +481,27 @@ final class AppleIntegrationTests: XCTestCase {
     func testBackgroundStopsTVAndExplicitForegroundRestart() async throws {
         let model = AppModel()
         defer { model.hub.stop() }
-        model.connectTV()
-        for _ in 0..<100 {
-            if model.tvListening { break }
-            try await Task.sleep(nanoseconds:100_000_000)
+        // A fresh Intel simulator exceeded the old ten-second polling window
+        // on first listener setup, then successfully restarted. Synchronize on
+        // the real published state; retain every lifecycle/idle-lock assertion.
+        @MainActor func waitForListening(_ value: Bool) async {
+            let changed = expectation(description:"TV listening becomes \(value)")
+            let observation = model.$tvListening.filter { $0 == value }.first().sink { _ in changed.fulfill() }
+            await fulfillment(of:[changed],timeout:45)
+            observation.cancel()
         }
-        XCTAssertTrue(model.tvListening)
+        model.connectTV()
+        await waitForListening(true)
+        XCTAssertTrue(model.tvListening,model.tvDiagnostics.joined(separator:"\n"))
+        guard model.tvListening else { return } // Keep failure; do not test stop before startup.
         XCTAssertTrue(UIApplication.shared.isIdleTimerDisabled,"Waiting for TV must prevent automatic screen lock")
         model.background()
-        for _ in 0..<50 {
-            if !model.tvListening { break }
-            try await Task.sleep(nanoseconds:100_000_000)
-        }
+        await waitForListening(false)
         XCTAssertFalse(model.tvListening)
         XCTAssertTrue(model.pairingCode.isEmpty)
         model.connectTV()
-        for _ in 0..<100 {
-            if model.tvListening { break }
-            try await Task.sleep(nanoseconds:100_000_000)
-        }
-        XCTAssertTrue(model.tvListening)
+        await waitForListening(true)
+        XCTAssertTrue(model.tvListening,model.tvDiagnostics.joined(separator:"\n"))
         XCTAssertFalse(model.pairingCode.isEmpty)
     }
     func testPeerAddressUsesBytesIncludingMappedIPv4() throws {
