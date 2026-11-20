@@ -69,7 +69,7 @@ final class LocalizationPickerUITests: XCTestCase {
         // Match the image coordinate space to the XCUIApplication target. The
         // screen-wide screenshot RPC also repeatedly crashed on this runtime.
         let shot = app.screenshot(), image = try XCTUnwrap(shot.image.cgImage)
-        screenshotPixels = CGSize(width:image.width,height:image.height)
+        screenshotPixels = CGSize(width:CGFloat(image.width),height:CGFloat(image.height))
         let request = VNRecognizeTextRequest(); request.recognitionLevel = .accurate
         request.recognitionLanguages = ["en-US"]; request.usesLanguageCorrection = false
         request.customWords = ["GameLingo","GLPicker","glpack","unknownformat","no-extension"]
