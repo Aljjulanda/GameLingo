@@ -25,9 +25,11 @@ struct PackManifest: Codable, Equatable {
     var attribution: String, permission: String, builtAt: String, arabicOrder: String, databaseSha256: String
     var speakerNames: [String]?
     var coverage: String?
+    var quality: PackQualitySummary? = nil
     static let categories: Set<String> = ["dialogue","menu","document","general"]
     func validate() throws {
-        guard formatVersion == 1, schemaVersion == 1, sourceLanguage == "en", targetLanguage == "ar", arabicOrder == "logical" else { throw PackFailure.unsupported }
+        guard formatVersion == 1, [1,2].contains(schemaVersion), sourceLanguage == "en", targetLanguage == "ar", arabicOrder == "logical" else { throw PackFailure.unsupported }
+        guard schemaVersion == 2 ? quality?.valid(recordCount:recordCount) == true : quality == nil else { throw PackFailure.invalid }
         guard gameId.range(of:"^[a-z0-9][a-z0-9._-]{0,63}$",options:.regularExpression) != nil,
               !gameTitle.isEmpty, gameTitle.count <= 100, !packVersion.isEmpty, packVersion.count <= 32,
               (1...500_000).contains(recordCount), (0...recordCount).contains(usableCount),
@@ -56,7 +58,7 @@ enum PackLookupKey {
 }
 
 struct PackMatch {
-    enum Kind: String { case exact, normalized, missing, ambiguous, unsupported, unavailable }
+    enum Kind: String { case exact, normalized, punctuationless, missing, ambiguous, unsupported, unavailable }
     var text: String?
     var kind: Kind
 }
@@ -75,8 +77,20 @@ private final class PackSQLiteProgress {
 final class PackDatabase {
     static let table = "CREATE TABLE entries (identifier TEXT NOT NULL, original_id TEXT NOT NULL, source TEXT NOT NULL, normalized TEXT NOT NULL, target TEXT NOT NULL, category TEXT NOT NULL, source_file TEXT NOT NULL, flags TEXT NOT NULL, usable INTEGER NOT NULL)"
     static let indexes = ["by_exact":"CREATE INDEX by_exact ON entries(source, category)","by_normalized":"CREATE INDEX by_normalized ON entries(normalized, category)","by_identifier":"CREATE INDEX by_identifier ON entries(identifier)"]
+    static let tableV2 = String(table.dropLast())+", punctuationless TEXT NOT NULL)"
+    static let qualityTable = "CREATE TABLE quality_variants (entry_id INTEGER NOT NULL, profile INTEGER NOT NULL, source TEXT NOT NULL, normalized TEXT NOT NULL, target TEXT NOT NULL, flags TEXT NOT NULL, usable INTEGER NOT NULL, punctuationless TEXT NOT NULL)"
+    static let qualityIndexes = [
+        "by_punctuationless":"CREATE INDEX by_punctuationless ON entries(punctuationless, category)",
+        "quality_profile":"CREATE UNIQUE INDEX quality_profile ON quality_variants(entry_id, profile)",
+        "quality_exact":"CREATE INDEX quality_exact ON quality_variants(source, profile)",
+        "quality_normalized":"CREATE INDEX quality_normalized ON quality_variants(normalized, profile)",
+        "quality_punctuationless":"CREATE INDEX quality_punctuationless ON quality_variants(punctuationless, profile)"
+    ]
+    private(set) var schemaVersion = 1
     private var db: OpaquePointer?
     private var exact: OpaquePointer?, normalized: OpaquePointer?
+    private var punctuationless: OpaquePointer?
+    private var qualityStatements: [OpaquePointer] = []
     private let progress = PackSQLiteProgress()
     private var cache = BoundedLRU<String,PackMatch>(capacity:32)
     init(url: URL) throws {
@@ -95,15 +109,23 @@ final class PackDatabase {
         try validateSchema()
         exact = try prepare("SELECT target, usable FROM entries WHERE source=? AND category IN (?, ?, 'general') LIMIT 33")
         normalized = try prepare("SELECT target, usable FROM entries WHERE normalized=? AND category IN (?, ?, 'general') LIMIT 33")
+        if schemaVersion == 2 {
+            punctuationless = try prepare("SELECT target, usable FROM entries WHERE punctuationless=? AND category IN (?, ?, 'general') LIMIT 33")
+            for column in ["source","normalized","punctuationless"] {
+                qualityStatements.append(try prepare("SELECT r.target, r.usable FROM entries r WHERE r.\(column)=?1 AND r.category IN (?2, ?3, 'general') AND NOT EXISTS (SELECT 1 FROM quality_variants q WHERE q.entry_id=r.rowid AND q.profile=?4) UNION ALL SELECT q.target, q.usable FROM quality_variants q JOIN entries r ON r.rowid=q.entry_id WHERE q.\(column)=?1 AND q.profile=?4 AND r.category IN (?2, ?3, 'general') LIMIT 33"))
+            }
+        }
         } catch {
             sqlite3_finalize(exact); sqlite3_finalize(normalized)
+            sqlite3_finalize(punctuationless); qualityStatements.forEach { sqlite3_finalize($0) }; qualityStatements = []
             exact = nil; normalized = nil
             sqlite3_progress_handler(db,0,nil,nil); sqlite3_close_v2(db); db = nil
             throw error
         }
     }
     deinit {
-        sqlite3_finalize(exact); sqlite3_finalize(normalized); sqlite3_close_v2(db)
+        sqlite3_finalize(exact); sqlite3_finalize(normalized); sqlite3_finalize(punctuationless)
+        qualityStatements.forEach { sqlite3_finalize($0) }; sqlite3_close_v2(db)
     }
     private func prepare(_ sql: String) throws -> OpaquePointer {
         var statement: OpaquePointer?
@@ -125,19 +147,25 @@ final class PackDatabase {
         guard value.withCString({ sqlite3_bind_text(statement,column,$0,-1,unsafeBitCast(-1,to:sqlite3_destructor_type.self)) }) == SQLITE_OK else { throw PackFailure.damaged }
     }
     private func validateSchema() throws {
+        let version = try prepare("PRAGMA user_version"); defer { sqlite3_finalize(version) }
+        guard sqlite3_step(version) == SQLITE_ROW else { throw PackFailure.damaged }
+        schemaVersion = Int(sqlite3_column_int(version,0))
+        guard [1,2].contains(schemaVersion) else { throw PackFailure.unsupported }
+        var tables = ["entries":schemaVersion == 1 ? Self.table : Self.tableV2]
+        var indexes = Self.indexes
+        if schemaVersion == 2 { tables["quality_variants"] = Self.qualityTable; indexes.merge(Self.qualityIndexes) {_,b in b} }
         let statement = try prepare("SELECT type, name, sql FROM sqlite_master")
         defer { sqlite3_finalize(statement) }
         var found = Set<String>(), code = sqlite3_step(statement)
         while code == SQLITE_ROW {
             let type = try string(statement,0), name = try string(statement,1), sql = try string(statement,2)
-            guard (name == "entries" && type == "table" && sql == Self.table) || (type == "index" && Self.indexes[name] == sql), !found.contains(name) else { throw PackFailure.invalid }
+            guard (type == "table" && tables[name] == sql) || (type == "index" && indexes[name] == sql), !found.contains(name) else { throw PackFailure.invalid }
             found.insert(name); code = sqlite3_step(statement)
         }
-        guard code == SQLITE_DONE, found == Set(["entries"]+Array(Self.indexes.keys)) else { throw PackFailure.invalid }
-        let version = try prepare("PRAGMA user_version"); defer { sqlite3_finalize(version) }
-        guard sqlite3_step(version) == SQLITE_ROW, sqlite3_column_int(version,0) == 1 else { throw PackFailure.unsupported }
+        guard code == SQLITE_DONE, found == Set(Array(tables.keys)+Array(indexes.keys)) else { throw PackFailure.invalid }
     }
     func validateContents(manifest: PackManifest, check: @escaping () throws -> Void = {}) throws {
+        guard manifest.schemaVersion == schemaVersion else { throw PackFailure.invalid }
         progress.deadline = ProcessInfo.processInfo.systemUptime+60; progress.check = check
         defer { progress.check = nil }
         let integrity = try prepare("PRAGMA integrity_check(1)"); defer { sqlite3_finalize(integrity) }
@@ -167,12 +195,14 @@ final class PackDatabase {
         }
         try check()
         guard code == SQLITE_DONE, count == manifest.recordCount, usable == manifest.usableCount else { throw PackFailure.damaged }
+        if schemaVersion == 2 { try validateQuality(manifest:manifest,check:check) }
     }
-    private func query(_ statement: OpaquePointer, key: String, category: String, kind: PackMatch.Kind) throws -> PackMatch {
+    private func query(_ statement: OpaquePointer, key: String, category: String, kind: PackMatch.Kind, profile: Int = 0) throws -> PackMatch {
         sqlite3_reset(statement); sqlite3_clear_bindings(statement)
         defer { sqlite3_reset(statement); sqlite3_clear_bindings(statement) }
         try bind(key,statement,1); try bind(category,statement,2)
         try bind(category == "document" ? "menu" : category,statement,3)
+        if profile != 0 { guard sqlite3_bind_int(statement,4,Int32(profile)) == SQLITE_OK else { throw PackFailure.damaged } }
         var values = Set<String>(), count = 0, blocked = false, code = sqlite3_step(statement)
         while code == SQLITE_ROW {
             count += 1; values.insert(try string(statement,0)); blocked = blocked || sqlite3_column_int(statement,1) != 1
@@ -184,14 +214,58 @@ final class PackDatabase {
         if blocked { return PackMatch(text:nil,kind:.unsupported) }
         return PackMatch(text:values.first,kind:kind)
     }
-    func lookup(_ source: String, category: String) throws -> PackMatch {
+    func lookup(_ source: String, category: String, quality: PackQualityOptions = PackQualityOptions()) throws -> PackMatch {
         guard source.count <= 4096, !source.contains("\0"), PackManifest.categories.contains(category) else { return PackMatch(text:nil,kind:.unsupported) }
-        let key = category+"/"+source
+        let key = quality.key+"/"+category+"/"+source
         if let result = cache.get(key) { return result }
         progress.deadline = ProcessInfo.processInfo.systemUptime+0.05
-        var result = try query(exact!,key:source,category:category,kind:.exact)
-        if result.kind == .missing { result = try query(normalized!,key:PackLookupKey.normalized(source),category:category,kind:.normalized) }
+        let profile = schemaVersion == 2 ? quality.profile : 0
+        let exactStatement = profile == 0 ? exact! : qualityStatements[0]
+        let normalizedStatement = profile == 0 ? normalized! : qualityStatements[1]
+        var result = try query(exactStatement,key:source,category:category,kind:.exact,profile:profile)
+        if result.kind == .missing { result = try query(normalizedStatement,key:PackLookupKey.normalized(source),category:category,kind:.normalized,profile:profile) }
+        if result.kind == .missing, quality.punctuation, schemaVersion == 2 {
+            let punctuationKey = PackQualityPolicy.punctuationless(source)
+            if !punctuationKey.isEmpty { result = try query(profile == 0 ? punctuationless! : qualityStatements[2],key:punctuationKey,category:category,kind:.punctuationless,profile:profile) }
+        }
         cache.put(result,for:key); return result
+    }
+    /// Shared bounded stream for the writer and derived-content validation.
+    func forEachRawRow(check: @escaping () throws -> Void = {}, _ body: (Int64,PackRawRow,String?) throws -> Void) throws {
+        progress.deadline = ProcessInfo.processInfo.systemUptime+120; progress.check = check
+        defer { progress.check = nil }
+        let sql = "SELECT rowid, identifier, original_id, source, normalized, target, category, source_file, flags, usable"+(schemaVersion == 2 ? ", punctuationless" : "")+" FROM entries ORDER BY rowid"
+        let statement = try prepare(sql); defer { sqlite3_finalize(statement) }
+        var count = 0, code = sqlite3_step(statement)
+        while code == SQLITE_ROW {
+            if count % 256 == 0 { try check() }; count += 1
+            guard count <= 500000 else { throw PackFailure.size }
+            let row = PackRawRow(fields:try (1...8).map { try string(statement,Int32($0)) },usable:sqlite3_column_int(statement,9) == 1)
+            try body(sqlite3_column_int64(statement,0),row,schemaVersion == 2 ? try string(statement,10) : nil)
+            code = sqlite3_step(statement)
+        }
+        try check(); guard code == SQLITE_DONE else { throw PackFailure.damaged }
+    }
+    private func validateQuality(manifest: PackManifest, check: @escaping () throws -> Void) throws {
+        let statement = try prepare("SELECT entry_id, profile, source, normalized, target, flags, usable, punctuationless FROM quality_variants ORDER BY entry_id, profile")
+        defer { sqlite3_finalize(statement) }
+        var code = sqlite3_step(statement), count: Int64 = 0, totals = PackQualityAccumulator()
+        try forEachRawRow(check:check) { id,row,key in
+            count += 1
+            guard id == count, key == PackQualityPolicy.punctuationless(row.source) else { throw PackFailure.invalid }
+            let variants = row.variants
+            totals.observe(row,variants:variants)
+            for (profile,value) in variants {
+                guard code == SQLITE_ROW, sqlite3_column_type(statement,0) == SQLITE_INTEGER, sqlite3_column_int64(statement,0) == id,
+                      sqlite3_column_type(statement,1) == SQLITE_INTEGER, sqlite3_column_int(statement,1) == profile,
+                      try string(statement,2) == value.source, try string(statement,3) == PackLookupKey.normalized(value.source),
+                      try string(statement,4) == value.target, try string(statement,5) == value.flags,
+                      sqlite3_column_type(statement,6) == SQLITE_INTEGER, sqlite3_column_int(statement,6) == (value.usable ? 1 : 0),
+                      try string(statement,7) == PackQualityPolicy.punctuationless(value.source) else { throw PackFailure.invalid }
+                code = sqlite3_step(statement)
+            }
+        }
+        guard code == SQLITE_DONE, totals.summary == manifest.quality else { throw PackFailure.invalid }
     }
     func lookupIdentifier(_ identifier: String) throws -> [String] {
         progress.deadline = ProcessInfo.processInfo.systemUptime+0.05
