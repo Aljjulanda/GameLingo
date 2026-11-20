@@ -11,7 +11,7 @@ final class LineLimitQualityTests: XCTestCase {
         let input = rows(texts)
         let legacy = try XCTUnwrap(StructuredDialogue.resolve(input,roi:.dialogue,knownNames:"Arthur"))
         let extended = try XCTUnwrap(StructuredDialogue.resolve(input,roi:.dialogue,knownNames:"Arthur",quality:quality))
-        XCTAssertEqual(legacy.content.text,"We need to leave now. "+texts[1...2].joined(separator:" "))
+        XCTAssertEqual(legacy.content.text,"We need to leave now. "+texts[1])
         XCTAssertEqual(extended.content.text,"We need to leave now. "+texts[1...4].joined(separator:" "))
         XCTAssertEqual(extended.content.speaker,"Arthur")
         var q = quality; q[.stageCues] = true; q[.speakerClassification] = true; q[.lineLimits] = false

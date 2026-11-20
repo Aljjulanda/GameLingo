@@ -24,17 +24,37 @@ enum StructuredDialogue {
         guard lines.filter({menu.contains(DialogueText.normalized($0.text).lowercased())}).count < 2 else { return nil }
         let safe = lines.filter {
             let key = DialogueText.normalized($0.text).lowercased()
-            return $0.box.isValid && $0.confidence >= 0.2 && !key.isEmpty && !menu.contains(key) && !key.hasPrefix("press ") && !key.hasPrefix("hold ") && !key.hasPrefix("tap ")
+            let hud = quality[.lineLimits] && key.range(of:"^(hp|ammo|fps|xp|level)\\s*\\d",options:.regularExpression) != nil
+            return !hud && $0.box.isValid && $0.confidence >= 0.2 && !key.isEmpty && !menu.contains(key) && !key.hasPrefix("press ") && !key.hasPrefix("hold ") && !key.hasPrefix("tap ")
         }
         func group(_ anchor: OCRLine, excluding: OCRLine?) -> [OCRLine] {
-            safe.filter { line in
+            if quality[.lineLimits] {
+                // A five-line body extends beyond the first line's immediate
+                // neighbours. Grow only through the same adjacent-line geometry,
+                // bounded to the body cap and the existing dialogue region.
+                var connected = [anchor]
+                while connected.count < max(3,min(5,quality.anchoredLineCap)) {
+                    guard let next = safe.first(where:{ line in
+                        guard line != excluding, !connected.contains(line), !DialogueContent.isName(line.text,knownNames:knownNames,confidence:line.confidence,quality:quality) else { return false }
+                        return connected.contains { near in
+                            let b = line.box, a = near.box
+                            let gap = max(b.y-a.y-a.h,a.y-b.y-b.h,0)
+                            let overlap = min(b.x+b.w,a.x+a.w)-max(b.x,a.x)
+                            return abs(b.y-a.y)>min(a.h,b.h)*0.45 && gap <= 1.4*max(a.h,b.h) && overlap>min(a.w,b.w)*0.3
+                        } && union(connected+[line]).h <= 0.85*roi.h
+                    }) else { break }
+                    connected.append(next)
+                }
+                return connected.sorted{$0.box.y < $1.box.y}
+            }
+            return safe.filter { line in
                 if line == excluding { return false }
                 if line == anchor { return true }
                 let b = line.box, a = anchor.box
                 let gap = max(b.y-a.y-a.h,a.y-b.y-b.h,0)
                 let overlap = min(b.x+b.w,a.x+a.w)-max(b.x,a.x)
                 return abs(b.y-a.y)>min(a.h,b.h)*0.45 && gap <= 1.4*max(a.h,b.h) && overlap>min(a.w,b.w)*0.3 && !DialogueContent.isName(line.text,knownNames:knownNames,confidence:line.confidence,quality:quality)
-            }.sorted { $0.box.y < $1.box.y }.prefix(quality[.lineLimits] ? max(3,min(5,quality.anchoredLineCap)) : 3).map { $0 }
+            }.sorted { $0.box.y < $1.box.y }.prefix(3).map { $0 }
         }
         for line in safe {
             let parsed = DialogueContent.parse(line.text,knownNames:knownNames,confidence:line.confidence,quality:quality)
