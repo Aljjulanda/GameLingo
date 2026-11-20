@@ -17,7 +17,13 @@ final class LineLimitQualityTests: XCTestCase {
         var q = quality; q[.stageCues] = true; q[.speakerClassification] = true; q[.lineLimits] = false
         XCTAssertEqual(StructuredDialogue.resolve(input,roi:.dialogue,knownNames:"Arthur",quality:q)?.content.text,legacy.content.text)
         q[.lineLimits] = true; q.anchoredLineCap = 4
-        XCTAssertFalse(StructuredDialogue.resolve(input,roi:.dialogue,knownNames:"Arthur",quality:q)!.content.text.contains(texts[4]))
+        XCTAssertEqual(StructuredDialogue.resolve(input,roi:.dialogue,knownNames:"Arthur",quality:q)?.content.text,"We need to leave now. "+texts[1...3].joined(separator:" "))
+    }
+    func testExpandedAnchoredBodyExcludesCountersAndMenuScreen() throws {
+        let input = rows(["Arthur: We need to leave now.","HP 100","The guards are on their way.","Take the money and follow me.","We will meet at the bridge."])
+        let result = try XCTUnwrap(StructuredDialogue.resolve(input,roi:.dialogue,knownNames:"Arthur",quality:quality))
+        XCTAssertFalse(result.content.text.contains("HP 100"))
+        XCTAssertNil(StructuredDialogue.resolve(rows(["Settings","Options","Arthur","Audio","Controls"]),roi:.dialogue,knownNames:"Arthur",quality:quality))
     }
     func testSixFallbackLinesNeedSpatialSentenceAndTemporalEvidence() {
         let input = rows(["We need to leave this place.","Right now.","Come on.","Stay close.","This way.","Let's go."])
