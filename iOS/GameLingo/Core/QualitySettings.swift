@@ -36,6 +36,7 @@ struct QualitySettings: Equatable {
     private var enabled = Set<QualityFlag>()
     var noHitThreshold = 20
     var settleSeconds = 3.0
+    var anchoredLineCap = 5, fallbackLineCap = 6
     var nameHeightRatio = 1.4, nameGapRatio = 2.0, nameOverlap = 0.15
     var nameLeftOffset = 0.18
     var colonNameThreshold = 1, otherNameThreshold = 2
@@ -49,6 +50,8 @@ struct QualitySettings: Equatable {
         for flag in QualityFlag.allCases { value[flag] = defaults.bool(forKey:"quality."+flag.rawValue) }
         if let n = defaults.object(forKey:"quality.noHitThreshold") as? Int { value.noHitThreshold = max(1,min(1000,n)) }
         if defaults.object(forKey:"quality.settleSeconds") != nil { value.settleSeconds = max(0,min(3,defaults.double(forKey:"quality.settleSeconds"))) }
+        if let n = defaults.object(forKey:"quality.anchoredLineCap") as? Int { value.anchoredLineCap = max(3,min(5,n)) }
+        if let n = defaults.object(forKey:"quality.fallbackLineCap") as? Int { value.fallbackLineCap = max(4,min(6,n)) }
         func bounded(_ key: String, _ fallback: Double, _ range: ClosedRange<Double>) -> Double {
             guard defaults.object(forKey:key) != nil else { return fallback }
             let n = defaults.double(forKey:key)
@@ -66,6 +69,7 @@ struct QualitySettings: Equatable {
         for flag in QualityFlag.allCases { defaults.set(self[flag],forKey:"quality."+flag.rawValue) }
         defaults.set(noHitThreshold,forKey:"quality.noHitThreshold")
         defaults.set(settleSeconds,forKey:"quality.settleSeconds")
+        defaults.set(anchoredLineCap,forKey:"quality.anchoredLineCap"); defaults.set(fallbackLineCap,forKey:"quality.fallbackLineCap")
         defaults.set(nameHeightRatio,forKey:"quality.nameHeightRatio"); defaults.set(nameGapRatio,forKey:"quality.nameGapRatio")
         defaults.set(nameOverlap,forKey:"quality.nameOverlap"); defaults.set(nameLeftOffset,forKey:"quality.nameLeftOffset")
         defaults.set(colonNameThreshold,forKey:"quality.colonNameThreshold"); defaults.set(otherNameThreshold,forKey:"quality.otherNameThreshold")

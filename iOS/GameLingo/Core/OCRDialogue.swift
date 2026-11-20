@@ -34,7 +34,7 @@ enum StructuredDialogue {
                 let gap = max(b.y-a.y-a.h,a.y-b.y-b.h,0)
                 let overlap = min(b.x+b.w,a.x+a.w)-max(b.x,a.x)
                 return abs(b.y-a.y)>min(a.h,b.h)*0.45 && gap <= 1.4*max(a.h,b.h) && overlap>min(a.w,b.w)*0.3 && !DialogueContent.isName(line.text,knownNames:knownNames,confidence:line.confidence,quality:quality)
-            }.sorted { $0.box.y < $1.box.y }.prefix(3).map { $0 }
+            }.sorted { $0.box.y < $1.box.y }.prefix(quality[.lineLimits] ? max(3,min(5,quality.anchoredLineCap)) : 3).map { $0 }
         }
         for line in safe {
             let parsed = DialogueContent.parse(line.text,knownNames:knownNames,confidence:line.confidence,quality:quality)
@@ -82,18 +82,19 @@ enum StructuredDialogue {
 struct DialogueSelection {
     private var previousSignature: [String] = []
     /// Port the desktop's structural gate; this is not semantic game/menu classification.
-    mutating func select(_ lines: [OCRLine], roi: SourceBox) -> [OCRLine] {
+    mutating func select(_ lines: [OCRLine], roi: SourceBox, quality: QualitySettings = QualitySettings()) -> [OCRLine] {
         let menus: Set<String> = ["settings","options","inventory","resume","resume game","load game","save game","new game","quit","quit game","main menu","graphics","audio","controls","objectives","equipment","skills","map"]
         let context: Set<String> = ["search","interact","pick up","open","talk","examine","use","climb"]
         func term(_ text: String) -> String { DialogueText.matches(text.lowercased(),"[\\p{L}\\p{N}_]+").joined(separator:" ") }
-        guard lines.count < 5, lines.filter({ menus.contains(term($0.text)) }).count < 2 else { previousSignature = []; return [] }
+        let cap = quality[.lineLimits] ? max(4,min(6,quality.fallbackLineCap)) : 4
+        guard lines.count <= cap, lines.filter({ menus.contains(term($0.text)) }).count < 2 else { previousSignature = []; return [] }
         let candidates = lines.filter { line in
             let key = term(line.text), center = (line.box.x+line.box.w/2-roi.x)/roi.w
             return !menus.contains(key) && !context.contains(key) && !key.hasPrefix("press ") && !key.hasPrefix("hold ") && !key.hasPrefix("tap ") && key.range(of:"^(hp|ammo|fps|xp|level)\\s*\\d",options:.regularExpression) == nil && (0.12...0.88).contains(center) && (0.018...0.55).contains(line.box.h/roi.h) && line.text.filter(\.isLetter).count >= 2
         }
         guard let anchor = candidates.min(by:{ abs($0.box.x+$0.box.w/2-0.5) < abs($1.box.x+$1.box.w/2-0.5) }) else { previousSignature = []; return [] }
         var group = [anchor]
-        for line in candidates.sorted(by:{ abs($0.box.y-anchor.box.y) < abs($1.box.y-anchor.box.y) }) where group.count < 4 {
+        for line in candidates.sorted(by:{ abs($0.box.y-anchor.box.y) < abs($1.box.y-anchor.box.y) }) where group.count < cap {
             if line.box == anchor.box { continue }
             if group.contains(where: { near in
                 let gap = max(line.box.y-near.box.y-near.box.h,near.box.y-line.box.y-line.box.h,0)
@@ -105,7 +106,17 @@ struct DialogueSelection {
         }
         let signature = DialogueText.words(group.map(\.text).joined(separator:" "))
         let reliable = group.allSatisfy { abs(($0.box.x+$0.box.w/2-roi.x)/roi.w-0.5) <= 0.22 }
-        let accepted = reliable || signature == previousSignature
+        var accepted = reliable || signature == previousSignature
+        if quality[.lineLimits], group.count > 4 {
+            // New unanchored 5/6-line regions need BOTH compact dialogue layout
+            // and a repeated real OCR observation. Short lines alone never mean
+            // menu; they remain eligible with a genuine sentence anchor. The
+            // pre-existing menu/HUD filters above are retained.
+            let bounds = StructuredDialogue.union(group)
+            let sentence = group.contains { DialogueText.words($0.text).count >= 5 }
+            let compact = bounds.h <= 0.85*roi.h && group.count == candidates.count
+            accepted = reliable && compact && sentence && signature == previousSignature
+        }
         previousSignature = signature
         return accepted ? group.sorted(by:{ $0.box.y < $1.box.y }) : []
     }
@@ -124,7 +135,7 @@ enum DialogueObservation {
         if let reading = StructuredDialogue.resolve(lines,roi:roi,knownNames:knownNames,quality:quality) {
             return PostOCRReading(content:reading.content,rawText:reading.content.text,box:reading.box,confidence:reading.confidence,separateSpeakerLabel:reading.content.speaker != nil)
         }
-        let selected = selector.select(lines,roi:roi)
+        let selected = selector.select(lines,roi:roi,quality:quality)
         let confidence = selected.map(\.confidence).min() ?? 0
         let ordered = selected.sorted { $0.box.y < $1.box.y }
         let separate = ordered.count >= 2 && ordered[0].box.w < ordered[1].box.w*0.5 && ordered[0].box.h <= ordered[1].box.h*1.1
