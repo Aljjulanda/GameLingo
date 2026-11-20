@@ -324,7 +324,9 @@ final class AppleIntegrationTests: XCTestCase {
         DispatchQueue.main.asyncAfter(deadline:.now()+0.4) { ready.fulfill() }
         wait(for:[ready],timeout:2)
         try store.save(source:"Please wait here",target:"ابق هنا")
-        pipeline.configureCorrections(store.snapshot)
+        let applied = expectation(description:"Explicit correction applied on the actual OCR queue")
+        pipeline.configureCorrections(store.snapshot,completion:{ applied.fulfill() })
+        wait(for:[applied],timeout:5)
         pipeline.offer(pixels)
         wait(for:[shown],timeout:15); pipeline.stop()
     }

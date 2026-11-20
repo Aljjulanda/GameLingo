@@ -60,7 +60,7 @@ final class FramePipeline {
     private var advancedEpoch: UInt64 = 0
     private var translationsContextKey = ""
     private var outputContextKey: String { namesCacheKey+"|"+corrections.outputKey+"|"+quality.outputKey+"|\(advancedEpoch)|"+(translator.packs?.outputKey ?? "") }
-    func configureCorrections(_ snapshot: CorrectionsSnapshot, recentToken: UUID? = nil) { queue.async {
+    func configureCorrections(_ snapshot: CorrectionsSnapshot, recentToken: UUID? = nil, completion: (() -> Void)? = nil) { queue.async {
         if let recentToken { self.recentToken = recentToken }
         let sameScope = self.correctionSnapshot.scopeKey == snapshot.scopeKey
         let oldKey = self.corrections.outputKey
@@ -69,6 +69,7 @@ final class FramePipeline {
         if self.corrections.outputKey != context.outputKey { self.translations = BoundedLRU(capacity:8) }
         self.corrections = context; self.translator.configureCorrections(snapshot,enabled:self.quality[.corrections])
         if oldKey != context.outputKey { self.retryHeldPublication(sameScope:sameScope) }
+        completion?()
     } }
     func configureNames(_ store: GameNamesStore?, snapshot: GameNamesSnapshot) { queue.async {
         let changed = self.namesCacheKey != snapshot.outputKey, sameScope = self.namesSnapshot.scopeKey == snapshot.scopeKey
