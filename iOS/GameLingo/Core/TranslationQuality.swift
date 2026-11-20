@@ -35,7 +35,8 @@ enum SourceGuidedPunctuation {
         let sourceTail = terminalRun(source)
         let question = sourceTail.contains("?") || sourceTail.contains("؟")
         var repairs = 0
-        if !sourceTail.isEmpty, terminalRun(body).isEmpty, let first = body.first, terminals.contains(first) {
+        let quoted = body.contains(where:{quotes.contains($0)})
+        if !quoted, !sourceTail.isEmpty, terminalRun(body).isEmpty, let first = body.first, terminals.contains(first) {
             let prefix = first == "." ? String(body.prefix(while:{$0 == "."})) : String(first)
             let rest = String(body.dropFirst(prefix.count)).trimmingCharacters(in:.whitespacesAndNewlines)
             // A decimal (.5) or mixed-script identifier (.NET) is not a
@@ -44,10 +45,10 @@ enum SourceGuidedPunctuation {
                 body = rest+prefix; repairs += 1
             }
         }
-        if question && body.last == "?" { body.removeLast(); body.append("؟"); repairs += 1 }
+        if !quoted, question && body.last == "?" { body.removeLast(); body.append("؟"); repairs += 1 }
         // Only one witnessed pair, outside quotations. More complex or
         // unbalanced strings stay unchanged and are reported, never guessed.
-        if !body.contains(where:{quotes.contains($0)}), body.contains(where:arabicLetter),
+        if !quoted, body.contains(where:arabicLetter), !body.contains(where:{$0.isASCII && $0.isLetter}),
            source.filter({bracketMarks.contains($0)}).count == 2,
            body.filter({bracketMarks.contains($0)}).count == 2 {
             let pairs: [(Character,Character)] = [("(",")"),("[","]")]

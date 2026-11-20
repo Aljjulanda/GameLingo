@@ -41,6 +41,7 @@ struct TranslationDecision {
     // Present only for opt-in capture/trace; stripped before the RAM reuse cache.
     var engineInput: String? = nil
     var rawOutput: String? = nil
+    var punctuationUnbalanced = false
     var withoutEngineTrace: Self { var copy = self; copy.engineInput = nil; copy.rawOutput = nil; return copy }
 }
 struct PackLookupOutcome {

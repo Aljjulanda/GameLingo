@@ -81,7 +81,9 @@ final class OfflineTranslator {
                 let lookup = corrected != nil ? PackLookupOutcome(game:selected?.game,pack:selected?.pack) : packs?.lookupDetailed(text,category:category,eventID:eventID) ?? PackLookupOutcome(fallback:.noDatabase)
                 let fallback = category == "dialogue" ? lookup.fallback : TranslationFallback.notDialogue
                 func decision(_ value: String, _ origin: TranslationOrigin) -> TranslationDecision {
-                    TranslationDecision(text:value,origin:origin,fallback:(origin == .argosInference || origin == .argosCache) ? fallback : nil,game:lookup.game,pack:lookup.pack)
+                    var chosen = TranslationDecision(text:value,origin:origin,fallback:(origin == .argosInference || origin == .argosCache) ? fallback : nil,game:lookup.game,pack:lookup.pack)
+                    if quality[.punctuationTrace] || quality[.punctuationRepair] { chosen.punctuationUnbalanced = SourceGuidedPunctuation.unbalanced(value) }
+                    return chosen
                 }
                 if let corrected {
                     packs?.recordAttempt(.userCorrection,game:lookup.game,pack:lookup.pack)
@@ -105,8 +107,7 @@ final class OfflineTranslator {
                     lock.unlock()
                     guard isCurrent(generation) else { throw CancellationError() }
                     guard let current else { throw LingoError.invalid("نموذج الترجمة غير جاهز") }
-                    let command = DialogueCommands.key(normalized)
-                    let commands = DialogueCommands.legacy
+                    let command = DialogueCommands.value(normalized,sourcePunctuation:quality[.commandPunctuation])
                     var error: NSError?
                     var engineInput: String?, rawOutput: String?
                     func infer(_ input: String) throws -> String {
@@ -114,9 +115,12 @@ final class OfflineTranslator {
                         if engineDiagnostics { engineInput = input; rawOutput = output }
                         return output
                     }
-                    let value = try commands[command] ?? infer(normalized)
+                    let raw = try command ?? infer(normalized)
+                    // Pack entries, explicit corrections and command-map output
+                    // retain their own authority. Only model output is repaired.
+                    let value = command == nil ? SourceGuidedPunctuation.repair(raw,source:normalized,enabled:quality[.punctuationRepair]).text : raw
                     cache.put(value,for:key)
-                    var chosen = decision(value,commands[command] == nil ? .argosInference : .command)
+                    var chosen = decision(value,command == nil ? .argosInference : .command)
                     chosen.engineInput = engineInput; chosen.rawOutput = rawOutput; result = .success(chosen)
                 }
             } catch { result = .failure(isCurrent(generation) ? error : CancellationError()) }

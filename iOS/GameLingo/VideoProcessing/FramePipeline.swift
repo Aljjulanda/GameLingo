@@ -335,7 +335,7 @@ final class FramePipeline {
                                 self.translator.packs?.recordPublished(PublishedTranslation(eventID:delivered.id,game:decision.game,pack:decision.pack,origin:decision.origin,fallback:decision.fallback,basis:decision.basis))
                             }
                             if self.quality[.punctuationTrace] {
-                                self.metrics.punctuationTrace = punctuationTrace + " | input " + SubtitlePresentation.punctuation(decision.engineInput ?? engineInput) + " | raw " + SubtitlePresentation.punctuation(decision.rawOutput ?? text) + " | repair " + SubtitlePresentation.punctuation(text) + " | wire " + SubtitlePresentation.punctuation(message["translated"] as? String ?? "")
+                                self.metrics.punctuationTrace = punctuationTrace + " | input " + SubtitlePresentation.punctuation(decision.engineInput ?? engineInput) + " | raw " + SubtitlePresentation.punctuation(decision.rawOutput ?? text) + " | repair " + SubtitlePresentation.punctuation(text) + " | unbalanced " + String(decision.punctuationUnbalanced) + " | wire " + SubtitlePresentation.punctuation(message["translated"] as? String ?? "")
                             }
                             if self.capture.active {
                                 do { try self.capture.append(QualityCaptureRecord(eventID:delivered.id,lines:captureLines,parsed:job.text,engineInput:decision.engineInput ?? engineInput,engineOutput:decision.rawOutput ?? text,origin:decision.origin,stage:.published,timestamp:self.capture.elapsed,segments:captureSegments,basis:decision.basis,finalOutput:text)) }

@@ -34,10 +34,9 @@ final class TranslationQualityTests: XCTestCase {
         XCTAssertTrue(SourceGuidedPunctuation.repair("افتح ]الباب",source:"Open [the door].").unbalanced)
     }
     func testNumericAndMixedScriptIdentifiersAndCorrectQuotedTextArePreserved() {
-        for text in [".5", ".NET يعمل", "Arthur (آرثر) قال: \"نعم!\"", "القيمة -5.2.", "هل قال \"لا؟\""] {
+        for text in [".5", ".NET يعمل", "Arthur (آرثر) قال: \"نعم!\"", "القيمة -5.2.", "هل قال \"لا؟\"", ")Arthur العزيز(", ". قال \"مرحبًا\"", "قال \"نعم\"?"] {
             XCTAssertEqual(SourceGuidedPunctuation.repair(text,source:"The result (value)?").text,text)
         }
-        XCTAssertEqual(SourceGuidedPunctuation.repair(")Arthur العزيز(",source:"(Arthur, my friend)").text,"(Arthur العزيز)")
     }
     func testCommandPunctuationFollowsSourceWithoutChangingLegacyRecognition() {
         for (source,target) in [("Go","انطلق"),("Go!","انطلق!"),("Run.","اركض."),("Wait?","انتظر؟"),("No...","لا...")] {
