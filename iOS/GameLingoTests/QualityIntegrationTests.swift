@@ -34,6 +34,7 @@ final class QualityIntegrationTests: XCTestCase {
         XCTAssertEqual(repaired.origin,.argosInference)
         let cached = try await translate(translator,source)
         XCTAssertEqual(cached.text,repaired.text); XCTAssertEqual(cached.origin,.argosCache)
+        XCTAssertNil(cached.engineInput); XCTAssertNil(cached.rawOutput,"A repaired cache value is not a fresh raw model output")
         quality[.punctuationRepair] = false; translator.configureQuality(quality)
         let rollback = try await translate(translator,source)
         XCTAssertEqual(rollback.origin,.argosInference); XCTAssertEqual(rollback.text,raw)
