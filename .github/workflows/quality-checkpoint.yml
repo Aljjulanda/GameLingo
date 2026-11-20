@@ -23,6 +23,7 @@ jobs:
           python3 iOS/Scripts/validate-source.py
           python3 iOS/Scripts/test-build-tools.py
           python3 iOS/Scripts/test-test-orchestration.py
+          python3 iOS/Scripts/test-preview-gates.py
           python3 tools/pack_converter/test_converter.py
           swift --version
           find iOS/GameLingo -name '*.swift' -print0 | xargs -0 swiftc -frontend -parse

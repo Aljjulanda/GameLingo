@@ -44,6 +44,10 @@ TEST_COMMAND=(xcodebuild test-without-building -project GameLingo.xcodeproj -sch
   -destination "$DESTINATION" -derivedDataPath build/DerivedData
   -resultBundlePath build/GameLingoTests.xcresult
   CODE_SIGN_ENTITLEMENTS='' ARCHS="$ARCH" ONLY_ACTIVE_ARCH=YES)
+if [[ "${IOS_PREVIEW:-0}" == 1 ]]; then
+  IOS_TEST_FILTERS="$(python3 Scripts/preview-tests.py filters)"
+  export IOS_TEST_FILTERS
+fi
 FILTER_COUNT=0
 if [[ -n "${IOS_TEST_FILTERS:-}" ]]; then
   while IFS= read -r filter; do
@@ -58,3 +62,7 @@ fi
 "${TEST_COMMAND[@]}" 2>&1 | tee build/logs/apple-tests.log
 test -d build/GameLingoTests.xcresult || { echo 'Missing native XCTest result bundle'; exit 1; }
 grep -Eq 'Executed [1-9][0-9]* tests?' build/logs/apple-tests.log || { echo 'No native XCTest cases executed'; exit 1; }
+
+if [[ "${IOS_PREVIEW:-0}" == 1 ]]; then
+  python3 Scripts/preview-tests.py verify build/logs/apple-tests.log
+fi

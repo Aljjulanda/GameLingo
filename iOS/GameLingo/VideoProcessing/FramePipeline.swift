@@ -42,10 +42,13 @@ final class FramePipeline {
     private var tracker = DialogueTracker()
     private var advanced = AdvancedSettings()
     private var quality = QualitySettings()
+    // Deferred research is compile-time excluded from this production preview.
+#if GAMELINGO_TYPEWRITER_RESEARCH
     private var typewriter = TypewriterPublication()
     private var typewriterScope: String?
     private var heldPublication: (job:DialogueJob,deliver:()->Void)?
     var onTypewriterDetected: ((String) -> Void)?
+#endif
     private var namesStore: GameNamesStore?
     private var namesSnapshot = GameNamesSnapshot(game:"general")
     private var namesWords = ""
@@ -68,15 +71,20 @@ final class FramePipeline {
         let context = CorrectionContext(snapshot,enabled:self.quality[.corrections])
         if self.corrections.outputKey != context.outputKey { self.translations = BoundedLRU(capacity:8) }
         self.corrections = context; self.translator.configureCorrections(snapshot,enabled:self.quality[.corrections])
+#if GAMELINGO_TYPEWRITER_RESEARCH
         if oldKey != context.outputKey { self.retryHeldPublication(sameScope:sameScope) }
+#endif
         completion?()
     } }
     func configureNames(_ store: GameNamesStore?, snapshot: GameNamesSnapshot) { queue.async {
         let changed = self.namesCacheKey != snapshot.outputKey, sameScope = self.namesSnapshot.scopeKey == snapshot.scopeKey
         self.namesStore = store
         self.applyNames(snapshot)
+#if GAMELINGO_TYPEWRITER_RESEARCH
         if changed { self.retryHeldPublication(sameScope:sameScope) }
+#endif
     } }
+#if GAMELINGO_TYPEWRITER_RESEARCH
     private func retryHeldPublication(sameScope: Bool) {
         guard let held = heldPublication else { return }
         heldPublication = nil
@@ -85,6 +93,7 @@ final class FramePipeline {
             submit()
         }
     }
+#endif
     private func applyNames(_ snapshot: GameNamesSnapshot) {
         if !namesConfigured || namesSnapshot.outputKey != snapshot.outputKey {
             let effective = snapshot.effective(packLabels:quality[.packLabels])
@@ -103,7 +112,9 @@ final class FramePipeline {
     func configureQuality(_ value: QualitySettings) { queue.async {
         let outputChanged = self.quality.outputKey != value.outputKey
         if outputChanged { self.translations = BoundedLRU(capacity:8) }
+#if GAMELINGO_TYPEWRITER_RESEARCH
         if self.quality[.typewriter] != value[.typewriter] { self.typewriter = TypewriterPublication(); self.typewriterScope = nil }
+#endif
         if self.quality[.packLabels] != value[.packLabels] { self.namesConfigured = false }
         self.quality = value; self.ocr.quality = value; self.ocr.qualityTrace = value[.punctuationTrace]
         self.corrections = CorrectionContext(self.correctionSnapshot,enabled:value[.corrections])
@@ -112,8 +123,10 @@ final class FramePipeline {
         self.translator.configureQuality(value)
         self.translator.packs?.configureQuality(PackQualityOptions(value))
         self.translator.configureEngineDiagnostics(value[.punctuationTrace] || self.capture.active)
+#if GAMELINGO_TYPEWRITER_RESEARCH
         if outputChanged { self.retryHeldPublication(sameScope:true) }
         else if value.settleSeconds == 0, let held = self.heldPublication { self.heldPublication = nil; held.deliver() }
+#endif
         if !value[.sessionCapture] { self.capture.stop(); self.ocr.captureLines = false; self.reportCapture() }
     } }
     func captureAction(start: Bool = false, delete: Bool = false) {
@@ -192,14 +205,18 @@ final class FramePipeline {
     func configurePackNames(_ names: String) { queue.async { self.packSpeakerNames = String(names.prefix(2000)) } }
     func interrupt() { translator.cancel(); queue.async { [self] in
         finishReading()
+#if GAMELINGO_TYPEWRITER_RESEARCH
         heldPublication = nil; typewriter = TypewriterPublication(); typewriterScope = nil
+#endif
         runID = UUID(); tracker.markInterrupted(); pending = nil; publish(TVProtocol.envelope("subtitle_clear"))
         slotLock.lock(); latest = nil; slotLock.unlock()
     } }
     /// Called from the hub queue; inference never synchronously waits on that queue.
     func tvDisconnected() { translator.cancel(); queue.sync { [self] in
         finishReading(message:"انقطع اتصال التلفزيون أثناء القراءة")
+#if GAMELINGO_TYPEWRITER_RESEARCH
         heldPublication = nil; typewriter = TypewriterPublication(); typewriterScope = nil
+#endif
         // Keep the observed dialogue identity so reconnecting does not retranslate/replay it.
         // Invalidate all in-flight publications and discard pending work.
         runID = UUID(); pending = nil
@@ -221,7 +238,9 @@ final class FramePipeline {
     }
     private func reset(preservingState: Bool = false) {
         finishReading()
+#if GAMELINGO_TYPEWRITER_RESEARCH
         heldPublication = nil; typewriter = TypewriterPublication(); typewriterScope = nil
+#endif
         timer?.cancel(); timer = nil; runID = UUID(); pending = nil; pendingCapture = []; pendingSegments = []; ocr = VisionDialogueOCR(); ocr.setBackground(isBackground); ocr.qualityTrace = quality[.punctuationTrace]; ocr.captureLines = capture.active; signature = FrameSignature()
         ocr.quality = quality
         if preservingState { tracker.markInterrupted(); memory.prune(now:ProcessInfo.processInfo.systemUptime) }
@@ -261,7 +280,11 @@ final class FramePipeline {
         let changed = signature.shouldRecognize(buffer,roi:roi,now:now,hasText:tracker.current != nil)
         // Confirmation is a real OCR read of a fresh offered frame, through the
         // unchanged sampling pacer above. A bitmap hash never counts as a read.
+#if GAMELINGO_TYPEWRITER_RESEARCH
         guard changed || (quality[.typewriter] && typewriter.needsConfirmation) else { return }
+#else
+        guard changed else { return }
+#endif
         do {
             let names = advanced.speakerNames+","+packSpeakerNames
             let storedNames = quality[.learnNames] ? speakerWords : ""
@@ -285,6 +308,7 @@ final class FramePipeline {
             metrics.ocrMilliseconds = (ProcessInfo.processInfo.systemUptime-now)*1000
             ocrSamples.record(metrics.ocrMilliseconds); metrics.ocrP95 = ocrSamples.p95
             metrics.contextEntries = memory.entries.count
+#if GAMELINGO_TYPEWRITER_RESEARCH
             if quality[.typewriter] {
                 let selectedGame: String?
                 if let packs = translator.packs { selectedGame = packs.publication("",origin:.rule).game }
@@ -304,6 +328,7 @@ final class FramePipeline {
                     DispatchQueue.main.async { self.onTypewriterDetected?(selectedGame) }
                 }
             }
+#endif
             switch tracker.observe(text:content.text,box:box,now:now,frameMilliseconds:stamp,speaker:content.speaker,confidence:ocr.confidence) {
             case .unchanged: break
             case .gone(let id):
@@ -324,7 +349,9 @@ final class FramePipeline {
                 pendingSegments = capture.active ? ocr.lastSegments.map{ CaptureLine(text:$0.text,box:$0.box,confidence:$0.confidence) } : []
                 pending = job; lastTextChange = now; submit()
             }
+#if GAMELINGO_TYPEWRITER_RESEARCH
             if let held = heldPublication, tracker.current?.id != held.job.id { heldPublication = nil }
+#endif
             metrics.duplicatesSuppressed = tracker.duplicatesSuppressed
             metrics.correctionsMerged = tracker.correctionsMerged
             metrics.frameMilliseconds = (ProcessInfo.processInfo.systemUptime-received)*1000
@@ -409,9 +436,13 @@ final class FramePipeline {
                     case .failure(let error): if !(error is CancellationError) { DispatchQueue.main.async { self.onError?(error.localizedDescription) } }
                     }
                     }
+#if GAMELINGO_TYPEWRITER_RESEARCH
                     if case .success = result, !self.typewriter.canPublish(job) {
                         self.heldPublication = (job,{ deliver(true) })
                     } else { deliver(false) }
+#else
+                    deliver(false)
+#endif
                 }
                 self.submit()
             }
@@ -426,7 +457,9 @@ final class FramePipeline {
         translator.cancel()
         queue.async { [self] in
             runID = UUID(); pending = nil; tracker.markInterrupted(); reading = true; captureRequested = true; readingTicket = ticket
+#if GAMELINGO_TYPEWRITER_RESEARCH
             heldPublication = nil; typewriter = TypewriterPublication(); typewriterScope = nil
+#endif
             documentStarted = ProcessInfo.processInfo.systemUptime; documentResident = ResourceMonitor.residentBytes()
             metrics.documentMilliseconds = 0; metrics.documentTranslationMilliseconds = 0; metrics.documentOCRMilliseconds = 0
             metrics.documentCompleted = 0; metrics.documentTotal = 0; metrics.documentExtraMegabytes = 0

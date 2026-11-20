@@ -7,20 +7,13 @@ struct QualitySettingsSection: View {
         Section("إصلاحات الجودة") {
             // Show only implemented units. Later units add their flags here
             // after their tests pass; the storage enum alone is not a feature.
-            ForEach([QualityFlag.measurement,.provenanceMarker,.punctuationTrace,.sessionCapture,.stageCues,.speakerClassification,.speakerGeometry,.visionNames,.learnNames,.corrections,.packMarkup,.packPunctuation,.packLabels,.punctuationRepair,.commandPunctuation,.typewriter,.lineLimits,.arabicParagraphDirection],id:\.rawValue) { flag in
+            ForEach([QualityFlag.measurement,.provenanceMarker,.punctuationTrace,.sessionCapture,.stageCues,.speakerClassification,.speakerGeometry,.visionNames,.learnNames,.corrections,.packMarkup,.packPunctuation,.packLabels,.punctuationRepair,.commandPunctuation,.lineLimits,.arabicParagraphDirection],id:\.rawValue) { flag in
                 Toggle(flag.title,isOn:Binding(get:{model.quality[flag]},set:{model.quality[flag] = $0}))
             }
             NavigationLink("أسماء اللعبة") { GameNamesView(library:model.namesLibrary) }
             NavigationLink("تصحيحاتي · الحوارات الأخيرة") { CorrectionsView(library:model.correctionsLibrary) }
             DisclosureGroup("متقدم") {
                 Stepper("تنبيه غياب المطابقة: \(model.quality.noHitThreshold) حوار",value:$model.quality.noHitThreshold,in:1...1000)
-                Stepper("نافذة اكتشاف النص المتدرج: \(model.quality.typewriterWindow) قراءات",value:$model.quality.typewriterWindow,in:3...20)
-                    .disabled(!model.quality[.typewriter])
-                Stepper("أقصى انتظار للاستقرار: \(model.quality.settleSeconds,specifier:"%.2f") ثانية",value:$model.quality.settleSeconds,in:0...3,step:0.25)
-                    .disabled(!model.quality[.typewriter])
-                if model.quality[.typewriter] {
-                    Text("لا يبدأ الانتظار إلا بعد اكتشاف نمو النص؛ يُحفظ النمط للعبة المختارة. دون اختيار لعبة يبقى الاكتشاف لهذه الجلسة. المدة صفر تعيد النشر المباشر.").font(.footnote)
-                }
                 Stepper("ارتفاع الاسم: \(model.quality.nameHeightRatio,specifier:"%.2f")",value:$model.quality.nameHeightRatio,in:0.8...2,step:0.1)
                 Stepper("فجوة الاسم: \(model.quality.nameGapRatio,specifier:"%.2f")",value:$model.quality.nameGapRatio,in:0.5...3,step:0.1)
                 Stepper("تداخل الاسم: \(model.quality.nameOverlap,specifier:"%.2f")",value:$model.quality.nameOverlap,in:0...0.75,step:0.05)
