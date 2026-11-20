@@ -518,3 +518,27 @@ runtime gate remains blocked. E/F/H/I remain unfinished; full batch NOT ready.
 Original-key TV APK remains locally ready with40 tests passed, source99da49a.
 No Release published, old Release untouched. Manual Arabic build guide added;
 use Run workflow on quality branch for fixes, not Re-run jobs on an older SHA.
+
+### Native runtime checkpoint verified on20 November from full run44031605630
+
+The17 November ARM full run on d1ac56d actually executed47 native XCTest cases:
+45passed,2 capability skips,0failures. Actual apple-tests.log42,809bytes and
+GameLingoTests.xcresult are present in artifact14306256835. Downloaded validation
+ZIP125,689,999bytes SHA256d728176130860f3ca23016e9f76d833d11cb2b41b4997dd09f575ab8167c4209.
+The2skips are names/capture protection metadata unavailable in both Simulator and
+direct Foundation controls; physical file protection remains unverified.
+All22 AppleIntegration,3 Corrections,14 Pack cases passed; Names3pass1skip,
+Quality3pass1skip. In particular all7 B/C/D Vision/pipeline cases passed using NV12,
+including old above/both-sides/wrapped tests. Real model/cache/scope/correction
+precedence cases passed. No Metal crash in this ARM run. B/C/D runtime gate is
+resolved for this source, subject to final regression of subsequent changes.
+
+Whole workflow still FAILED: picker UI1pass1failure. Actual native picker selected
+exe/zip/glpack/rar/7z with delegate-verified names, then XML thumbnail tap at
+(70.41,417.92)pt left the provider unchanged. Pre-tap and teardown screenshots
+visually confirm the correct XML thumbnail and unchanged Files grid; the sandbox
+test passed. This is observed interaction failure, not proof XML cannot import.
+Test now tries the visible filename caption once IF provider remains visible,
+then still requires exact delegate filename, completed inspection and all12
+extensions plus cancellation. No app/importer behavior or assertions removed.
+Full rerun required. No IPA uploaded by corrected workflow; no Release published.

@@ -78,7 +78,7 @@ final class LocalizationPickerUITests: XCTestCase {
         }
         XCTFail("Native provider did not render its folder header")
     }
-    private func pickerFilePoint(_ ext: String) throws -> CGPoint {
+    private func pickerFilePoints(_ ext: String) throws -> (thumbnail: CGPoint, caption: CGPoint) {
         try waitForNativePicker()
         // Tap the status-bar clock to return the provider's scroll view to top.
         screenCoordinate(CGPoint(x:0.15,y:0.025)).tap()
@@ -112,22 +112,33 @@ final class LocalizationPickerUITests: XCTestCase {
                     continue
                 }
                 print("PICKER_THUMBNAIL_TAP \(ext) \(point)")
-                return point
+                return (point,CGPoint(x:box.midX,y:1-box.midY))
             }
             screenCoordinate(CGPoint(x:0.5,y:0.74)).press(forDuration:0.05,thenDragTo:screenCoordinate(CGPoint(x:0.5,y:0.40)))
             Thread.sleep(forTimeInterval:1.0)
         }
         XCTFail("Visible picker label not found: "+ext)
-        return CGPoint(x:0.5,y:0.5)
+        return (CGPoint(x:0.5,y:0.5),CGPoint(x:0.5,y:0.5))
     }
     func testNativePickerSelectsAllFixtureExtensionsAndCanCancel() throws {
         for ext in ["exe","zip","glpack","rar","7z","xml","json","csv","txt","po","unknownformat",""] {
             importButton().tap()
             let name = ext.isEmpty ? "GLPicker-no-extension" : "GLPicker-"+ext
-            let point = try pickerFilePoint(ext)
+            let points = try pickerFilePoints(ext)
             let screenshot = XCTAttachment(screenshot:app.screenshot()); screenshot.name = "Picker-"+name; screenshot.lifetime = .keepAlways; add(screenshot)
-            screenCoordinate(point).tap()
+            screenCoordinate(points.thumbnail).tap()
             Thread.sleep(forTimeInterval:1.0)
+            // The recorded XML preview stayed in Files after a correctly placed
+            // thumbnail tap. Files also exposes the filename as a selection hit
+            // target. Try that visible caption once, only while the provider is
+            // still on screen. Acceptance still requires the delegate-delivered
+            // exact filename below; no extension, import or cancel check is skipped.
+            if try visiblePickerText().contains(where:{ $0.0.contains("gamelingo") && $0.1.midY > 0.82 }) {
+                print("PICKER_CAPTION_TAP \(ext) \(points.caption)")
+                let remaining = XCTAttachment(screenshot:XCUIScreen.main.screenshot())
+                remaining.name = "Picker-before-caption-"+name; remaining.lifetime = .keepAlways; add(remaining)
+                screenCoordinate(points.caption).tap()
+            }
             try waitFinished(filename:ext.isEmpty ? name : name+"."+ext)
             print("PICKER_SELECTION_VERIFIED "+(ext.isEmpty ? "extensionless" : ext))
         }
