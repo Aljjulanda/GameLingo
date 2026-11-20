@@ -1,15 +1,38 @@
 import Foundation
-@testable import LingoCore
 
-/// Research prototype, excluded from the app target until delivery ordering is
-/// verified with the single inference worker. RAM-only observations, not dialogue
-/// history or a second identity/duplicate
-/// system. A caller must deliver every `ready` item in order through its existing
-/// tracker; an interrupted pending candidate is never silently discarded.
+/// RAM-only observations, not dialogue history or a second identity/duplicate
+/// system. Publication can settle while the existing worker translates early.
 struct TypewriterReading: Equatable {
     var text: String, speaker: String?
     var box: SourceBox
     var confidence: Double = 1
+}
+
+/// Translation is allowed to start immediately. Only publication is held, so a
+/// fast interrupted line whose result is ready can be delivered BEFORE the
+/// existing tracker moves to the next source. No new IDs or TV clocks are made.
+struct TypewriterPublication {
+    private var settling: TypewriterSettling
+    private var permitted: TypewriterReading?
+    private(set) var active = false
+    var needsConfirmation: Bool { active && settling.needsConfirmation }
+    var detected: Bool { settling.detected }
+    init(knownTypewriter: Bool = false) { settling = TypewriterSettling(knownTypewriter:knownTypewriter) }
+    mutating func observe(_ reading: TypewriterReading, now: Double, enabled: Bool, maxWait: Double = 3, window: Int = 5) -> [TypewriterReading] {
+        active = enabled && maxWait > 0
+        let result = settling.observe(reading,now:now,enabled:enabled,maxWait:maxWait,window:window)
+        permitted = result.ready.last.flatMap { $0.text == reading.text && $0.box.isAdjacent(to:reading.box) ? reading : nil }
+        return result.ready
+    }
+    private static func compatible(_ job: DialogueJob, _ reading: TypewriterReading) -> Bool {
+        job.box.isAdjacent(to:reading.box) && (job.speaker == nil || reading.speaker == nil || job.speaker == reading.speaker)
+    }
+    func canPublish(_ job: DialogueJob) -> Bool {
+        !active || permitted.map { $0.text == job.text && Self.compatible(job,$0) } == true
+    }
+    static func canFlush(_ job: DialogueJob, ready: [TypewriterReading]) -> Bool {
+        ready.contains { Self.compatible(job,$0) && ($0.text == job.text || $0.text.hasPrefix(job.text)) }
+    }
 }
 
 struct TypewriterDecision {
