@@ -68,7 +68,7 @@ struct TypewriterSettling {
             pending = nil
             return emit(interrupted+[reading],waiting:false)
         }
-        if released == reading && pending == nil { return emit([reading],waiting:false) }
+        if let released, released.text == reading.text, sameRegion(released,reading), pending == nil { return emit([reading],waiting:false) }
         if let pending, pending.text == reading.text && sameRegion(pending,reading) {
             self.pending = nil
             return emit([reading],waiting:false)

@@ -48,6 +48,15 @@ final class TypewriterSettlingTests: XCTestCase {
         XCTAssertEqual(gate.observe(next,now:0.5,enabled:true).ready,[incomplete,next])
         XCTAssertFalse(gate.needsConfirmation)
     }
+    func testReleasedTextDoesNotRequestContinuousExtraConfirmations() {
+        var gate = TypewriterSettling(knownTypewriter:true)
+        let input = line("We should leave")
+        _ = gate.observe(input,now:0,enabled:true)
+        _ = gate.observe(input,now:0.5,enabled:true)
+        var differentConfidence = input; differentConfidence.confidence = 0.82
+        XCTAssertEqual(gate.observe(differentConfidence,now:1,enabled:true).ready,[differentConfidence])
+        XCTAssertFalse(gate.needsConfirmation)
+    }
     func testOCRJitterPunctuationAndSourceChangesAreNotGrowthEvidence() {
         for inputs in [["We should","We shou1d","We should leave"],["Wait","Wait.","Wait!"],["Arthur","ARTHUR","Arthur Morgan"],["We should leave","We should","We should leave now"]] {
             var gate = TypewriterSettling()
