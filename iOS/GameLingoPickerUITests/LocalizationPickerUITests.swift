@@ -8,8 +8,10 @@ final class LocalizationPickerUITests: XCTestCase {
     // provider renders in another process, absent from the AUT's AX hierarchy.
     // Recognize the actual visible label and tap screen coordinates, then require
     // the delegate-delivered filename in the AUT. No picker acceptance is mocked.
-    private var screenHeight: CGFloat = 852
-    private var headerY: CGFloat = 0.115
+    // Independent simctl PNG: iPhone16 English provider More=(364,97)pt.
+    // The earlier OCR-derived header ordinate injected y40 into the status bar.
+    private let headerY: CGFloat = 97.0/852
+    private var screenshotPixels = CGSize.zero
     private var listPresentation = false
     private func diagnosticScreen(_ name: String) {
         // A CI-side simctl watcher captures the actual provider independently
@@ -61,12 +63,13 @@ final class LocalizationPickerUITests: XCTestCase {
         XCTAssertFalse(app.staticTexts["gamePacks.importStatus"].label.isEmpty)
     }
     private func screenCoordinate(_ point: CGPoint) -> XCUICoordinate {
-        let origin = app.frame.origin
-        return app.coordinate(withNormalizedOffset:CGVector(dx:0,dy:0)).withOffset(CGVector(dx:point.x*393-origin.x,dy:point.y*screenHeight-origin.y))
+        app.coordinate(withNormalizedOffset:CGVector(dx:point.x,dy:point.y))
     }
     private func visiblePickerText() throws -> [(String,CGRect)] {
-        let shot = XCUIScreen.main.screenshot(), image = try XCTUnwrap(shot.image.cgImage)
-        screenHeight = CGFloat(image.height)/CGFloat(image.width)*393
+        // Match the image coordinate space to the XCUIApplication target. The
+        // screen-wide screenshot RPC also repeatedly crashed on this runtime.
+        let shot = app.screenshot(), image = try XCTUnwrap(shot.image.cgImage)
+        screenshotPixels = CGSize(width:image.width,height:image.height)
         let request = VNRecognizeTextRequest(); request.recognitionLevel = .accurate
         request.recognitionLanguages = ["en-US"]; request.usesLanguageCorrection = false
         request.customWords = ["GameLingo","GLPicker","glpack","unknownformat","no-extension"]
@@ -80,8 +83,7 @@ final class LocalizationPickerUITests: XCTestCase {
         for _ in 0..<30 {
             let text = try visiblePickerText()
             if let title = text.first(where:{ $0.0.contains("gamelingo") && $0.1.midY > 0.82 }) {
-                headerY = 1-title.1.midY
-                print("PICKER_NATIVE_HEADER_VISIBLE frame=\(app.frame)")
+                print("PICKER_NATIVE_HEADER_VISIBLE frame=\(app.frame) pixels=\(screenshotPixels) titleBox=\(title.1)")
                 return
             }
             Thread.sleep(forTimeInterval:0.25)
@@ -93,11 +95,10 @@ final class LocalizationPickerUITests: XCTestCase {
         if !listPresentation {
             // Files owns its presentation and hit regions. Use its actual List
             // command instead of guessing the hit area of a Quick Look thumbnail.
-            // The English system provider puts More at the trailing edge.
-            // The Arabic grid recording used the opposite edge; reusing that
-            // coordinate activates Back rather than opening the view menu.
+            // Use the button position in the independently captured actual
+            // provider, not the erroneous y40 OCR-derived title coordinate.
             diagnosticScreen("before-view-menu")
-            screenCoordinate(CGPoint(x:0.92,y:headerY)).tap()
+            screenCoordinate(CGPoint(x:364.0/393,y:headerY)).tap()
             diagnosticScreen("after-view-menu")
             var listPoint: CGPoint?
             for _ in 0..<10 {
@@ -179,8 +180,8 @@ final class LocalizationPickerUITests: XCTestCase {
         importButton().tap()
         try waitForNativePicker()
         let cancelLabels = try visiblePickerText()
-        let cancel = try XCTUnwrap(cancelLabels.first(where:{$0.0 == "cancel" && $0.1.midY > 0.82}),"Native Cancel command not visible")
-        screenCoordinate(CGPoint(x:cancel.1.midX,y:1-cancel.1.midY)).tap()
+        XCTAssertTrue(cancelLabels.contains(where:{$0.0 == "cancel" && $0.1.midY > 0.82}),"Native Cancel command not visible")
+        screenCoordinate(CGPoint(x:304.0/393,y:headerY)).tap()
         expectation(for:NSPredicate { [self] _,_ in app.buttons["gamePacks.import"].isHittable },evaluatedWith:app)
         waitForExpectations(timeout:15)
         XCTAssertEqual(app.staticTexts["gamePacks.fileSummary"].label,previous)

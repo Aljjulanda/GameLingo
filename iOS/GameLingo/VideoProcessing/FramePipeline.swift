@@ -388,7 +388,9 @@ final class FramePipeline {
                                 self.translator.packs?.recordPublished(PublishedTranslation(eventID:delivered.id,game:decision.game,pack:decision.pack,origin:decision.origin,fallback:decision.fallback,basis:decision.basis))
                             }
                             if self.quality[.punctuationTrace] {
-                                self.metrics.punctuationTrace = punctuationTrace + " | input " + (decision.engineInput.map(SubtitlePresentation.punctuation) ?? "لا استدلال جديد") + " | raw " + (decision.rawOutput.map(SubtitlePresentation.punctuation) ?? "غير متاح · لا مخرج نموذج جديد") + " | repair " + SubtitlePresentation.punctuation(text) + " | unbalanced " + String(decision.punctuationUnbalanced) + " | wire " + SubtitlePresentation.punctuation(message["translated"] as? String ?? "")
+                                let inputTrace = decision.engineInput.map(SubtitlePresentation.punctuation) ?? "لا استدلال جديد"
+                                let rawTrace = decision.rawOutput.map(SubtitlePresentation.punctuation) ?? "غير متاح · لا مخرج نموذج جديد"
+                                self.metrics.punctuationTrace = punctuationTrace + " | input " + inputTrace + " | raw " + rawTrace + " | repair " + SubtitlePresentation.punctuation(text) + " | unbalanced " + String(decision.punctuationUnbalanced) + " | wire " + SubtitlePresentation.punctuation(message["translated"] as? String ?? "")
                             }
                             if self.capture.active {
                                 do { try self.capture.append(QualityCaptureRecord(eventID:delivered.id,lines:captureLines,parsed:job.text,engineInput:decision.engineInput ?? "",engineOutput:decision.rawOutput ?? "",origin:decision.origin,stage:.published,timestamp:self.capture.elapsed,segments:captureSegments,basis:decision.basis,finalOutput:text,rawEngineTraceAvailable:decision.engineInput != nil && decision.rawOutput != nil)) }
