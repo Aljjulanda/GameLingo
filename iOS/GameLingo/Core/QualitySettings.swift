@@ -36,6 +36,8 @@ struct QualitySettings: Equatable {
     private var enabled = Set<QualityFlag>()
     var noHitThreshold = 20
     var settleSeconds = 3.0
+    var typewriterWindow = 5
+    private(set) var typewriterGames = Set<String>()
     var anchoredLineCap = 5, fallbackLineCap = 6
     var nameHeightRatio = 1.4, nameGapRatio = 2.0, nameOverlap = 0.15
     var nameLeftOffset = 0.18
@@ -45,11 +47,18 @@ struct QualitySettings: Equatable {
         set { if newValue { enabled.insert(flag) } else { enabled.remove(flag) } }
     }
     var outputKey: String { enabled.map(\.rawValue).sorted().joined(separator:",") }
+    @discardableResult mutating func rememberTypewriter(game: String) -> Bool {
+        guard game.range(of:"^[a-z0-9][a-z0-9._-]{0,63}$",options:.regularExpression) != nil,
+              typewriterGames.count < 256 || typewriterGames.contains(game) else { return false }
+        return typewriterGames.insert(game).inserted
+    }
     static func load(_ defaults: UserDefaults = .standard) -> Self {
         var value = Self()
         for flag in QualityFlag.allCases { value[flag] = defaults.bool(forKey:"quality."+flag.rawValue) }
         if let n = defaults.object(forKey:"quality.noHitThreshold") as? Int { value.noHitThreshold = max(1,min(1000,n)) }
         if defaults.object(forKey:"quality.settleSeconds") != nil { value.settleSeconds = max(0,min(3,defaults.double(forKey:"quality.settleSeconds"))) }
+        if let n = defaults.object(forKey:"quality.typewriterWindow") as? Int { value.typewriterWindow = max(3,min(20,n)) }
+        for game in (defaults.stringArray(forKey:"quality.typewriterGames") ?? []).prefix(256) { value.rememberTypewriter(game:game) }
         if let n = defaults.object(forKey:"quality.anchoredLineCap") as? Int { value.anchoredLineCap = max(3,min(5,n)) }
         if let n = defaults.object(forKey:"quality.fallbackLineCap") as? Int { value.fallbackLineCap = max(4,min(6,n)) }
         func bounded(_ key: String, _ fallback: Double, _ range: ClosedRange<Double>) -> Double {
@@ -69,6 +78,8 @@ struct QualitySettings: Equatable {
         for flag in QualityFlag.allCases { defaults.set(self[flag],forKey:"quality."+flag.rawValue) }
         defaults.set(noHitThreshold,forKey:"quality.noHitThreshold")
         defaults.set(settleSeconds,forKey:"quality.settleSeconds")
+        defaults.set(typewriterWindow,forKey:"quality.typewriterWindow")
+        defaults.set(typewriterGames.sorted(),forKey:"quality.typewriterGames")
         defaults.set(anchoredLineCap,forKey:"quality.anchoredLineCap"); defaults.set(fallbackLineCap,forKey:"quality.fallbackLineCap")
         defaults.set(nameHeightRatio,forKey:"quality.nameHeightRatio"); defaults.set(nameGapRatio,forKey:"quality.nameGapRatio")
         defaults.set(nameOverlap,forKey:"quality.nameOverlap"); defaults.set(nameLeftOffset,forKey:"quality.nameLeftOffset")

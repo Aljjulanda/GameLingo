@@ -60,4 +60,22 @@ final class TypewriterPublicationTests: XCTestCase {
         other.speaker = nil; other.box.x = 0.8
         XCTAssertFalse(TypewriterPublication.canFlush(old,ready:[other]))
     }
+    func testOnlyBoundedSelectedGameIDsAreRememberedAndResetDoesNotEnableWaiting() throws {
+        let suite = "synthetic.typewriter."+UUID().uuidString
+        let defaults = try XCTUnwrap(UserDefaults(suiteName:suite)); defer { defaults.removePersistentDomain(forName:suite) }
+        var quality = QualitySettings()
+        XCTAssertTrue(quality.typewriterGames.isEmpty); XCTAssertFalse(quality[.typewriter])
+        XCTAssertEqual(quality.typewriterWindow,5); XCTAssertEqual(quality.settleSeconds,3)
+        XCTAssertTrue(quality.rememberTypewriter(game:"synthetic-game-a"))
+        XCTAssertFalse(quality.rememberTypewriter(game:"synthetic-game-a"))
+        XCTAssertFalse(quality.rememberTypewriter(game:"Actual dialogue text is never a game ID."))
+        quality.save(defaults)
+        let restored = QualitySettings.load(defaults)
+        XCTAssertEqual(restored.typewriterGames,["synthetic-game-a"])
+        XCTAssertFalse(restored.typewriterGames.contains("synthetic-game-b")); XCTAssertFalse(restored[.typewriter])
+        for index in 0..<300 { quality.rememberTypewriter(game:"synthetic-\(index)") }
+        XCTAssertEqual(quality.typewriterGames.count,256)
+        QualitySettings().save(defaults)
+        XCTAssertTrue(QualitySettings.load(defaults).typewriterGames.isEmpty)
+    }
 }
