@@ -57,7 +57,7 @@ enum PackQualityPolicy {
               SpeakerEvidence.isName(name,knownNames:"",confidence:1) else { return nil }
         return (name,body)
     }
-    static func transform(source: String, target: String, flags: String, usable: Bool, options: PackQualityOptions) -> PackQualityText {
+    static func transform(source: String, target: String, flags: String, usable: Bool, options: PackQualityOptions, alignedArabicName: String? = nil) -> PackQualityText {
         var result = PackQualityText(source:source,target:target,flags:flags,usable:usable)
         guard options.profile != 0 else { return result }
         let originalFlags = (try? JSONSerialization.jsonObject(with:Data(flags.utf8))) as? [String]
@@ -69,10 +69,11 @@ enum PackQualityPolicy {
         if options.labels, let label = label(result.source) {
             result.source = label.body; result.speaker = label.name
             added.append("speaker:"+label.name)
-            // Only remove a demonstrably identical English label from the target.
-            // An unverified Arabic prefix remains visible; it is never guessed.
+            // Remove only the same English label or an independently aligned
+            // exact EN-name/AR-name pair. Unknown Arabic prefixes remain visible.
             if let colon = result.target.firstIndex(of:":"),
-               String(result.target[..<colon]).trimmingCharacters(in:.whitespacesAndNewlines).lowercased() == label.name.lowercased() {
+               (String(result.target[..<colon]).trimmingCharacters(in:.whitespacesAndNewlines).lowercased() == label.name.lowercased() ||
+                alignedArabicName.map{String(result.target[..<colon]).trimmingCharacters(in:.whitespacesAndNewlines) == $0} == true) {
                 result.target = String(result.target[result.target.index(after:colon)...]).trimmingCharacters(in:.whitespacesAndNewlines)
             }
         }

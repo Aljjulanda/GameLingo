@@ -23,10 +23,13 @@ struct PackRawRow {
     var source: String { fields[2] }
     var target: String { fields[4] }
     var original: PackQualityText { PackQualityText(source:source,target:target,flags:fields[7],usable:usable) }
-    var variants: [(Int32,PackQualityText)] {
-        (1...3).compactMap { profile in
+    func variants(alignedArabic: (String) throws -> String?) rethrows -> [(Int32,PackQualityText)] {
+        try (1...3).compactMap { profile in
+            let candidate = profile & 1 != 0 ? PackQualityPolicy.cleanMarkup(source) : source
+            let name = profile & 2 != 0 ? PackQualityPolicy.label(candidate)?.name : nil
+            let arabic = try name.flatMap { try alignedArabic($0) }
             let value = PackQualityPolicy.transform(source:source,target:target,flags:fields[7],usable:usable,
-                options:PackQualityOptions(markup:profile & 1 != 0,labels:profile & 2 != 0))
+                options:PackQualityOptions(markup:profile & 1 != 0,labels:profile & 2 != 0),alignedArabicName:arabic)
             return value == original ? nil : (Int32(profile),value)
         }
     }
@@ -35,15 +38,18 @@ struct PackRawRow {
 struct PackQualityAccumulator {
     private var value = PackQualitySummary(), names = Set<String>(), order = PackArabicOrderEvidence()
     mutating func observe(_ row: PackRawRow, variants: [(Int32,PackQualityText)]) {
-        let markup = variants.first{$0.0 == 1}?.1 ?? row.original
-        let labels = variants.first{$0.0 == 2}?.1 ?? row.original
-        let both = variants.first{$0.0 == 3}?.1 ?? row.original
+        // Avoid older Swift's optional tuple-element inference with `?.1 ??`.
+        func selected(_ profile: Int32) -> PackQualityText {
+            for (key,value) in variants where key == profile { return value }
+            return row.original
+        }
+        let markup = selected(1), labels = selected(2), both = selected(3)
         value.rawUsable += row.usable ? 1 : 0
         value.markupUsable += markup.usable ? 1 : 0; value.labelsUsable += labels.usable ? 1 : 0
         value.combinedUsable += both.usable ? 1 : 0
         value.cleaned += markup.source != row.source || markup.target != row.target ? 1 : 0
         value.excluded += row.usable && !markup.usable ? 1 : 0
-        if let speaker = both.speaker, both.usable {
+        if let speaker = both.speaker, both.usable, ["dialogue","general"].contains(row.fields[5]) {
             value.labels += 1; names.insert(speaker)
             if names.count > 64, let last = names.max() { names.remove(last) }
         }
@@ -87,7 +93,7 @@ enum PackV2Builder {
             sqlite3_bind_int(statement,9,row.usable ? 1 : 0)
             try bind(PackQualityPolicy.punctuationless(row.source),to:statement,at:10)
             guard sqlite3_step(statement) == SQLITE_DONE else { throw PackFailure.damaged }
-            let variants = row.variants; totals.observe(row,variants:variants)
+            let variants = try source.qualityVariants(row); totals.observe(row,variants:variants)
             for (profile,value) in variants {
                 let statement = variant!; reset(statement)
                 sqlite3_bind_int64(statement,1,rowID); sqlite3_bind_int(statement,2,profile)

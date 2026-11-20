@@ -10,7 +10,7 @@ import UIKit
 final class PackIntegrationTests: XCTestCase {
     func testQualityImportV2ProfilesAndNamesRetainOriginalAndRollback() async throws {
         let root = try folder(), file = root.appendingPathComponent("quality.json"), store = TranslationPackStore(root:root.appendingPathComponent("packs"))
-        let bytes = Data(#"{"game_id":"quality","entries":[{"en":"Arthur: ~z~Stay~n~here?","ar":"Arthur: <C>ابق هنا.</C>"},{"en":"Arthur","ar":"آرثر"},{"en":"Take {0} items.","ar":"خذ {0} أغراض."}]}"#.utf8)
+        let bytes = Data(#"{"game_id":"quality","entries":[{"en":"Arthur: ~z~Stay~n~here?","ar":"آرثر: <C>ابق هنا.</C>"},{"en":"Arthur","ar":"آرثر"},{"en":"Take {0} items.","ar":"خذ {0} أغراض."}]}"#.utf8)
         try bytes.write(to:file)
         let (result,report) = await inspect(file,store:store); try result.get()
         let saved = await state(store), manifest = try XCTUnwrap(saved.registry.packs.first?.manifest)
@@ -21,7 +21,7 @@ final class PackIntegrationTests: XCTestCase {
         XCTAssertEqual(manifest.quality?.speakerNames,["Arthur"])
         XCTAssertEqual(try Data(contentsOf:file),bytes); XCTAssertNil(saved.registry.selectedGame)
         store.changeSelection(game:"quality"); try await waitLoaded(store)
-        XCTAssertEqual(store.lookup("Arthur: ~z~Stay~n~here?",category:"dialogue",eventID:nil),"Arthur: <C>ابق هنا.</C>")
+        XCTAssertEqual(store.lookup("Arthur: ~z~Stay~n~here?",category:"dialogue",eventID:nil),"آرثر: <C>ابق هنا.</C>")
         store.configureQuality(PackQualityOptions(markup:true,labels:true,punctuation:true))
         let match = store.lookupDetailed("Stay, here!",category:"dialogue",eventID:nil)
         XCTAssertEqual(match.text,"ابق هنا."); XCTAssertEqual(match.origin,.packPunctuationless)
@@ -37,7 +37,7 @@ final class PackIntegrationTests: XCTestCase {
         let offNames: [GameName] = await withCheckedContinuation { continuation in store.qualityNames{_,_,names in continuation.resume(returning:names)} }
         XCTAssertTrue(offNames.isEmpty)
         let restored = TranslationPackStore(root:store.root); try await waitLoaded(restored)
-        XCTAssertEqual(restored.lookup("Arthur: ~z~Stay~n~here?",category:"dialogue",eventID:nil),"Arthur: <C>ابق هنا.</C>")
+        XCTAssertEqual(restored.lookup("Arthur: ~z~Stay~n~here?",category:"dialogue",eventID:nil),"آرثر: <C>ابق هنا.</C>")
     }
     @MainActor func testQualityActivateNowIsExplicitAndRetainsLegacyNamesWhenOff() async throws {
         let root = try folder(), file = root.appendingPathComponent("activation.json")

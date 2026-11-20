@@ -253,7 +253,7 @@ final class PackDatabase {
         try forEachRawRow(check:check) { id,row,key in
             count += 1
             guard id == count, key == PackQualityPolicy.punctuationless(row.source) else { throw PackFailure.invalid }
-            let variants = row.variants
+            let variants = try qualityVariants(row)
             totals.observe(row,variants:variants)
             for (profile,value) in variants {
                 guard code == SQLITE_ROW, sqlite3_column_type(statement,0) == SQLITE_INTEGER, sqlite3_column_int64(statement,0) == id,
@@ -266,6 +266,16 @@ final class PackDatabase {
             }
         }
         guard code == SQLITE_DONE, totals.summary == manifest.quality else { throw PackFailure.invalid }
+    }
+    func qualityVariants(_ row: PackRawRow) throws -> [(Int32,PackQualityText)] {
+        try row.variants { name in
+            let match = try query(exact!,key:name,category:"dialogue",kind:.exact)
+            guard match.kind == .exact, let target = match.text, target.count <= 40,
+                  target.unicodeScalars.contains(where:{(0x0600...0x06ff).contains($0.value)}),
+                  target.allSatisfy({ $0.isWhitespace || " '’.-".contains($0) ||
+                      $0.unicodeScalars.allSatisfy{(0x0600...0x06ff).contains($0.value) && (CharacterSet.letters.contains($0) || CharacterSet.nonBaseCharacters.contains($0))} }) else { return nil }
+            return target
+        }
     }
     func lookupIdentifier(_ identifier: String) throws -> [String] {
         progress.deadline = ProcessInfo.processInfo.systemUptime+0.05

@@ -82,6 +82,20 @@ final class PackV2Tests: XCTestCase {
         let result = try PackDatabase(url:output).lookup("stay here",category:"dialogue",quality:PackQualityOptions(punctuation:true))
         XCTAssertEqual(result.kind,.ambiguous); XCTAssertNil(result.text)
     }
+    func testArabicLabelRemovalRequiresAnIndependentExactAlignedNamePair() throws {
+        let (original,manifest) = try fixture([("Arthur: Stay here.","آرثر: ابق هنا."),("Arthur","آرثر"),("John: Stay here.","جون: ابق هنا.")])
+        let (output,_) = try upgrade(original,manifest), db = try PackDatabase(url:output)
+        let options = PackQualityOptions(labels:true)
+        // Two label-stripped rows now share the same key but different targets;
+        // ambiguity must remain a rejection, never a random pick.
+        XCTAssertEqual(try db.lookup("Stay here.",category:"dialogue",quality:options).kind,.ambiguous)
+        var variants: [String:String] = [:]
+        try db.forEachRawRow { _,row,_ in
+            if let label = PackQualityPolicy.label(row.source), let value = try db.qualityVariants(row).first(where:{$0.0 == 2})?.1 { variants[label.name] = value.target }
+        }
+        XCTAssertEqual(variants["Arthur"],"ابق هنا."); XCTAssertEqual(variants["John"],"جون: ابق هنا.")
+        XCTAssertEqual(try db.lookup("Arthur: Stay here.",category:"dialogue").text,"آرثر: ابق هنا.")
+    }
     func testDerivedRowsKeysAndReportsAreValidatedNotTrusted() throws {
         for sql in ["UPDATE quality_variants SET target='تغيير غير موثوق' WHERE profile=1", "DELETE FROM quality_variants WHERE profile=3", "UPDATE entries SET punctuationless='wrong'", "INSERT INTO quality_variants SELECT 99,profile,source,normalized,target,flags,usable,punctuationless FROM quality_variants WHERE profile=1"] {
             let (original,manifest) = try fixture([("Arthur: Stay here.","<C>ابق هنا.</C>")])

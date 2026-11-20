@@ -542,3 +542,64 @@ Test now tries the visible filename caption once IF provider remains visible,
 then still requires exact delegate filename, completed inspection and all12
 extensions plus cancellation. No app/importer behavior or assertions removed.
 Full rerun required. No IPA uploaded by corrected workflow; no Release published.
+
+### E reversible pack profiles — implemented, native gate pending
+
+Policies3192357:122 Core tests passed44719198477. V2 database121c6d6:
+128 passed44719804882. Integrated109ab7f:130 passed44721368186, including all
+source/project/converter/packaging checks. No local Windows Swift execution.
+
+New imports validate the ORIGINAL hash/schema/contents before generating a new
+managed v2 database. Existing installed v1 stays readable and unchanged until
+explicit reimport. Raw v1 columns/keys/flags/usable/targets remain for allOFF.
+V2 adds indexed punctuation keys and sparse profiles1markup/2label/3combined;
+all derived keys/rows/counts/names/statistics rederived during validation. No
+caller SQL, extra schema objects, orphan/duplicate/missing variant or arbitrary
+ambiguous result is accepted. SQLite page cap256MiB, bounded cache, cancellation;
+external file never changed. Index/matching key v1 unchanged.
+
+Markup controls limited to ~z~/~n~/~s~ and balanced <C> wrappers. Visible inner
+text preserved; unknown/unbalanced tokens remain and are unusable when cleaning
+is enabled. Numeric brace/printf placeholders retained but excluded in cleaning
+profile. An originally unusable row can recover ONLY when known unresolved
+markup was its sole blocker (presentation-form conversion annotation allowed),
+with all text checks passing. Report before/after/cleaned/excluded + statistical
+reversed-order WARNING only, no Arabic reversal. Runtime/selftest use selected
+profile's actual usable count/source. AllOFF uses original exact/normalized SQL.
+
+Punctuation tier only in v2 and with packPunctuation flag. Preserve word borders,
+interior apostrophes, signed/decimal numbers; strict ambiguity/no tier fallthrough
+after ambiguous/unsupported normalized result. Provenance packPunctuationless.
+Confirmed source Name: split under packLabels, metadata in flags. HUD/cue/ordinary
+prefixes and IDs rejected. Identical EN target label can be removed; AR target
+label requires an independent unique exact EN-name/AR-name record in raw data.
+Unknown AR prefix is deliberately retained rather than guessed. Quality-only names kept
+separate from original manifest.speakerNames. Aligned exact EN-name/AR-name pair
+wins; otherwise editable approximate transliteration, explicitly tagged. Persisted
+packLabel entries filtered when that flag isOFF, without deleting the store or
+losing manual edits. Manual/canonical raw pack decisions/blocklist win.
+
+Activate now is explicit after successful import. Corrections and cached outputs
+follow actual selected/active game, pack activation, all quality flags, names and
+corrections versions. Frame reuse also invalidates for advanced setting changes;
+delayed unpublished outputs cannot refill a new context. Tracker/duplicate logic,
+TV clocks and transport unchanged. No new dialogue history/logging.
+
+New native integration cases cover managed v2 import/external bytes/flag rollback/
+actual lookup provenance/name alignment/restart, explicit activation/legacy names,
+real Argos cache game/flag/names isolation and stale correction scope rejection.
+Real RDR2 CLI now compiles actual shared Core policies, upgrades in ignored staging,
+validates v2, compares allOFF on independent expected old samples, measures time/
+size and asserts raw DB hash unchanged; only aggregate counts/timings exported.
+These new native/real-data cases have NOT run yet. F/H/I remain unfinished.
+ARM44718640360 failed before runner allocation; Intel44721577664 on109ab7f acquired
+a runner and is current full validation. Keep Xcode16.4/all gates. No Release.
+
+Intel44721577664 then FAILED compiling Core on Xcode16.4: inferred local values
+from `variants.first{...}?.1 ?? row.original` remained Optional under its Swift
+version, despite130 passing on Ubuntu's newer compiler. Use an explicit typed
+selection function instead. No tests/archive/native execution in this attempt.
+Also added strict raw aligned-name lookup during profile derivation/validation:
+known AR prefixes can be safely removed; unknown ones stay. New Core regression
+covers matching ambiguity after split, raw rollback and exact name evidence.
+Native import fixture now exercises aligned AR prefix (not only English prefix).
