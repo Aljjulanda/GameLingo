@@ -9,6 +9,8 @@ enum GameNameSource: String, Codable { case auto, pack, manual
 }
 struct GameName: Codable, Equatable, Identifiable {
     var english: String, type: GameNameType, arabic: String, source: GameNameSource, count: Int
+    var approximate: Bool? = nil
+    var packLabel: Bool? = nil
     var id: String { Self.key(english) }
     static func key(_ value: String) -> String { DialogueText.normalized(value).lowercased() }
     var valid: Bool {
@@ -31,6 +33,11 @@ struct GameNamesSnapshot: Codable, Equatable {
     var speakerWords: String { dictionary(entries.filter{$0.type == .person}) }
     var scopeKey: String { (general == true ? "general/" : "game/")+game }
     var outputKey: String { scopeKey+"/"+String(version) }
+    func effective(packLabels: Bool) -> Self {
+        var value = self
+        if !packLabels { value.entries.removeAll{$0.source == .pack && $0.packLabel == true} }
+        return value
+    }
     func validate() throws {
         guard schema == 1, UserDataFile.validGame(game), general != true || game == "general", version < UInt64.max,
               entries.count <= 2000, entries.allSatisfy(\.valid), Set(entries.map(\.id)).count == entries.count,
@@ -79,8 +86,10 @@ final class GameNamesStore {
             if let index = next.entries.firstIndex(where:{$0.id == key}) {
                 let old = next.entries[index]
                 guard incoming.source.priority >= old.source.priority else { return }
+                if incoming.source == .pack && incoming.packLabel == true && old.source == .pack && old.packLabel != true { return }
+                if incoming.source == .pack && incoming.approximate == true && old.source == .pack && old.approximate != true { return }
                 incoming.count = max(old.count,incoming.count)
-                if old.english != incoming.english || old.arabic != incoming.arabic || old.type != incoming.type || old.source != incoming.source { next.version += 1 }
+                if old.english != incoming.english || old.arabic != incoming.arabic || old.type != incoming.type || old.source != incoming.source || old.approximate != incoming.approximate || old.packLabel != incoming.packLabel { next.version += 1 }
                 next.entries[index] = incoming
             } else { guard next.entries.count < 2000 else { throw LingoError.invalid("وصلت قائمة الأسماء إلى حدها") }; next.entries.append(incoming); next.version += 1 }
         }

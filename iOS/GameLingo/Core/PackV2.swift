@@ -10,6 +10,7 @@ struct PackQualitySummary: Codable, Equatable {
     var cleaned = 0, excluded = 0, labels = 0
     var possibleVisualOrder = false
     var speakerNames: [String] = []
+    func usable(profile: Int) -> Int { profile == 1 ? markupUsable : profile == 2 ? labelsUsable : profile == 3 ? combinedUsable : rawUsable }
     func valid(recordCount: Int) -> Bool {
         [rawUsable,markupUsable,labelsUsable,combinedUsable,cleaned,excluded,labels].allSatisfy{(0...max(0,recordCount)).contains($0)} &&
             speakerNames.count <= 64 && Set(speakerNames).count == speakerNames.count && speakerNames == speakerNames.sorted() &&

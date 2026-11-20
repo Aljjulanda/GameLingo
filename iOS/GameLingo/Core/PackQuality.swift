@@ -53,7 +53,7 @@ enum PackQualityPolicy {
         guard let colon = text.firstIndex(of:":"), text.distance(from:text.startIndex,to:colon) <= 40 else { return nil }
         let name = String(text[..<colon]).trimmingCharacters(in:.whitespacesAndNewlines)
         let body = String(text[text.index(after:colon)...]).trimmingCharacters(in:.whitespacesAndNewlines)
-        guard !body.isEmpty, name.range(of:"[\\p{Latin}]",options:.regularExpression) != nil,
+        guard !body.isEmpty, (name == "47" || name.range(of:"[\\p{Latin}]",options:.regularExpression) != nil),
               SpeakerEvidence.isName(name,knownNames:"",confidence:1) else { return nil }
         return (name,body)
     }

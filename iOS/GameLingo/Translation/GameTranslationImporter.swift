@@ -7,6 +7,8 @@ struct LocalizationInspection {
     var filename: String, bytes: Int64 = 0, format = "جارٍ الفحص"
     var localization: Bool?, supported: Bool?, mapping: Bool?, usable: Int?, rejected = 0
     var declaredUsable: Int?
+    var gameId: String?
+    var quality: PackQualitySummary?
     var progressDone: Int64?, progressTotal: Int64?
     var progressUnit = "بايت"
     var stage = "جارٍ فحص الملف", result = "", requirement = ""
@@ -61,15 +63,15 @@ final class GameTranslationImporter {
                 try control.check(); report.stage = "جارٍ التحقق من حزمة الترجمة وتثبيتها"; report.progressDone = nil; report.progressTotal = nil; publish(report)
                 let preparedReport = report
                 DispatchQueue.main.async {
-                    store.importPack(package,check:control.check) { result in
+                    store.importPackDetailed(package,check:control.check) { result in
                         self.worker.async {
                             try? FileManager.default.removeItem(at:stage)
                             var final = preparedReport
                             switch result {
-                            case .success: final.usable = final.usable ?? final.declaredUsable; final.result = "تم استيراد الترجمة بنجاح؛ اختر اللعبة لتفعيلها"; final.stage = "اكتمل الاستيراد"
+                            case .success(let manifest): final.usable = manifest.usableCount; final.gameId = manifest.gameId; final.quality = manifest.quality; final.result = "تم استيراد الترجمة بنجاح؛ اختر اللعبة لتفعيلها"; final.stage = "اكتمل الاستيراد"
                             case .failure(let error): final.result = Self.message(error); final.stage = "لم تُثبّت حزمة"
                             }
-                            DispatchQueue.main.async { completion(result,final) }
+                            DispatchQueue.main.async { completion(result.map{_ in ()},final) }
                         }
                     }
                 }

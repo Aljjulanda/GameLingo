@@ -23,6 +23,26 @@ final class TranslationPackStore {
     private var state = GamePackState()
     private var database: PackDatabase?
     private var activation = 0
+    private var quality = PackQualityOptions()
+    func configureQuality(_ value: PackQualityOptions) { queue.async { self.quality = value } }
+    var outputKey: String {
+        queue.sync { "\(activation)/\(state.registry.selectedGame ?? "")/\(state.loaded ? 1 : 0)/\(quality.key)" }
+    }
+    func qualityNames(_ completion: @escaping (String?,String?,[GameName]) -> Void) {
+        queue.async { [self] in
+            let item = state.loaded && quality.labels ? state.registry.packs.first{$0.manifest.gameId == state.registry.selectedGame && $0.enabled} : nil
+            var names: [GameName] = []
+            for name in item?.manifest.quality?.speakerNames ?? [] {
+                let match = try? database?.lookup(name,category:"dialogue",quality:quality)
+                let exact = match?.kind == .exact ? match?.text : nil
+                let validExact = exact.flatMap { GameName(english:name,type:.person,arabic:$0,source:.pack,count:0).valid ? $0 : nil }
+                let value = GameName(english:name,type:.person,arabic:validExact ?? NameTransliteration.arabic(name),source:.pack,count:0,approximate:validExact == nil,packLabel:true)
+                if value.valid { names.append(value) }
+            }
+            let game = state.registry.selectedGame, pack = item?.id, result = names
+            DispatchQueue.main.async { completion(game,pack,result) }
+        }
+    }
     private var metrics = HybridMetrics()
     private var eventIDs = BoundedLRU<String,Bool>(capacity:64)
     func alignedNamePairs(_ completion: @escaping (String?,String?,[(String,String)]) -> Void) {
@@ -31,7 +51,7 @@ final class TranslationPackStore {
             var pairs: [(String,String)] = []
             if let item, let database {
                 for name in item.manifest.speakerNames ?? [] where SpeakerEvidence.isName(name,knownNames:"",confidence:1) {
-                    if let match = try? database.lookup(name,category:"dialogue"), match.kind == .exact, let arabic = match.text,
+                    if let match = try? database.lookup(name,category:"dialogue",quality:quality), match.kind == .exact, let arabic = match.text,
                        GameName(english:name,type:.person,arabic:arabic,source:.pack,count:0).valid { pairs.append((name,arabic)) }
                 }
             }
@@ -62,7 +82,8 @@ final class TranslationPackStore {
     private func notify() { let value = state; DispatchQueue.main.async { self.onChange?(value) } }
     private func save(_ registry: GamePackRegistry) throws {
         let url = root.appendingPathComponent("library.json")
-        try JSONEncoder().encode(registry).write(to:url,options:[.atomic,.completeFileProtectionUntilFirstUserAuthentication])
+        let data = try JSONEncoder().encode(registry); guard data.count <= 262144 else { throw PackFailure.size }
+        try data.write(to:url,options:[.atomic,.completeFileProtectionUntilFirstUserAuthentication])
     }
     static func hash(_ url: URL, check: () throws -> Void = {}) throws -> String {
         let file = try FileHandle(forReadingFrom:url); defer { try? file.close() }
@@ -165,11 +186,13 @@ final class TranslationPackStore {
             let start = ProcessInfo.processInfo.systemUptime; metrics.lookups += 1
             defer { let ms = (ProcessInfo.processInfo.systemUptime-start)*1000; metrics.lookupTotal += ms; metrics.samples.record(ms) }
             do {
-                let result = try database.lookup(source,category:category)
+                let result = try database.lookup(source,category:category,quality:quality)
                 if let text = result.text {
                     metrics.matches += 1
-                    if result.kind == .exact { metrics.exact += 1 } else { metrics.normalized += 1 }
-                    outcome.text = text; outcome.origin = result.kind == .exact ? .packExact : .packNormalized
+                    if result.kind == .exact { metrics.exact += 1 }
+                    else if result.kind == .punctuationless { metrics.punctuationless += 1 }
+                    else { metrics.normalized += 1 }
+                    outcome.text = text; outcome.origin = result.kind == .exact ? .packExact : result.kind == .punctuationless ? .packPunctuationless : .packNormalized
                 } else {
                     metrics.fallbacks += 1; if result.kind == .ambiguous { metrics.ambiguous += 1 }
                     outcome.fallback = TranslationFallback(rawValue:result.kind.rawValue) ?? .unsupported
@@ -185,10 +208,11 @@ final class TranslationPackStore {
         queue.async { [self] in
             var report = PackSelfTest()
             report.active = state.loaded
-            report.usablePairs = state.registry.packs.first{$0.manifest.gameId == state.registry.selectedGame && $0.enabled}?.manifest.usableCount ?? 0
+            let selected = state.registry.packs.first{$0.manifest.gameId == state.registry.selectedGame && $0.enabled}?.manifest
+            report.usablePairs = selected?.quality?.usable(profile:quality.profile) ?? selected?.usableCount ?? 0
             if let database {
                 do {
-                    for (index,source) in try database.sampleSources().enumerated() {
+                    for (index,source) in try database.sampleSources(quality:quality).enumerated() {
                         let perturbed: String
                         switch index % 4 {
                         case 0: perturbed = source.trimmingCharacters(in:CharacterSet(charactersIn:".!?"))
@@ -196,7 +220,7 @@ final class TranslationPackStore {
                         case 2: perturbed = source.replacingOccurrences(of:" ",with:"  ")
                         default: perturbed = source.replacingOccurrences(of:" ",with:"\n")
                         }
-                        let match = try database.lookup(perturbed,category:"dialogue")
+                        let match = try database.lookup(perturbed,category:"dialogue",quality:quality)
                         report.count += 1
                         if match.text != nil { report.matched += 1 } else { report.reasons[match.kind.rawValue,default:0] += 1 }
                     }
@@ -208,10 +232,13 @@ final class TranslationPackStore {
     }
     /// Copies a scoped Files URL into managed storage, validates before registry commit.
     func importPack(_ external: URL, check: @escaping () throws -> Void = {}, completion: @escaping (Result<Void,Error>) -> Void) {
+        importPackDetailed(external,check:check) { completion($0.map{_ in ()}) }
+    }
+    func importPackDetailed(_ external: URL, check: @escaping () throws -> Void = {}, completion: @escaping (Result<PackManifest,Error>) -> Void) {
         let scoped = external.startAccessingSecurityScopedResource()
         importer.async { [self] in
             defer { if scoped { external.stopAccessingSecurityScopedResource() } }
-            let result = Result { () throws -> Void in
+            let result = Result { () throws -> PackManifest in
                 try check()
                 let fm = FileManager.default
                 try fm.createDirectory(at:root,withIntermediateDirectories:true)
@@ -234,8 +261,25 @@ final class TranslationPackStore {
                 }
                 if let error = coordinationError { throw error }
                 if let error = copyError { throw error }
-                let manifest = try Self.unpack(package,into:stage,check:check)
+                var manifest = try Self.unpack(package,into:stage,check:check)
                 let dbURL = stage.appendingPathComponent("translations.sqlite")
+                // Validate the original hash/schema/content before deriving v2.
+                // Existing installed v1 files are never migrated on activation.
+                let derived = stage.appendingPathComponent("quality.sqlite")
+                do {
+                    let input = try PackDatabase(url:dbURL); try input.validateContents(manifest:manifest,check:check)
+                    if manifest.schemaVersion == 1 { manifest.quality = try PackV2Builder.build(from:input,to:derived,check:check) }
+                }
+                if manifest.schemaVersion == 1 {
+                    try fm.removeItem(at:dbURL); try fm.moveItem(at:derived,to:dbURL)
+                    manifest.schemaVersion = 2; manifest.databaseSha256 = try Self.hash(dbURL,check:check)
+                    let encoder = JSONEncoder(); encoder.keyEncodingStrategy = .convertToSnakeCase; encoder.outputFormatting = .sortedKeys
+                    let raw = try encoder.encode(manifest)
+                    try raw.write(to:stage.appendingPathComponent("manifest.json"),options:.atomic)
+                    let hashes = ["manifest.json":SHA256.hash(data:raw).map{String(format:"%02x",$0)}.joined(),"translations.sqlite":manifest.databaseSha256]
+                    try JSONEncoder().encode(hashes).write(to:stage.appendingPathComponent("checksums.json"),options:.atomic)
+                }
+                try manifest.validate()
                 try fm.setAttributes([.protectionKey:FileProtectionType.completeUntilFirstUserAuthentication],ofItemAtPath:dbURL.path)
                 let validated = try PackDatabase(url:dbURL); try validated.validateContents(manifest:manifest,check:check)
                 try fm.removeItem(at:package)
@@ -257,6 +301,7 @@ final class TranslationPackStore {
                     notify()
                     if let old { try? fm.removeItem(at:root.appendingPathComponent(old.id)) }
                 }
+                return manifest
             }
             DispatchQueue.main.async { completion(result) }
         }

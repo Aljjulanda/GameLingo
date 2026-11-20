@@ -27,6 +27,7 @@ INSTALLER_REV='04e9bb1ee583740fcba30b1a016329d4a3243a62'
 INSTALLER_URL=f'https://raw.githubusercontent.com/arabic-pc/arabic-pc.github.io/{INSTALLER_REV}/downloads/Arabic-RDR2.exe'
 MAIN=r'''
 import Foundation
+import CryptoKit
 @main struct Validation {
     static func main() throws {
         let root = URL(fileURLWithPath:CommandLine.arguments[1])
@@ -47,8 +48,26 @@ import Foundation
                 guard result.text == nil else { throw PackFailure.invalid }; rejected += 1
             }
         }
+        let upgraded = root.appendingPathComponent("quality-v2.sqlite")
+        if FileManager.default.fileExists(atPath:upgraded.path) { try FileManager.default.removeItem(at:upgraded) }
+        let upgradeStart = ProcessInfo.processInfo.systemUptime
+        let summary = try PackV2Builder.build(from:database,to:upgraded)
+        let upgradeMS = (ProcessInfo.processInfo.systemUptime-upgradeStart)*1000
+        var next = manifest; next.schemaVersion = 2; next.quality = summary
+        let handle = try FileHandle(forReadingFrom:upgraded); defer { try? handle.close() }
+        var hash = SHA256()
+        while let bytes = try handle.read(upToCount:1024*1024), !bytes.isEmpty { hash.update(data:bytes) }
+        next.databaseSha256 = hash.finalize().map{String(format:"%02x",$0)}.joined()
+        let candidate = try PackDatabase(url:upgraded), verifyStart = ProcessInfo.processInfo.systemUptime
+        try candidate.validateContents(manifest:next)
+        let v2ValidationMS = (ProcessInfo.processInfo.systemUptime-verifyStart)*1000
+        for sample in inputs {
+            let before = try database.lookup(sample["source"]!,category:sample["category"]!)
+            let after = try candidate.lookup(sample["source"]!,category:sample["category"]!)
+            guard after.kind == before.kind, after.text == before.text else { throw PackFailure.invalid }
+        }
         timing.sort()
-        let result: [String:Any] = ["native_validation_ms":validationMS,"records":manifest.recordCount,"eligible_rows":manifest.usableCount,"verified_matches":accepted,"verified_rejections":rejected,"lookup_samples":timing.count,"lookup_average_ms":timing.reduce(0,+)/Double(max(1,timing.count)),"lookup_p95_ms":timing[max(0,Int(ceil(Double(timing.count)*0.95))-1)],"environment":"Actual real RDR2 database, native SQLite and Swift on CI Mac; not physical iPhone or gameplay; correctness is expected lookup decision, not a human linguistic certification"]
+        let result: [String:Any] = ["native_validation_ms":validationMS,"records":manifest.recordCount,"eligible_rows":manifest.usableCount,"verified_matches":accepted,"verified_rejections":rejected,"lookup_samples":timing.count,"lookup_average_ms":timing.reduce(0,+)/Double(max(1,timing.count)),"lookup_p95_ms":timing[max(0,Int(ceil(Double(timing.count)*0.95))-1)],"v2_upgrade_ms":upgradeMS,"v2_validation_ms":v2ValidationMS,"v2_database_bytes":try upgraded.resourceValues(forKeys:[.fileSizeKey]).fileSize ?? 0,"v2_cleaned_rows":summary.cleaned,"v2_excluded_rows":summary.excluded,"v2_markup_usable":summary.markupUsable,"v2_possible_visual_order_warning":summary.possibleVisualOrder,"v2_all_off_equivalent_samples":inputs.count,"environment":"Actual real RDR2 database, native SQLite and Swift on CI Mac; not physical iPhone or gameplay; correctness is expected lookup decision, not a human linguistic certification"]
         print("REAL_RDR2_NATIVE_VALIDATION "+String(decoding:try JSONSerialization.data(withJSONObject:result,options:[.sortedKeys]),as:UTF8.self))
     }
 }
@@ -99,8 +118,11 @@ def main():
     safe['source_data_published']=False
     if not args.python_only:
         harness=WORK/'Main.swift';harness.write_text(MAIN,encoding='utf-8');binary=WORK/'native-validation'
-        subprocess.run(['swiftc','-O',str(ROOT/'iOS/GameLingo/Core/PackDatabase.swift'),str(ROOT/'iOS/GameLingo/Core/Dialogue.swift'),str(ROOT/'iOS/GameLingo/Core/SubtitlePresentation.swift'),str(harness),'-lsqlite3','-o',str(binary)],check=True)
+        sources=sorted((ROOT/'iOS/GameLingo/Core').glob('*.swift'))
+        before_database_hash=c.digest((WORK/'translations.sqlite').read_bytes())
+        subprocess.run(['swiftc','-O',*map(str,sources),str(harness),'-lsqlite3','-o',str(binary)],check=True)
         output=subprocess.check_output([str(binary),str(WORK)],text=True);print(output.strip())
+        assert c.digest((WORK/'translations.sqlite').read_bytes())==before_database_hash,'V2 upgrade modified the original database'
         safe['native']=json.loads(output.split('REAL_RDR2_NATIVE_VALIDATION ',1)[1])
     target=ROOT/'iOS/build/logs/translation-pack-validation.json';target.parent.mkdir(parents=True,exist_ok=True)
     target.write_text(json.dumps(safe,indent=2)+'\n',encoding='utf-8')

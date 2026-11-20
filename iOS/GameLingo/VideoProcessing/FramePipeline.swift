@@ -53,7 +53,9 @@ final class FramePipeline {
     private var corrections = CorrectionContext(CorrectionsSnapshot(game:"general",general:true),enabled:false)
     private var recentToken = UUID()
     var onRecentPublished: ((RecentPublishedLine,UUID) -> Void)?
-    private var outputContextKey: String { namesCacheKey+"|"+corrections.outputKey+"|"+quality.outputKey }
+    private var advancedEpoch: UInt64 = 0
+    private var translationsContextKey = ""
+    private var outputContextKey: String { namesCacheKey+"|"+corrections.outputKey+"|"+quality.outputKey+"|\(advancedEpoch)|"+(translator.packs?.outputKey ?? "") }
     func configureCorrections(_ snapshot: CorrectionsSnapshot, recentToken: UUID? = nil) { queue.async {
         if let recentToken { self.recentToken = recentToken }
         self.correctionSnapshot = snapshot
@@ -67,8 +69,9 @@ final class FramePipeline {
     } }
     private func applyNames(_ snapshot: GameNamesSnapshot) {
         if !namesConfigured || namesSnapshot.outputKey != snapshot.outputKey {
-            translations = BoundedLRU(capacity:8); namesWords = snapshot.words; speakerWords = snapshot.speakerWords
-            namesByKey = Dictionary(uniqueKeysWithValues:snapshot.entries.map{($0.id,$0.arabic)})
+            let effective = snapshot.effective(packLabels:quality[.packLabels])
+            translations = BoundedLRU(capacity:8); namesWords = effective.words; speakerWords = effective.speakerWords
+            namesByKey = Dictionary(uniqueKeysWithValues:effective.entries.map{($0.id,$0.arabic)})
             namesConfigured = true
         }
         namesSnapshot = snapshot
@@ -81,10 +84,13 @@ final class FramePipeline {
     private var pendingSegments: [CaptureLine] = []
     func configureQuality(_ value: QualitySettings) { queue.async {
         if self.quality.outputKey != value.outputKey { self.translations = BoundedLRU(capacity:8) }
+        if self.quality[.packLabels] != value[.packLabels] { self.namesConfigured = false }
         self.quality = value; self.ocr.quality = value; self.ocr.qualityTrace = value[.punctuationTrace]
         self.corrections = CorrectionContext(self.correctionSnapshot,enabled:value[.corrections])
         self.translator.configureCorrections(self.correctionSnapshot,enabled:value[.corrections])
-        self.translator.configureNames(self.namesSnapshot)
+        self.applyNames(self.namesSnapshot)
+        self.translator.configureQuality(value)
+        self.translator.packs?.configureQuality(PackQualityOptions(value))
         self.translator.configureEngineDiagnostics(value[.punctuationTrace] || self.capture.active)
         if !value[.sessionCapture] { self.capture.stop(); self.ocr.captureLines = false; self.reportCapture() }
     } }
@@ -156,6 +162,7 @@ final class FramePipeline {
     func setBackground(_ value: Bool) { queue.async { [self] in isBackground = value; ocr.setBackground(value) } }
     func configureAdvanced(_ value: AdvancedSettings) {
         queue.async { [self] in
+            if advanced != value { advancedEpoch &+= 1; translations = BoundedLRU(capacity:8) }
             advanced = value; memory.enabled = value.contextEnabled; memory.capacity = value.contextCapacity
             memory.prune(now:ProcessInfo.processInfo.systemUptime)
         }
@@ -279,6 +286,7 @@ final class FramePipeline {
         pending = nil; translating = true
         let epoch = runID
         let contextKey = outputContextKey
+        if translationsContextKey != contextKey { translations = BoundedLRU(capacity:8); translationsContextKey = contextKey }
         let correctionScope = correctionSnapshot.scopeKey
         let publicationToken = recentToken
         memory.prune(now:ProcessInfo.processInfo.systemUptime)
@@ -287,7 +295,9 @@ final class FramePipeline {
         let reusable = !job.meaningfulCorrection && cached.map { DialogueText.same($0.0,job.text) && !DialogueText.prefix($0.0,job.text) } == true
         let cueOnly = engineInput.isEmpty && job.cue != nil
         let correctionSource = engineInput.isEmpty ? job.text : engineInput
-        let override = DialogueOverride.resolve(source:correctionSource,corrections:corrections,reuse:reusable ? cached?.2 : nil,cue:cueOnly ? job.cue : nil) {
+        let selectedGame = translator.packs?.publication("",origin:.rule).game
+        let applicable = translator.packs == nil || corrections.matches(game:selectedGame) ? corrections : CorrectionContext(correctionSnapshot,enabled:false)
+        let override = DialogueOverride.resolve(source:correctionSource,corrections:applicable,reuse:reusable ? cached?.2 : nil,cue:cueOnly ? job.cue : nil) {
             Terminology.resolve(engineInput,rules:advanced.terminology,context:memory.entries.filter { $0.id != job.id })
         }
         let punctuationTrace = metrics.punctuationTrace

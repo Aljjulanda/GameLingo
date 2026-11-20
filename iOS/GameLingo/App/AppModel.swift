@@ -15,9 +15,9 @@ final class AppModel: ObservableObject {
     }
     @Published var quality = QualitySettings.load() {
         didSet {
-            quality.save(); pipeline.configureQuality(quality)
+            quality.save(); packLibrary.store.configureQuality(PackQualityOptions(quality)); packLibrary.configureQuality(quality); pipeline.configureQuality(quality)
             if oldValue[.measurement] != quality[.measurement] { packLibrary.metrics = HybridMetrics(); packLibrary.store.resetMetrics() }
-            if !oldValue[.learnNames] && quality[.learnNames] { refreshPackNamePairs() }
+            if (!oldValue[.learnNames] && quality[.learnNames]) || oldValue[.packLabels] != quality[.packLabels] || oldValue[.packMarkup] != quality[.packMarkup] { refreshPackNamePairs() }
             if !quality[.corrections] { correctionsLibrary.clearRecent() }
         }
     }
@@ -76,6 +76,13 @@ final class AppModel: ObservableObject {
                   self.packLibrary.state.loaded, self.namesLibrary.snapshot.game == (game ?? "general") else { return }
             self.namesLibrary.seed(pairs)
         }
+        guard quality[.packLabels] else { return }
+        packLibrary.store.qualityNames { [weak self] game,pack,names in
+            guard let self, self.quality[.learnNames], self.quality[.packLabels], self.packLibrary.state.loaded,
+                  game == self.packLibrary.state.registry.selectedGame, self.namesLibrary.snapshot.game == (game ?? "general"),
+                  pack != nil, pack == self.packLibrary.state.registry.packs.first(where:{$0.manifest.gameId == game && $0.enabled})?.id else { return }
+            self.namesLibrary.seedPackLabels(names)
+        }
     }
     lazy var translator = OfflineTranslator(packs:packLibrary.store)
     let hub = TVHub()
@@ -132,7 +139,7 @@ final class AppModel: ObservableObject {
 
     init() {
         try? LocalizationInbox().prepare()
-        pipeline.configureQuality(quality)
+        packLibrary.store.configureQuality(PackQualityOptions(quality)); packLibrary.configureQuality(quality); pipeline.configureQuality(quality)
         pipeline.onCaptureState = { [weak self] active,file in self?.qualityCaptureActive = active; self?.qualityCaptureFile = file }
         pipeline.captureAction()
         namesLibrary.onChange = { [weak self] store,snapshot in self?.pipeline.configureNames(store,snapshot:snapshot) }

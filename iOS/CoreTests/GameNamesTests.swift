@@ -2,6 +2,22 @@ import XCTest
 @testable import LingoCore
 
 final class GameNamesTests: XCTestCase {
+    func testPackLabelSpellingProvenanceAndIndependentRollbackPreserveUserChoices() throws {
+        let folder = root(); defer { try? FileManager.default.removeItem(at:folder) }
+        let store = try GameNamesStore(root:folder,game:"synthetic")
+        let approximate = GameName(english:"Arthur",type:.person,arabic:"ارثر",source:.pack,count:0,approximate:true,packLabel:true)
+        try store.upsert(approximate)
+        XCTAssertTrue(store.snapshot.effective(packLabels:false).entries.isEmpty)
+        XCTAssertEqual(store.snapshot.effective(packLabels:true).entries.first?.arabic,"ارثر")
+        var canonical = approximate; canonical.arabic = "آرثر"; canonical.approximate = false
+        try store.upsert(canonical); try store.upsert(approximate)
+        XCTAssertEqual(store.snapshot.entries.first?.arabic,"آرثر")
+        try store.upsert(name("Arthur","آرثر اليدوي"),explicit:true)
+        try store.upsert(canonical)
+        XCTAssertEqual(store.snapshot.effective(packLabels:false).entries.first?.arabic,"آرثر اليدوي")
+        try store.remove("Arthur"); try store.upsert(approximate); XCTAssertTrue(store.snapshot.entries.isEmpty)
+        XCTAssertEqual(try GameNamesStore(root:folder,game:"synthetic").snapshot,store.snapshot)
+    }
     private func root() -> URL { FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString) }
     private func name(_ english: String = "Arthur", _ arabic: String = "آرثر", _ source: GameNameSource = .manual) -> GameName { GameName(english:english,type:.person,arabic:arabic,source:source,count:1) }
     func testLearningThresholdsDistinctEventsAndNoHUDOrDialogueInference() throws {

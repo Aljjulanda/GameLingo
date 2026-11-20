@@ -17,6 +17,14 @@ final class OfflineTranslator {
     private var cancellationGeneration: UInt64 = 0
     private var cache = BoundedLRU<String,String>(capacity:256)
     private var names = GameNamesSnapshot(game:"general")
+    private var quality = QualitySettings()
+    private var lastPackKey = ""
+    func configureQuality(_ value: QualitySettings) {
+        queue.async { [self] in
+            if quality.outputKey != value.outputKey { cache = BoundedLRU(capacity:256) }
+            quality = value; packs?.configureQuality(PackQualityOptions(value))
+        }
+    }
     private var corrections = CorrectionContext(CorrectionsSnapshot(game:"general",general:true),enabled:false)
     func configureCorrections(_ snapshot: CorrectionsSnapshot, enabled: Bool) {
         queue.async { [self] in
@@ -64,8 +72,11 @@ final class OfflineTranslator {
             do {
                 guard isCurrent(generation) else { throw CancellationError() }
                 let normalized = DialogueText.normalized(text)
-                let key = Self.modelID+"/commands-v2/en/ar/"+normalized
-                let corrected = corrections.lookup(text)
+                let packKey = packs?.outputKey ?? ""
+                if lastPackKey != packKey { cache = BoundedLRU(capacity:256); lastPackKey = packKey }
+                let key = Self.modelID+"/commands-v2/en/ar/"+quality.outputKey+"/"+names.outputKey+"/"+corrections.outputKey+"/"+packKey+"/"+normalized
+                let selectedGame = packs?.publication("",origin:.rule).game
+                let corrected = packs == nil || corrections.matches(game:selectedGame) ? corrections.lookup(text) : nil
                 let selected = corrected != nil ? packs?.publication(eventID ?? "",origin:.userCorrection) : nil
                 let lookup = corrected != nil ? PackLookupOutcome(game:selected?.game,pack:selected?.pack) : packs?.lookupDetailed(text,category:category,eventID:eventID) ?? PackLookupOutcome(fallback:.noDatabase)
                 let fallback = category == "dialogue" ? lookup.fallback : TranslationFallback.notDialogue

@@ -61,7 +61,7 @@ struct PublishedTranslation: Codable {
 struct HybridMetrics {
     // Retain legacy attempt counters for comparison; none is the denominator Y.
     var dialogueEvents = 0, lookups = 0, matches = 0, fallbacks = 0, ambiguous = 0
-    var argos = 0, exact = 0, normalized = 0, approximate = 0
+    var argos = 0, exact = 0, normalized = 0, punctuationless = 0, approximate = 0
     var lookupTotal = 0.0
     var samples = LatencySamples()
     private(set) var published = 0, publishedPack = 0

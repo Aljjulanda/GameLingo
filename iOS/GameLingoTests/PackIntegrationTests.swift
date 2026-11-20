@@ -8,6 +8,82 @@ import UIKit
 @testable import GameLingo
 
 final class PackIntegrationTests: XCTestCase {
+    func testQualityImportV2ProfilesAndNamesRetainOriginalAndRollback() async throws {
+        let root = try folder(), file = root.appendingPathComponent("quality.json"), store = TranslationPackStore(root:root.appendingPathComponent("packs"))
+        let bytes = Data(#"{"game_id":"quality","entries":[{"en":"Arthur: ~z~Stay~n~here?","ar":"Arthur: <C>ابق هنا.</C>"},{"en":"Arthur","ar":"آرثر"},{"en":"Take {0} items.","ar":"خذ {0} أغراض."}]}"#.utf8)
+        try bytes.write(to:file)
+        let (result,report) = await inspect(file,store:store); try result.get()
+        let saved = await state(store), manifest = try XCTUnwrap(saved.registry.packs.first?.manifest)
+        XCTAssertEqual(manifest.schemaVersion,2); XCTAssertEqual(report.gameId,"quality")
+        XCTAssertEqual(report.quality?.rawUsable,3); XCTAssertEqual(report.quality?.markupUsable,2)
+        XCTAssertEqual(report.quality?.cleaned,1); XCTAssertEqual(report.quality?.excluded,1)
+        XCTAssertTrue(manifest.speakerNames?.isEmpty == true)
+        XCTAssertEqual(manifest.quality?.speakerNames,["Arthur"])
+        XCTAssertEqual(try Data(contentsOf:file),bytes); XCTAssertNil(saved.registry.selectedGame)
+        store.changeSelection(game:"quality"); try await waitLoaded(store)
+        XCTAssertEqual(store.lookup("Arthur: ~z~Stay~n~here?",category:"dialogue",eventID:nil),"Arthur: <C>ابق هنا.</C>")
+        store.configureQuality(PackQualityOptions(markup:true,labels:true,punctuation:true))
+        let match = store.lookupDetailed("Stay, here!",category:"dialogue",eventID:nil)
+        XCTAssertEqual(match.text,"ابق هنا."); XCTAssertEqual(match.origin,.packPunctuationless)
+        XCTAssertNil(store.lookup("Take {0} items.",category:"dialogue",eventID:nil))
+        let names: [GameName] = await withCheckedContinuation { continuation in store.qualityNames{_,_,names in continuation.resume(returning:names)} }
+        XCTAssertEqual(names.first?.arabic,"آرثر"); XCTAssertEqual(names.first?.source,.pack)
+        XCTAssertEqual(names.first?.packLabel,true); XCTAssertEqual(names.first?.approximate,false)
+        store.configureQuality(PackQualityOptions(labels:true))
+        XCTAssertEqual(store.lookup("~z~Stay~n~here?",category:"dialogue",eventID:nil),"<C>ابق هنا.</C>")
+        store.configureQuality(PackQualityOptions())
+        XCTAssertNil(store.lookup("Stay, here!",category:"dialogue",eventID:nil))
+        XCTAssertEqual(store.lookup("Take {0} items.",category:"dialogue",eventID:nil),"خذ {0} أغراض.")
+        let offNames: [GameName] = await withCheckedContinuation { continuation in store.qualityNames{_,_,names in continuation.resume(returning:names)} }
+        XCTAssertTrue(offNames.isEmpty)
+        let restored = TranslationPackStore(root:store.root); try await waitLoaded(restored)
+        XCTAssertEqual(restored.lookup("Arthur: ~z~Stay~n~here?",category:"dialogue",eventID:nil),"Arthur: <C>ابق هنا.</C>")
+    }
+    @MainActor func testQualityActivateNowIsExplicitAndRetainsLegacyNamesWhenOff() async throws {
+        let root = try folder(), file = root.appendingPathComponent("activation.json")
+        try Data(#"{"game_id":"activation","entries":[{"en":"Arthur: Stay here.","ar":"ابق هنا."}]}"#.utf8).write(to:file)
+        let library = GamePackLibrary(store:TranslationPackStore(root:root.appendingPathComponent("packs")))
+        var names = ""
+        library.onNamesChanged = { names = $0 }
+        XCTAssertTrue(library.importFile(file))
+        for _ in 0..<250 { if !library.busy { break }; try await Task.sleep(nanoseconds:20_000_000) }
+        XCTAssertFalse(library.busy); XCTAssertEqual(library.inspection?.gameId,"activation")
+        XCTAssertNil(library.state.registry.selectedGame)
+        library.activateImported(); try await waitLoaded(library.store)
+        for _ in 0..<100 { if library.state.loaded { break }; try await Task.sleep(nanoseconds:20_000_000) }
+        XCTAssertEqual(library.state.registry.selectedGame,"activation"); XCTAssertEqual(names,"")
+        var quality = QualitySettings(); quality[.packLabels] = true
+        library.configureQuality(quality); XCTAssertEqual(names,"Arthur")
+        library.configureQuality(QualitySettings()); XCTAssertEqual(names,"")
+    }
+    func testQualityCacheAndCorrectionsFollowActualActiveGame() async throws {
+        let root = try folder(), store = TranslationPackStore(root:root.appendingPathComponent("packs"))
+        try await importFile(pack(),to:store); try await importFile(pack(game:"other"),to:store)
+        store.changeSelection(game:"fixture"); try await waitLoaded(store)
+        let model = try XCTUnwrap(Bundle(for:Self.self).url(forResource:"en_ar",withExtension:nil))
+        let translator = OfflineTranslator(folder:model,packs:store)
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void,Error>) in translator.load{continuation.resume(with:$0)} }
+        func translated() async throws -> TranslationDecision {
+            try await withCheckedThrowingContinuation { continuation in translator.translateDetailed("Where are you going?"){ result,_ in continuation.resume(with:result) } }
+        }
+        let first = try await translated(), cached = try await translated()
+        XCTAssertEqual(first.origin,.argosInference); XCTAssertEqual(cached.origin,.argosCache)
+        var quality = QualitySettings(); quality[.packPunctuation] = true
+        translator.configureQuality(quality)
+        let flag = try await translated(); XCTAssertEqual(flag.origin,.argosInference); XCTAssertEqual(flag.text,first.text)
+        var names = GameNamesSnapshot(game:"fixture"); names.version = 1; translator.configureNames(names)
+        let renamed = try await translated(); XCTAssertEqual(renamed.origin,.argosInference)
+        store.changeSelection(game:"other"); try await waitLoaded(store)
+        let changed = try await translated(); XCTAssertEqual(changed.origin,.argosInference); XCTAssertEqual(changed.game,"other")
+        let corrections = try GameCorrectionsStore(root:root.appendingPathComponent("corrections"),game:"fixture")
+        try corrections.save(source:"Where are you going?",target:"تصحيح اللعبة الأولى")
+        translator.configureCorrections(corrections.snapshot,enabled:true)
+        let isolated = try await translated(); XCTAssertNotEqual(isolated.origin,.userCorrection); XCTAssertEqual(isolated.text,first.text)
+        let selected = await state(store), item = try XCTUnwrap(selected.registry.packs.first{$0.manifest.gameId == "other"})
+        store.enable(item.id,false); _ = await state(store)
+        let disabled = try await translated(); XCTAssertEqual(disabled.origin,.argosInference); XCTAssertNil(disabled.pack)
+        XCTAssertEqual(disabled.game,"other"); XCTAssertEqual(disabled.fallback,.noDatabase)
+    }
     func testExplicitCorrectionWinsOverActivePackAndDeletionRestoresExactPack() async throws {
         let root = try folder(), store = TranslationPackStore(root:root.appendingPathComponent("packs"))
         try await importFile(pack(),to:store)

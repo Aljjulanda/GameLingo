@@ -36,6 +36,14 @@ import UniformTypeIdentifiers
         catch { message = "تعذر حفظ بعض أسماء الحزمة" }
     }
     func export() -> URL? { do { return try store?.export() } catch { message = "تعذر تصدير الأسماء"; return nil } }
+    func seedPackLabels(_ names: [GameName]) {
+        do {
+            for name in names where name.source == .pack && name.packLabel == true && name.valid {
+                try store?.upsert(name)
+            }
+            refresh()
+        } catch { message = "تعذر حفظ بعض أسماء الحزمة" }
+    }
     func importFile(_ url: URL) {
         guard let store else { return }
         message = "جارٍ قراءة ملف الأسماء"
@@ -85,7 +93,7 @@ struct GameNamesView: View {
                 } label: {
                     VStack(alignment:.leading) {
                         Text(name.english+" · "+name.arabic)
-                        Text(name.source.title+" · "+name.type.title+" · \(name.count) مرات").font(.caption).foregroundColor(.secondary)
+                        Text(name.source.title+(name.approximate == true ? " · تهجئة تقريبية" : "")+" · "+name.type.title+" · \(name.count) مرات").font(.caption).foregroundColor(.secondary)
                     }
                 }.swipeActions { Button("حذف",role:.destructive) { library.remove(name) } }
             }

@@ -47,6 +47,7 @@ final class PackQualityTests: XCTestCase {
         }
     }
     func testPackLabelsNeedNamesAndNeverHideUnverifiedArabicPrefixes() {
+        XCTAssertEqual(row("47: Keep going.","واصل.",labels:true).speaker,"47")
         for label in ["Wait","Look","Objective","Press A","Music","2026","PS5"] {
             let source = label+": Keep going."
             XCTAssertEqual(row(source,"واصل.",labels:true).source,source)
@@ -54,6 +55,13 @@ final class PackQualityTests: XCTestCase {
         XCTAssertEqual(row("The Stranger: Keep going.","واصل.",labels:true).speaker,"The Stranger")
         XCTAssertEqual(row("Arthur: Keep going.","آرثر: واصل.",labels:true).target,"آرثر: واصل.")
         XCTAssertNil(PackQualityPolicy.label("Arthur:"))
+    }
+    func testCorrectionScopeMustMatchSelectedGameAndGeneralRole() {
+        XCTAssertTrue(CorrectionContext(CorrectionsSnapshot(game:"a"),enabled:true).matches(game:"a"))
+        XCTAssertFalse(CorrectionContext(CorrectionsSnapshot(game:"a"),enabled:true).matches(game:"b"))
+        XCTAssertFalse(CorrectionContext(CorrectionsSnapshot(game:"general"),enabled:true).matches(game:nil))
+        XCTAssertTrue(CorrectionContext(CorrectionsSnapshot(game:"general",general:true),enabled:true).matches(game:nil))
+        XCTAssertFalse(CorrectionContext(CorrectionsSnapshot(game:"general",general:true),enabled:true).matches(game:"general"))
     }
     func testPunctuationTierRetainsWordBoundariesContractionsAndSignedDecimals() {
         XCTAssertEqual(PackQualityPolicy.punctuationless("“Stop, go!”"),"stop go")

@@ -44,6 +44,7 @@ struct CorrectionContext {
         self.snapshot = snapshot; self.enabled = enabled; index = CorrectionLookup(snapshot)
     }
     var outputKey: String { snapshot.outputKey + (enabled ? "/on" : "/off") }
+    func matches(game: String?) -> Bool { snapshot.game == (game ?? "general") && (snapshot.general == true) == (game == nil) }
     func lookup(_ source: String) -> String? { enabled ? index.lookup(source) : nil }
 }
 

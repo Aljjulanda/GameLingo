@@ -23,6 +23,13 @@ final class GamePackLibrary: ObservableObject {
     private let importer = GameTranslationImporter()
     private var importControl: LocalizationImportControl?
     var onNamesChanged: ((String) -> Void)?
+    private var qualityLabels = false
+    func configureQuality(_ value: QualitySettings) { qualityLabels = value[.packLabels]; notifyNames() }
+    private func notifyNames() {
+        let active = state.loaded ? state.registry.packs.first { $0.manifest.gameId == state.registry.selectedGame && $0.enabled } : nil
+        let names = (active?.manifest.speakerNames ?? [])+(qualityLabels ? active?.manifest.quality?.speakerNames ?? [] : [])
+        onNamesChanged?(names.joined(separator:","))
+    }
     init(store: TranslationPackStore = TranslationPackStore()) {
         self.store = store
         store.onChange = { [weak self] value in
@@ -34,8 +41,7 @@ final class GamePackLibrary: ObservableObject {
                 self.metrics = HybridMetrics(); self.selfTestReport = ""
             }
             self.state = value
-            let active = value.loaded ? value.registry.packs.first { $0.manifest.gameId == value.registry.selectedGame && $0.enabled } : nil
-            self.onNamesChanged?((active?.manifest.speakerNames ?? []).joined(separator:","))
+            self.notifyNames()
         }
     }
     func refreshMetrics() { store.sampleMetrics { [weak self] in self?.metrics = $0 } }
@@ -54,6 +60,10 @@ final class GamePackLibrary: ObservableObject {
         return true
     }
     func cancelImport() { importControl?.cancel(); message = "جارٍ إلغاء الاستيراد وتنظيف الملفات المؤقتة…" }
+    func activateImported() {
+        guard !busy, let game = inspection?.gameId, let pack = state.registry.packs.first(where:{$0.manifest.gameId == game}) else { return }
+        store.enable(pack.id,true); store.changeSelection(game:game)
+    }
     var method: String {
         state.loaded ? "حزمة اللعبة المختارة ثم Argos عند الحاجة" : "Argos المحلي"
     }
@@ -95,6 +105,9 @@ struct GamePackLibraryView: View {
                 }
                 if let report = library.inspection { Text(report.filename+" · "+report.format).font(.caption).accessibilityIdentifier("gamePacks.fileSummary") }
                 if !library.message.isEmpty { Text(library.message).accessibilityIdentifier("gamePacks.importStatus") }
+                if library.inspection?.gameId != nil {
+                    Button("فعّلها الآن") { library.activateImported() }.disabled(model.running || library.busy).accessibilityIdentifier("gamePacks.activateImported")
+                }
                 if library.busy { Button("إلغاء الاستيراد",role:.cancel) { library.cancelImport() }.accessibilityIdentifier("gamePacks.cancelImport") }
                 if let error = library.state.error { Text(error).foregroundColor(.orange) }
                 if model.running { Text("أوقف جلسة الترجمة لتغيير اللعبة أو الحزم.").font(.footnote) }
@@ -136,6 +149,13 @@ struct GamePackLibraryView: View {
                     LabeledContent("مقابلة الإنجليزية والعربية",value:answer(report.mapping))
                     if let count = report.usable { LabeledContent("المداخل القابلة للاستخدام",value:String(count)) }
                     if report.rejected > 0 { LabeledContent("مداخل مكررة أو غير صالحة استُبعدت",value:String(report.rejected)) }
+                    if let quality = report.quality {
+                        LabeledContent("القابل للاستخدام قبل / بعد التنظيف",value:"\(quality.rawUsable) / \(quality.markupUsable)")
+                        LabeledContent("مداخل نُظفت / استُبعدت بسبب علامات أو متغيرات",value:"\(quality.cleaned) / \(quality.excluded)")
+                        LabeledContent("مداخل لها اسم متحدث موثوق",value:String(quality.labels))
+                        Text("المصدر الأصلي محفوظ. تُستخدم التحسينات عند تفعيل مفاتيح الحزم في «إصلاحات الجودة»؛ إغلاقها يعيد مطابقة النص الأصلي.").font(.footnote)
+                        if quality.possibleVisualOrder { Text("تحذير: توجد مؤشرات إحصائية لترتيب عربي معكوس. لا تثبت النتيجة فساد النص، ولم يُعكس أو يُصلح تلقائيًا.").foregroundColor(.orange) }
+                    }
                     if !report.requirement.isEmpty { Text(report.requirement) }
                     if !report.result.isEmpty { Text(report.result) }
                 }
@@ -194,6 +214,7 @@ struct HybridStatisticsView: View {
             LabeledContent("مطابقات غامضة رُفضت",value:String(library.metrics.ambiguous))
             LabeledContent("طلبات Argos",value:String(library.metrics.argos))
             LabeledContent("مطابقة حرفية / بعد التطبيع",value:"\(library.metrics.exact) / \(library.metrics.normalized)")
+            if model.quality[.packPunctuation] { LabeledContent("مطابقة الكلمات دون ترقيم",value:String(library.metrics.punctuationless)) }
             LabeledContent("مطابقة تقريبية آمنة",value:String(library.metrics.approximate))
             LabeledContent("بحث الحزمة · المتوسط / p95",value:"\(NumericInput.format(library.metrics.average)) / \(NumericInput.format(library.metrics.samples.p95)) ms")
             Text("البحث التقريبي معطّل في هذا الإصدار لحماية المعنى. الإحصاءات بلا سجل دائم للحوار.").font(.footnote)

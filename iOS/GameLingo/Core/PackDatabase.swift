@@ -275,10 +275,13 @@ final class PackDatabase {
         guard code == SQLITE_DONE else { throw PackFailure.damaged }; return result
     }
     /// Explicit synthetic compatibility check only, not gameplay provenance.
-    func sampleSources(seed: UInt64 = 0x474c, limit: Int = 20) throws -> [String] {
+    func sampleSources(seed: UInt64 = 0x474c, limit: Int = 20, quality: PackQualityOptions = PackQualityOptions()) throws -> [String] {
         progress.deadline = ProcessInfo.processInfo.systemUptime+2
-        let statement = try prepare("SELECT source FROM entries WHERE usable=1 AND category IN ('dialogue','general') ORDER BY identifier LIMIT 20")
+        let profile = schemaVersion == 2 ? quality.profile : 0
+        let sql = profile == 0 ? "SELECT source FROM entries WHERE usable=1 AND category IN ('dialogue','general') ORDER BY identifier LIMIT 20" : "SELECT r.source, r.identifier FROM entries r WHERE r.usable=1 AND r.category IN ('dialogue','general') AND NOT EXISTS (SELECT 1 FROM quality_variants q WHERE q.entry_id=r.rowid AND q.profile=?1) UNION ALL SELECT q.source, r.identifier FROM quality_variants q JOIN entries r ON r.rowid=q.entry_id WHERE q.usable=1 AND q.profile=?1 AND r.category IN ('dialogue','general') ORDER BY identifier LIMIT 20"
+        let statement = try prepare(sql)
         defer { sqlite3_finalize(statement) }
+        if profile != 0 { guard sqlite3_bind_int(statement,1,Int32(profile)) == SQLITE_OK else { throw PackFailure.damaged } }
         var result: [String] = [], code = sqlite3_step(statement)
         while code == SQLITE_ROW { result.append(try string(statement,0)); code = sqlite3_step(statement) }
         guard code == SQLITE_DONE else { throw PackFailure.damaged }
