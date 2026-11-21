@@ -93,13 +93,22 @@ final class ImprovementMemoryStore {
     func prune(now: Date = Date()) throws {
         raw.removeAll { now.timeIntervalSince($0.created) > 7*86400 }; proposals.removeAll { now.timeIntervalSince($0.example.created) > 7*86400 }
         try save("raw",raw); try save("proposals",proposals)
-        try? FileManager.default.removeItem(at:root.appendingPathComponent("export.json"))
+        let exported = root.appendingPathComponent("export.json")
+        if let modified = try? exported.resourceValues(forKeys:[.contentModificationDateKey]).contentModificationDate,
+           now.timeIntervalSince(modified) > 900 { try? FileManager.default.removeItem(at:exported) }
     }
     func deleteCollected() throws { raw = []; proposals = []; try save("raw",raw); try save("proposals",proposals); try? FileManager.default.removeItem(at:root.appendingPathComponent("export.json")) }
     func rollbackApproved() throws { approved = []; try save("approved",approved); try? FileManager.default.removeItem(at:root.appendingPathComponent("export.json")) }
     func export() throws -> URL {
+        try prune()
         let file = root.appendingPathComponent("export.json")
         let data = try JSONSerialization.data(withJSONObject:["raw":JSONSerialization.jsonObject(with:JSONEncoder().encode(raw)),"proposals":JSONSerialization.jsonObject(with:JSONEncoder().encode(proposals)),"approved":JSONSerialization.jsonObject(with:JSONEncoder().encode(approved))],options:[.sortedKeys])
-        try UserDataFile.write(data,to:file); return file
+        guard data.count <= 12*1024*1024 else { throw LingoError.invalid("التصدير يتجاوز الحد المسموح") }
+        #if os(iOS)
+        try data.write(to:file,options:[.atomic,.completeFileProtectionUntilFirstUserAuthentication])
+        #else
+        try data.write(to:file,options:.atomic)
+        #endif
+        return file
     }
 }

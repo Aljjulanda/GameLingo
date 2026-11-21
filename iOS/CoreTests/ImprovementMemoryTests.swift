@@ -33,9 +33,15 @@ final class ImprovementMemoryTests: XCTestCase {
         XCTAssertNil(snapshot.lookup(game:example.game,source:example.source,context:"another speaker"))
         XCTAssertNil(snapshot.lookup(game:example.game,source:"Do take 11 coins.",context:example.context))
         let exported = try store.export(); XCTAssertTrue(FileManager.default.fileExists(atPath:exported.path))
+        var another = example; another.id = UUID().uuidString; another.source = "Wait here."
+        try store.observe(another,consent:true)
+        XCTAssertTrue(FileManager.default.fileExists(atPath:exported.path),"New capture must not delete an export being shared")
         try store.deleteCollected(); XCTAssertFalse(FileManager.default.fileExists(atPath:exported.path)); XCTAssertEqual(store.approved.count,1)
         try store.rollbackApproved(); XCTAssertTrue(store.approved.isEmpty)
         var old = example; old.created = Date(timeIntervalSince1970:0)
-        try store.observe(old,consent:true); try store.prune(); XCTAssertTrue(store.raw.isEmpty)
+        try store.observe(old,consent:true)
+        let fresh = try store.export(); XCTAssertTrue(store.raw.isEmpty)
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with:Data(contentsOf:fresh)) as? [String:Any])
+        XCTAssertEqual((json["raw"] as? [Any])?.count,0,"Export must enforce retention even if no new gameplay was captured")
     }
 }
