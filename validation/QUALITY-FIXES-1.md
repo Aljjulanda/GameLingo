@@ -623,3 +623,278 @@ preventing unnecessary sparse copies (the old measured count includes whitespace
 rewrites). New regression checks zero extra variants for ordinary spaced lines.
 Raw source validation, strict derived validation, ambiguity checks/page caps/
 cancellation/deadlines remain. Re-measure on same Intel environment before gate.
+
+#### Current E verification and corrected live-status interpretation
+
+Optimizations489bfef then conservative recovery guardc938ad3 passed all132 portable
+tests in44725040332 (previous44724707140 also succeeded). Recovery now requires
+ACTUAL supported token removal and no remaining delimiter that could represent an
+unknown marker; removing only a label/ordinary whitespace cannot unblock old data.
+
+Run44722281933 onbb02183 was explicitly cancelled to validate the optimized source
+after observing the import budget regression. It is NOT a completed native pass.
+Its final validation artifact14623294273 ZIP82876bytes digest
+2e2d8ee2fbb93cbff3c54523ddac02ee56b062ba2afeecd2aecd8f793e9d7cc3
+was downloaded/verified. Release and Debug test builds SUCCEEDED. Contrary to the
+stale live browser view (which showed an old ClangStatCache line), actual
+apple-tests.log29908bytes shows12 Apple cases PASSED from11:12:47UTC, then the B
+cue pipeline case STARTED before cancellation. No E Pack cases/picker ran and no
+full summary. Partial xcresult Staging is not a completed result. A user progress
+claim that there were no case results was explicitly corrected. Never infer
+zero execution from missing/stale live DOM chunks.
+
+Current full ARM44726181204/job136254309789 on c938ad3 acquired a runner, passed
+Mac Core132/real RDR2/native prepare/maintenance/archive; actual native/picker
+verification pending. Completed RDR2 step live DOM reports:228174rows,
+209459raw usable;1102 allOFF equivalence samples (1000matches102rejections),
+raw validation8640.26ms, upgrade8236.06ms, v2validation15458.39ms; database
+112472064bytes,5610cleaned13excluded,209617markup-usable, warning false.
+Final artifact still required for durable evidence. Approx32.3sec cumulative
+core work is below the existing120sec importer control on this ARM Mac; copy/
+hash/provider work and physical iPhone timing are separate. Old timings were
+Intel, new ARM: do NOT claim a same-host speedup ratio. Database size/derived-row
+reduction and targeted whitespace regression are environment-independent.
+No new Release, no approved current IPA; F/H/I still unfinished.
+
+#### Durable c938 native result and current F investigation (20 November)
+
+Downloaded artifact14626190519 for44726181204: ZIP123678211bytes,
+SHA256541791dc6dabaab7ebd2b2b9a9085fed151074f5f3e6de50166d2bb3dea19285.
+Actual apple-tests.log:50executed,48passed,2capability skips,0failures.
+All three E integration cases passed. Native tests alone do not make this run
+green: picker UI executed2cases, sandbox passed, real-provider selection failed
+at XML after5verified extensions, including the caption fallback. Archive step
+passed but IPA upload correctly did not run. No new Release.
+
+Downloaded aggregate RDR2 report confirms the timings/counts above. No private
+source dialogue was extracted into tracked files or published. Current Files
+investigation uses actual provider List rows and the same exact delegate filename,
+12extension, cancel and sandbox assertions. Only the system-provider test language
+is English for Vision OCR; Arabic product strings/render fixtures are separate.
+Focused workflow can opt into picker checks, and cannot publish release assets.
+
+F pure punctuation/command policies passed138 portable cases at610ed53 (run
+44730942937). Runtime wiring repairs model output only, never explicit corrections,
+pack text or command-map values. Quoted and mixed-Latin bracket text is preserved;
+unbalanced state is content-free. Raw inference is retained only for opt-in trace/
+capture, before repair. Cache invalidates on either independent flag change. Added
+native real-model rollback/cache/trace tests and synthetic sentence-splitting
+research, not a production splitter. No F switches are visible until verified.
+
+F line-cap initial8f02cda checkpoint44731313016 correctly failed: anchored grouping
+only considers immediate neighbours of the first body line, so changing prefix3
+to5 alone does not admit a five-line body.498e056 adds bounded connected-neighbour
+growth only with lineLimits ON; OFF retains the original filter verbatim. HUD
+counters are excluded, total body height bounded. New unanchored5/6-line bodies
+need compact layout, an actual sentence anchor, and repeated OCR evidence; short
+line majority alone is never a menu veto. Advanced caps persisted (3...5/4...6),
+not yet exposed.143-case checkpoint44731562043 and focused native44731368649 are
+pending outcomes; the latter source8f02cda predates the anchored grouping correction
+and does not certify that correction. Typewriter/H/final I remain unfinished.
+
+#### Later 20 November verification (before final release gate)
+
+44731368649/job136271683875 (8f02cda, Intel) actually ran7native Quality cases:
+6passed,1file-protection capability skip,0failures. Real Argos punctuation/raw
+trace/cache/one-flag rollback and explicit-correction authority passed. Native
+sentence research on3multi-sentence fixtures found no clear meaning improvement:
+whole/split times512/944ms,497/651ms,580/859ms (single measurements on Simulator,
+not a phone benchmark). Three single-sentence controls retained the whole-input
+path, including Mr./Dr./St., ellipsis and quotes. No production splitter/flag was
+added. A repeatable Windows CPU int8 experiment on the exact hash-verified local
+Argos package reached a similar semantic conclusion, separately from iOS proof;
+tools/quality/compare_argos_sentences.py records3repeat medians using synthetic
+authored inputs. The Windows application's files/model were never changed.
+
+The same focused workflow FAILED picker UI. Its English provider view menu did
+not open using the previous Arabic leading-edge coordinate. Later XCTest itself
+reported XPCReplyCheck/NSCFString bytes; video attachment contains only a pending-
+attachment error, not usable video, so do not claim a visual root-cause proof.
+Sandbox import passed. Artifact14627432445,64812346bytes, SHA256
+09caeb410244d7178f11780b47f7751331284bd15e571d18738e4972cd424f16 was downloaded/
+verified.6071302 uses English trailing-edge More and OCR-found Cancel. No product
+import filtering changed. Its initial ARM run44762618645 was cancelled without
+executing steps. Picker still needs an actually passing rerun, not assumptions.
+
+44764080712/job136383937153 (90fd566, Intel) PASSED8native cases:7passed1capability
+skip. Actual Apple Translation LanguageAvailability API returned unsupported for
+en-ar on iOS18.5/build22F77 in0.339s. No session/download/engine option was added.
+This does NOT establish availability on the user's current physical iOS release.
+API: https://developer.apple.com/documentation/translation/languageavailability/status(from:to:)
+
+All-off cross-Release gate44763237497 on d5bebc7 PASSED151Core cases and an actual
+separately compiled bf3675e Release/current post-OCR comparison.10synthetic
+streams/24canonical messages matched exactly (stable-ID namespace normalized;
+required text, geometry, lifecycle fields preserved). Same Ubuntu CI host2900
+timed observations: baseline median0.534ms/p951.390ms; current OFF0.542/1.390ms;
+representative quality enabled0.680/5.061ms. This excludes Vision, SQLite lookup,
+Argos, asynchronous worker, network/TV/physical hardware. It is NOT whole-system
+latency. The enabled workload intentionally emitted25messages (including cue).
+
+44764232354 on c97fe0c PASSED157Core cases + same-output gate. Per-fixture timing
+localized the enabled tail to the6-line unanchored region (fixture6median7.451ms,
+p957.622ms on that host); overall baseline0.779/1.922ms, OFF0.766/1.903ms,
+enabled1.034/6.977ms. af43122 reuses name/word classification only within the
+same at-most8-line OCR observation when lineLimits is ON, never across frames.
+79b2bd9 also accepts short multi-line dialogue with multiple punctuation/pronoun
+anchors plus compact layout and repeated observation. Short-line majority alone
+is not a menu veto. Menus/HUD exclusions and OFF semantics remain unchanged.
+Re-measure optimized code before claiming the regression resolved.
+
+F punctuationRepair/commandPunctuation/lineLimits controls became visible at
+128d6e4 after portable/native component checks; defaults remain OFF. Typewriter
+remains hidden pending native verification. The research settling policy was
+promoted to Core atbc60e96 after its7policy tests, followed by5publication tests,
+bounded selected-game ID hints (max256, no dialogue history), and a terminal-only
+punctuation change regression. f88651e integrates EARLY translation with delayed
+publication in FramePipeline, preserves the existing tracker/worker/TV clocks,
+flushes an already-ready interrupted result before source identity advances,
+and uses a fresh offered frame through the unchanged pacer for confirmation.
+Bitmap signatures never count as OCR reads. Held state is one RAM closure and
+clears on Stop/pause/interruption/disconnect/manual reading; context edits retry
+only a still-current unpublished result. Unselected games learn for the session;
+only selected validated game IDs are remembered. Automatic detection is based on
+multiple strict monotonic prefix extensions with stable region/speaker and high
+confidence; jitter/punctuation-only/unrelated lines are negative evidence.
+Whole-input Argos remains unchanged. Three new native Vision/NV12+rule-worker
+tests cover2actual reads/OFF first-read, interrupted short line ordering, and Stop/
+restart. These are NOT real-model or physical-device claims.
+
+f88651e portable checkpoint44765445844 PASSED; full native/picker sourcef88651e
+runs44765544702(ARM) and44765782205(Intel) are pending results. They do not include
+the later per-read optimization/short-line anchor refinement. The final full IPA
+workflow, exact versions/identities, one-flag matrix, and physical acceptance are
+still required. No new IPA uploaded or Release published.
+
+#### Current source / blockers after 16:06 UTC
+
+Run44765782205/job136389903722 onf88651e completed. Xcode16.4 Debug test build
+SUCCEEDED; Simulator data migration was slow but eventually completed, not an app
+failure. Actual3new Vision/NV12+rule-worker typewriter cases all PASSED: interrupted
+short-line ordering11.484s, Stop/restart12.719s,2real OCR reads/OFF21.091s. Whole
+focused suite11executed,10passed,1protection metadata skip,0native failures.
+These wall times include generated Vision fixtures/host overhead, NOT subtitle
+latency or physical-phone timing. Picker step failed again: neither leading nor
+trailing guessed header edge exposed List in OCR, then screenshot attachment XPC
+reportedNSCFString bytes. Do NOT assert the menu's actual position without an
+independent screen. Artifact14646444040 digest
+027757249f3ad465949b761d37c7f2a818ecdca934f2c5c33491f81c3b20c924,
+54119390bytes, contains durable evidence; not yet downloaded locally.
+
+44766435730 on79b2bd9 passed159Core cases and cross-Release comparison. Same-host
+median/p95ms: Release0.409/1.077, currentOFF0.429/1.128, enabled0.535/1.907.
+Six-line enabled fixture median2.145/p952.280ms. OFF canonical24messages unchanged,
+enabled canonical25messages unchanged from earlier enabled fixtures. The earlier
+c97 host was different: do NOT publish a cross-host speedup percentage. Current
+overhead is lightweight and the repeated-classification source was investigated.
+
+827f053 adds the same TypewriterPublication policy to QualityReplay with a
+synchronous early stub/held result, actual observation filtering, optional game
+hint, no EOF/hashed-frame fake confirmation.4new tests cover a publication record
+not counting as a read, interrupted/terminal order, unknown/OFF/zero legacy output,
+and3s continuous-growth deadline.44768928821/job136401033614 PASSED163Core cases
+and unchanged approved-Release equivalence. Actual async timing still belongs to
+native Frame tests, not this replay. Native tests expanded afterf88651e to cover
+one-flag OFF with other flags ON,zero duration, and editing an explicit correction
+while a result is held. The added correction case remains unexecuted so far.
+
+5b5edc8 prepares iOS0.3.1 build9 and exposes typewriter (OFF) with Advanced window
+3...20(default5) and settle0...3seconds(default3). All other quality defaults remain
+OFF. Game hints max256 selected IDs; reset clears them. Names retry scopes now use
+scopeKey including general/game roles; nonfinite saved settling duration defaults
+to3. Both 5b5edc8/44770458040 and bb6300e/44770965398 portable checkpoints PASSED.
+
+bb6300e adds CI-only independent `simctl io screenshot` captures on diagnostic
+markers to test-picker-ui.sh (bounded24screens/15min, cleaned background watcher).
+This replaces failing in-test screenshot attachments for diagnostic stages but
+does NOT skip any selection, exact delegate filename, extension, cancel or sandbox
+assertion. Current focused run44771052654 onbb6300e,Intel, runs only the existing
+GameSwitch smoke case plus actual picker UI to obtain real provider images. Its
+uploaded logs should contain picker-system-1.png(beforemenu),-2.png(aftermenu),etc.
+Inspect those images BEFORE changing more coordinates/filtering/product code.
+No new IPA artifact/Release. Full0.3.1 build9 workflow still required after picker
+fix, including the latest native correction/zero/all-other-flags tests and all
+old integration cases. APK remains the already verified original-key0.6.2-quality.1.
+
+
+#### 16:59 UTC: actual focused result, no new IPA
+
+Run44775318198 at556e2ef executed12 native tests:10 passed,1 capability
+skip,1 failure. The held-correction case timed out waiting45s for its first
+OCR metric; this does not establish a production correction failure. The
+expanded other-flags-on / zero-duration first-read cases, interrupted ordering,
+Stop/restart, actual Argos punctuation/cache/rollback and Apple availability
+all passed. Picker investigation was skipped because the preceding native
+step failed. No IPA/release certification is inferred.
+
+At1c22eef, the held-correction test verifies and initializes the exact native
+Vision image before timing the pipeline observation, matching the two-read
+test. Focused picker investigation now runs even after a native failure (unless
+cancelled); the job remains failed and the full release gate is unchanged.
+Run44778642657 is the pending focused native+picker retry.
+
+APK0.6.2-quality.1 was independently reverified locally with apksigner, aapt,
+DEX test-class absence and empty runtime-source diff since99da49ac: package
+dev.gamelingo.tv/code10,1511120 bytes, SHA-256
+e3605dd8bf1177940cee202a29b15179a07c2b4d8b61c51b0a153938133e1520,
+original signer48cf8a45a37f4e5c338f98fa7d5135c7cdbaf59d50b39b8bf591a79622a28e38.
+No unchanged APK rebuild or physical install was performed.
+
+Current1c22eef portable checkpoint44778614096 passed all163 XCTest cases
+(the final Swift Testing0 line is not that suite), source/build orchestration
+and converter checks. Same-host optimized actual-Core benchmark: baseline
+median0.820/p952.015ms; currentOFF0.819/1.968; enabled0.974/3.476. OFF
+24 canonical messages equal baseline; same exclusions and no cross-host
+performance comparison apply.
+
+
+#### 17:22 UTC: crash report corrects the earlier screenshot-RPC hypothesis
+
+Run44778642657 at1c22eef: all4 typewriter native cases passed, including
+held correction replacement, zero-duration and one-flag-OFF/all-others-ON.
+Ten native cases passed, one protection-capability skip, one crash in the
+research case. Restarted-suite4/4 totals are NOT the whole-run result.
+Actual picker More/List controls worked and EXE's exact delegate filename
+was verified; the next selection crashed. Sandbox import passed. No IPA.
+
+Artifact14651268969:142465505 bytes, SHA-256
+5fe257e2b7df34caf9d4969c2f03454c77c5838ad5ac93e2c6d79f58163dccdb.
+Downloaded, digest verified, independent provider PNG3 inspected (actual List
+command), native exported crash9DA745B9-B298-46B3-8D88-AFA2837E8319.ips
+inspected. The native crashing thread is MTLSimDriver newCommandQueue through
+VideoToolbox pixel transfer and TextRecognition; another thread is inside
+VisionDialogueOCR/FramePipeline.sample from a prior test, while main is loading
+Argos. Neither Argos nor JSON attachment serialization caused this crash.
+The same XPCReplyCheck string alone does NOT prove a screenshot RPC defect;
+that earlier hypothesis is superseded. The picker lacks an exported IPS, so
+its identical error during screenshot OCR is not independently stack-proven.
+
+At180478e, Stop accepts an optional OCR-queue-drain completion; existing
+callers retain identical asynchronous scheduling/reset. Native fixture cleanup
+awaits that completion to prevent prior Vision work overlapping later cases.
+The Stop/restart behavior test retains its initial ordinary Stop, so cleanup
+does not substitute a disconnect/reset for the behavior being asserted.
+Picker-only control OCR usesCPUOnly=true; production foreground Vision, decode,
+sampling/ROI and release assertions are unchanged. No JSON evidence removed.
+
+Focused Intel44782637839 and full ARM6444782644434 dispatched on the same
+source. Xcode16.4/all full release gates remain; no artifact upload/publish
+unless the full run passes. ARM64 allocation is not assumed.
+
+
+## النتيجة النهائية — نُشرت معاينة الجودة 1 في 21 نوفمبر 2026
+
+- الريليز الجديد: [ios-v0.3.1-preview.1](https://github.com/Aljjulanda/GameLingo/releases/tag/ios-v0.3.1-preview.1)، منشور كمعاينة؛ لم يُعدّل ريليز الرجوع السابق.
+- المصدر `69b3e188f0fe410edfd3923c0dc57e8b702ac718` على `codex/quality-fixes-1`؛ [التشغيل الناجح 44816815978](https://github.com/Aljjulanda/GameLingo/actions/runs/44816815978)، Intel/Xcode 16.4/profile `quality-preview-1`.
+- نجحت بوابات المعاينة: 163 Core، تكافؤ 24 رسالة/10 streams، RDR2/SQLite الحقيقي، الأرشيف، و42 حالة أصلية: 40 نجاحًا وتجاوزا بيانات حماية الملفات غير المتاحة في المحاكي. لا فشل أو إعادة محاولة داخل تشغيل القبول النهائي.
+- [IPA 0.3.1 (9)](https://github.com/Aljjulanda/GameLingo/releases/download/ios-v0.3.1-preview.1/GameLingo-unsigned.ipa)، `dev.gamelingo.ios`، ARM64 iPhone، غير موقّعة، 3081287 بايت؛ SHA-256 `ea458fcd0346e9b4e4844b4dd7ff2dcb1be6423e932cebdea2fd3a6c8c1ba3a6`. فُحص غياب التوقيع وprovisioning وxctest ونموذج الاختبار. التوقيع الخارجي للمستخدم.
+- [APK 0.6.2-quality.1 (10)](https://github.com/Aljjulanda/GameLingo/releases/download/ios-v0.3.1-preview.1/GameLingo-TV-0.6.2-quality.1.apk)، `dev.gamelingo.tv`، 1511120 بايت؛ SHA-256 `e3605dd8bf1177940cee202a29b15179a07c2b4d8b61c51b0a153938133e1520`. أُعيد استخدام نسخة 40 اختبارًا المعتمدة دون بناء، وفُحص توقيع المفتاح الأصلي فعليًا.
+- [التقرير العربي النهائي](https://github.com/Aljjulanda/GameLingo/releases/download/ios-v0.3.1-preview.1/GameLingo-Quality-Report-AR.md) و[البصمات](https://github.com/Aljjulanda/GameLingo/releases/download/ios-v0.3.1-preview.1/SHA256SUMS.txt). نُزّلت الأصول المرفوعة الأربعة وتطابقت بصماتها، وتحقق وسم الريليز من commit البناء نفسه.
+- النص المتدرج مستبعد من ربط الإنتاج ومؤجل؛ أبحاثه واختباراته محفوظة. Vision/FramePipeline المصورة وFiles التفاعلية وحماية الملفات العتادية مؤجلة للفحص الميداني. لم تُختبر الدفعة على iPhone/TCL/PS5 الفعلي. جميع ميزات الجودة الباقية OFF افتراضيًا. ليست هذه شهادة اكتمال A–I.
+- أصول النشر أربعة محددة فقط؛ لا بيانات RDR2 خاصة أو مفاتيح أو تسجيلات لعب أو نموذج تجريبي أو أدلة محاولة فاشلة ضمنها. لا عمل نشر متبقٍ لهذه المعاينة.
+- أدلة التشغيل محليًا: `iOS/.build/quality-preview-44816815978/`؛ بيان النشر النهائي `iOS/.build/quality-delivery/published-quality-release.json`. أداة النشر المحلية تستخدم تحقق Windows الأصلي لسلسلة شهادات خادم الرفع؛ لم يُعطّل TLS أو التحقق من المضيف ولم يتغير TLS التطبيق.
+
+---
+
+## السجل السابق المحفوظ للمراجعة التاريخية
+
