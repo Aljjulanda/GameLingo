@@ -61,6 +61,16 @@ final class AppModel: ObservableObject {
     @Published var running = false
     @Published var modelReady = false
     @Published var modelBusy = false
+    let modelDownload = ModelDownloadService()
+    private var modelRequest = UUID()
+    let improvementWorker = ImprovementWorker()
+    @Published var learningConsent = false {
+        didSet { improvementWorker.setConsent(learningConsent); pipeline.configureLearning(learningConsent); if !learningConsent && !running { translator.cancel() } }
+    }
+    @Published var improvementStatus = "التحسين المحلي متوقف"
+    @Published var improvementExport: URL?
+    func runImprovement() { guard !running, modelReady, learningConsent else { return }; improvementWorker.run(translator:translator) }
+    func exportImprovement() { improvementWorker.export { [weak self] in self?.improvementExport = $0 } }
     @Published var metrics = PipelineMetrics()
     @Published var thermal = ProcessInfo.processInfo.thermalState
     @Published var availableMemory: UInt64 = 0
@@ -247,6 +257,14 @@ final class AppModel: ObservableObject {
     }
 
     init() {
+        improvementWorker.onUpdate = { [weak self] status,snapshot in self?.improvementStatus = status; self?.pipeline.configureImprovedMemory(snapshot) }
+        modelDownload.completion = { [weak self] result in
+            guard let self else { return }
+            switch result {
+            case .success(let file): self.installModel(file,temporary:true)
+            case .failure(let error): self.modelBusy = false; self.modelStatus = "تعذر تنزيل النموذج"; self.errorMessage = error.localizedDescription
+            }
+        }
         do { profileStore = try GameProfileStore(root:FileManager.default.urls(for:.applicationSupportDirectory,in:.userDomainMask)[0].appendingPathComponent("GameProfiles",isDirectory:true)) }
         catch { errorMessage = error.localizedDescription }
         try? LocalizationInbox().prepare()
@@ -259,6 +277,9 @@ final class AppModel: ObservableObject {
         }
 #endif
         pipeline.captureAction()
+        pipeline.onLearningExample = { [weak self] example in
+            guard let self, self.learningConsent, self.running, self.currentGame == example.game else { return }; self.improvementWorker.observe(example)
+        }
         pipeline.onPreview = { [weak self] image,lines in self?.previewFrame = UIImage(cgImage:image); if !lines.isEmpty { self?.setupLines = lines } }
         namesLibrary.onChange = { [weak self] store,snapshot in self?.pipeline.configureNames(store,snapshot:snapshot) }
         pipeline.configureNames(namesLibrary.store,snapshot:namesLibrary.snapshot)
@@ -456,6 +477,7 @@ final class AppModel: ObservableObject {
         guard !running, modelReady, !pairing, let console = consoles.first(where:{ $0.id == settings.selectedConsoleID }) else { errorMessage = "اختر PS5 مسجلًا وجهّز نموذج الترجمة أولًا"; return }
         guard settings.roi.isValid else { errorMessage = "اضبط منطقة الحوار داخل حدود صورة البث أولًا"; return }
         do {
+            improvementWorker.cancel(); translator.cancel()
             packLibrary.store.resetMetrics()
             policy.start(); policy.experimentalAudio = settings.advanced.backgroundAudio
             SessionIntentStore.save(true); initialBattery = -1; batteryUsed = nil; UIDevice.current.isBatteryMonitoringEnabled = true
@@ -485,6 +507,7 @@ final class AppModel: ObservableObject {
         localMenuItems = []; localMenuUntil = 0
         UIApplication.shared.isIdleTimerDisabled = policy.foreground && tvListening
         if let brightness = originalBrightness { UIScreen.main.brightness = brightness; originalBrightness = nil }
+        if learningConsent && modelReady { improvementWorker.run(translator:translator) }
     }
     func smartRead() {
         guard running, modelReady, streamConnected, tvConnected, tvDocuments else { return }
@@ -599,17 +622,9 @@ final class AppModel: ObservableObject {
     func downloadModel() {
         guard !modelBusy, !running else { return }
         modelBusy = true; modelStatus = "تنزيل النموذج · 88.5 MB؛ يلزم الإنترنت لهذه الخطوة فقط"
-        downloadTask = Task { [weak self] in
-            guard let self else { return }
-            do {
-                var request = URLRequest(url:OfflineTranslator.modelURL)
-                request.setValue("GameLingo/1.0",forHTTPHeaderField:"User-Agent")
-                let (location,response) = try await URLSession.shared.download(for:request)
-                guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw LingoError.invalid("فشل تنزيل النموذج") }
-                self.installModel(location,temporary:true)
-            } catch { self.modelBusy = false; self.errorMessage = error.localizedDescription; self.modelStatus = "فشل التنزيل" }
-        }
+        modelRequest = UUID(); modelDownload.start()
     }
+    func cancelModelDownload() { modelRequest = UUID(); modelDownload.pause(); translator.cancel(); modelBusy = false; modelStatus = "توقف التنزيل/التثبيت؛ النموذج السابق محفوظ" }
     func importModel(_ url: URL) {
         guard !running, !modelBusy else { return }
         let access = url.startAccessingSecurityScopedResource()

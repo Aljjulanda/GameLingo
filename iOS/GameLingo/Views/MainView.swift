@@ -127,6 +127,17 @@ struct TranslationView: View {
                     NavigationLink("معاينة اللعبة وتحديد مناطق القراءة") { GameFrameEditorView() }
                 }
                 QualitySettingsSection()
+                Section("تحسين محلي خارج اللعب · اختياري") {
+                    Toggle("أوافق على جمع أمثلة نصية محليًا لهذه الجلسة",isOn:$model.learningConsent)
+                    Text("بالتفعيل تُحفظ نصوص الحوار والسياق ومرجع الحزمة على الآيفون فقط: 200 مثال، 7 أيام، بلا صور أو رفع. لا تدريب مستمر للأوزان. ينفذ العامل دورة من 10 أمثلة بعد إيقاف اللعب، ويعتمد فقط ما يطابق مرجع حزمة حرفيًا مع فحوص OCR والسياق والأعداد والنفي. الامتناع متوقع عند الشك.").font(.footnote)
+                    Text(model.improvementStatus).font(.caption)
+                    Button("تشغيل دورة الآن خارج اللعب") { model.runImprovement() }.disabled(model.running || !model.modelReady || !model.learningConsent)
+                    Button("تصدير بيانات التحسين المحلية") { model.exportImprovement() }
+                    if let file = model.improvementExport { ShareLink(item:file) { Label("مشاركة التصدير",systemImage:"square.and.arrow.up") } }
+                    Button("حذف الخام والاقتراحات",role:.destructive) { model.improvementWorker.deleteCollected(); model.improvementExport = nil }
+                    Button("التراجع عن الذاكرة المعتمدة",role:.destructive) { model.improvementWorker.rollback(); model.improvementExport = nil }
+                    Text("إيقاف الجمع يترك المعتمد يعمل لنفس اللعبة والنص والسياق فقط. لا يُعدل تصحيحك الصريح. زيادة التغطية لا تثبت تحسن جملة جديدة غير مغطاة.").font(.footnote)
+                }
                 Section("تشغيل الجلسة والخلفية") {
                     Toggle("تجربة الصوت الصامت في الخلفية",isOn:$model.settings.advanced.backgroundAudio)
                         .onChange(of:model.settings.advanced.backgroundAudio) { _ in model.updateBackgroundExperiment() }
@@ -147,8 +158,11 @@ struct TranslationView: View {
                 }
                 Section("النموذج المحلي") {
                     Text(model.modelStatus)
+                    ModelDownloadProgress(service:model.modelDownload)
                     if model.modelBusy { ProgressView() }
                     Button("تنزيل نموذج EN → AR") { model.downloadModel() }.disabled(model.modelBusy || model.running)
+                    if model.modelBusy { Button("إيقاف التنزيل وحفظ تقدم الاستئناف") { model.cancelModelDownload() } }
+                    Text("Argos هو النموذج الوحيد المعتمد حاليًا. إطار المقارنة منفصل؛ لا يُتاح بديل قبل تحقق التوافق والجودة والسرعة على الهاتف.").font(.footnote)
                     Button("استيراد حزمة .argosmodel") { importing = true }.disabled(model.modelBusy || model.running)
                     Button("تحميل النموذج المثبت") { model.loadModel() }.disabled(model.modelBusy || model.running)
                     Button("حذف النموذج",role:.destructive) { model.removeModel() }.disabled(model.modelBusy || model.running)

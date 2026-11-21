@@ -23,6 +23,16 @@ final class FramePipeline {
     var onError: ((String) -> Void)?
     var onReading: ((UUID,Bool,[String],String) -> Void)?
     var onPreview: ((CGImage,[OCRLine]) -> Void)?
+    var onLearningExample: ((ImprovementExample) -> Void)?
+    private var learningConsent = false
+    private var improvedMemory = ImprovedMemorySnapshot()
+    func configureLearning(_ enabled: Bool) { queue.async { self.learningConsent = enabled } }
+    func configureImprovedMemory(_ value: ImprovedMemorySnapshot) { queue.async { self.improvedMemory = value; self.translations = BoundedLRU(capacity:8) } }
+    private func learningContext(source: String, speaker: String?) -> String {
+        let previous = memory.entries.filter{$0.confidence >= 0.9 && DialogueText.normalized($0.source) != DialogueText.normalized(source)}.suffix(2)
+        guard !previous.isEmpty else { return "" }
+        return String(((speaker ?? "-")+"|"+previous.map{($0.speaker ?? "-")+":"+$0.source}.joined(separator:"|")).prefix(4096))
+    }
     private var previewRequested = false
     private var setupRequested = false
     private var setupRegion = GameOptions().menuRegion
@@ -338,6 +348,10 @@ final class FramePipeline {
             let (_,box) = try autoreleasepool { try ocr.recognize(buffer,roi:roi,knownNames:names+","+storedNames,dictionaryNames:names+","+namesWords) }
             guard isActive() else { return }
             let content = ocr.content
+            if learningConsent, namesSnapshot.game != "general", !content.text.isEmpty {
+                let example = ImprovementExample(game:namesSnapshot.game,source:content.text,context:learningContext(source:content.text,speaker:content.speaker),confidence:ocr.confidence)
+                DispatchQueue.main.async { self.onLearningExample?(example) }
+            }
             if capture.active {
                 let raw = ocr.lastLines.map{CaptureLine(text:$0.text,box:$0.box,confidence:$0.confidence)}
                 let segments = ocr.lastSegments.map{CaptureLine(text:$0.text,box:$0.box,confidence:$0.confidence)}
@@ -465,9 +479,12 @@ final class FramePipeline {
         let correctionSource = engineInput.isEmpty ? job.text : engineInput
         let selectedGame = translator.packs?.publication("",origin:.rule).game
         let applicable = translator.packs == nil || corrections.matches(game:selectedGame) ? corrections : CorrectionContext(correctionSnapshot,enabled:false)
-        let override = DialogueOverride.resolve(source:correctionSource,corrections:applicable,reuse:reusable ? cached?.2 : nil,cue:cueOnly ? job.cue : nil) {
+        var override = DialogueOverride.resolve(source:correctionSource,corrections:applicable,reuse:reusable ? cached?.2 : nil,cue:cueOnly ? job.cue : nil) {
             Terminology.resolve(engineInput,rules:advanced.terminology,context:memory.entries.filter { $0.id != job.id })
         }
+        let learningKey = learningContext(source:job.text,speaker:job.speaker)
+        if override == nil, translator.packs?.publication("",origin:.rule).pack == nil,
+           let learned = improvedMemory.lookup(game:namesSnapshot.game,source:engineInput,context:learningKey) { override = TranslationDecision(text:learned,origin:.rule,game:namesSnapshot.game) }
         let punctuationTrace = metrics.punctuationTrace
         let captureLines = pendingCapture, captureSegments = pendingSegments
         let selection = override != nil && (quality[.measurement] || quality[.provenanceMarker] || capture.active) ? translator.packs?.publication(job.id,origin:override?.origin ?? .rule) : nil
@@ -518,6 +535,10 @@ final class FramePipeline {
                                 self.reportCapture()
                             }
                             self.publish(message)
+                            if self.learningConsent, decision.origin == .packExact, let pack = decision.pack {
+                                let example = ImprovementExample(game:self.namesSnapshot.game,source:engineInput,context:learningKey,confidence:job.confidence,trustedTarget:text,authority:"pack-exact:"+pack)
+                                DispatchQueue.main.async { self.onLearningExample?(example) }
+                            }
                             if self.quality[.corrections] {
                                 let recent = RecentPublishedLine(id:delivered.id,scope:self.correctionSnapshot.scopeKey,source:correctionSource,target:message["translated"] as? String ?? text,origin:decision.origin)
                                 DispatchQueue.main.async { self.onRecentPublished?(recent,publicationToken) }

@@ -10,6 +10,7 @@ struct LocalSubtitleState {
     static let sample = "هذه تجربة لعرض الترجمة العربية داخل الألعاب"
     private(set) var entries: [LocalSubtitle] = []
     private(set) var preview = false
+    private var seen: [String] = []
     var document: String?
     mutating func clear() { entries.removeAll(); document = nil }
     mutating func expire(now: Double) { entries.removeAll { $0.until <= now } }
@@ -27,6 +28,8 @@ struct LocalSubtitleState {
             guard let id = message["id"] as? String, let text = message["translated"] as? String, !text.isEmpty, text.count <= 2400 else { return }
             let clean = SubtitlePresentation.clean(text)
             if let index = entries.firstIndex(where:{$0.id == id}) { entries[index].text = clean; return }
+            guard !seen.contains(id) else { return }
+            seen.append(id); seen = Array(seen.suffix(128))
             let duration = settings.bool("adaptive") ? max(settings.number("min_seconds"),min(settings.number("max_seconds"),Double(clean.count)/max(1,settings.number("reading_speed")))) : settings.number("fixed_seconds")
             entries.append(LocalSubtitle(id:id,text:clean,until:now+min(duration,settings.number("hard_seconds")),minimumUntil:now+settings.number("min_seconds")))
             entries = Array(entries.suffix(max(1,min(3,Int(settings.number("max_entries"))))))

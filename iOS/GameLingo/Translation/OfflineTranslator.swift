@@ -58,6 +58,18 @@ final class OfflineTranslator {
         }
     }
     func cancel() { lock.lock(); cancellationGeneration &+= 1; engine?.cancel(); lock.unlock() }
+    func propose(_ source: String, completion: @escaping (Result<String,Error>) -> Void) {
+        lock.lock(); let generation = cancellationGeneration; lock.unlock()
+        queue.async { [self] in
+            do {
+                guard isCurrent(generation), !source.isEmpty, source.count <= 1800 else { throw CancellationError() }
+                lock.lock(); let current = engine; current?.resume(); lock.unlock()
+                var error: NSError?
+                guard let current, let output = current.translate(source,error:&error), isCurrent(generation) else { throw error ?? LingoError.invalid("تعذر توليد اقتراح محلي") as NSError }
+                completion(.success(output))
+            } catch { completion(.failure(error)) }
+        }
+    }
     private func isCurrent(_ generation: UInt64) -> Bool {
         lock.lock(); defer { lock.unlock() }; return cancellationGeneration == generation
     }
@@ -130,8 +142,10 @@ final class OfflineTranslator {
     }
     /// Verify the original package before extraction; extract only the five known files.
     func install(package: URL, completion: @escaping (Result<Void,Error>) -> Void) {
+        lock.lock(); let generation = cancellationGeneration; lock.unlock()
         queue.async { [self] in
             do {
+                guard isCurrent(generation) else { throw CancellationError() }
                 let size = try package.resourceValues(forKeys:[.fileSizeKey]).fileSize ?? 0
                 guard size == Self.modelSize else { throw LingoError.invalid("حجم نموذج الترجمة غير صحيح") }
                 let data = try Data(contentsOf:package,options:.mappedIfSafe)
@@ -139,11 +153,14 @@ final class OfflineTranslator {
                 guard digest == Self.modelDigest else { throw LingoError.invalid("فشل التحقق من SHA-256 للنموذج") }
                 let parent = folder.deletingLastPathComponent()
                 try FileManager.default.createDirectory(at:parent,withIntermediateDirectories:true)
+                let capacity = try parent.resourceValues(forKeys:[.volumeAvailableCapacityForImportantUsageKey]).volumeAvailableCapacityForImportantUsage ?? 0
+                guard capacity > 300*1024*1024 else { throw LingoError.invalid("لا توجد مساحة كافية لفك الحزمة مع حفظ النموذج السابق") }
                 let stage = parent.appendingPathComponent("model-stage-"+UUID().uuidString,isDirectory:true)
                 try FileManager.default.createDirectory(at:stage,withIntermediateDirectories:true)
                 defer { try? FileManager.default.removeItem(at:stage) }
                 let archive = try Archive(url:package,accessMode:.read)
                 for file in Self.required {
+                    guard isCurrent(generation) else { throw CancellationError() }
                     guard let entry = archive["en_ar/"+file], entry.type == .file, entry.uncompressedSize <= 250*1024*1024 else { throw LingoError.invalid("محتويات حزمة النموذج غير صالحة") }
                     let destination = stage.appendingPathComponent(file)
                     try FileManager.default.createDirectory(at:destination.deletingLastPathComponent(),withIntermediateDirectories:true)
@@ -151,6 +168,7 @@ final class OfflineTranslator {
                 }
                 let metadata = try JSONSerialization.jsonObject(with:Data(contentsOf:stage.appendingPathComponent("metadata.json"))) as? [String:Any]
                 guard metadata?["from_code"] as? String == "en", metadata?["to_code"] as? String == "ar" else { throw LingoError.invalid("زوج لغات غير صحيح") }
+                guard isCurrent(generation) else { throw CancellationError() }
                 if FileManager.default.fileExists(atPath:folder.path) { _ = try FileManager.default.replaceItemAt(folder,withItemAt:stage) }
                 else { try FileManager.default.moveItem(at:stage,to:folder) }
                 var stored = folder; var values = URLResourceValues(); values.isExcludedFromBackup = true; try stored.setResourceValues(values)
