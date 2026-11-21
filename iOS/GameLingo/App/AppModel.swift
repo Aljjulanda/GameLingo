@@ -196,7 +196,9 @@ final class AppModel: ObservableObject {
             try profileStore.ensure(id,title:title,migration:migration,packEnabled:packEnabled)
             let value = profileStore.profile(id)!.effective
             applyingProfile = true; profileReady = true; currentGame = id; gameOptions = value
-            settings.display = value.display; settings.roi = value.dialogueRegion; settings.advanced = value.advanced; quality = value.quality
+            var display = value.display
+            display.revision = max(settings.display.revision+1,Int64(Date().timeIntervalSince1970*1000))
+            settings.display = display; settings.roi = value.dialogueRegion; settings.advanced = value.advanced; quality = value.quality
             applyingProfile = false; profileReady = true; gameProfiles = profileStore.profiles
             pipeline.configureMenus(value)
             pipeline.configureRegion(value.dialogueRegion,manual:value.manualDialogueRegion)

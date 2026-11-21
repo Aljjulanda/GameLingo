@@ -57,7 +57,11 @@ final class GameProfileStore {
     }
     func update(_ id: String, options: GameOptions) throws {
         guard options.valid, let index = profiles.firstIndex(where:{ $0.id == id }) else { throw LingoError.invalid("إعدادات اللعبة غير صالحة") }
-        guard profiles[index].options != options else { return }
+        var before = profiles[index].options, after = options
+        // Wire revisions belong to the connection's monotonic style clock, not
+        // to user intent. Rebasing a saved game must not consume its undo.
+        before.display.revision = 0; after.display.revision = 0
+        guard before != after else { return }
         var next = profiles; next[index].previous = next[index].options; next[index].options = options; try commit(next)
     }
     func enable(_ id: String, _ value: Bool) throws { guard let index = profiles.firstIndex(where:{$0.id == id}) else { return }; var next = profiles; next[index].enabled = value; try commit(next) }

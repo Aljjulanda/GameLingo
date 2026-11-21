@@ -30,6 +30,8 @@ final class PlayExperienceTests: XCTestCase {
         try store.update("game-a",options:edit); try store.enable("game-a",false)
         XCTAssertEqual(store.profile("game-a")?.effective,GameOptions())
         try store.enable("game-a",true); XCTAssertEqual(store.profile("game-a")?.effective,edit)
+        var rebased = edit; rebased.display.revision += 100
+        try store.update("game-a",options:rebased)
         try store.undo("game-a"); XCTAssertEqual(store.profile("game-a")?.options,legacy)
         let reopened = try GameProfileStore(root:root)
         XCTAssertEqual(reopened.profile("game-b")?.options,GameOptions())
