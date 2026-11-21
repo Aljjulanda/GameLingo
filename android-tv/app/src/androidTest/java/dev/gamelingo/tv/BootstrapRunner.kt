@@ -14,7 +14,8 @@ import javax.net.ssl.*
 
 /** Dedicated lab app: no production preferences, TV tokens or PS5 activity. */
 class BootstrapRunner: Instrumentation() {
-    override fun onCreate(arguments:Bundle?) {super.onCreate(arguments);start()}
+    private var ui=false
+    override fun onCreate(arguments:Bundle?) {ui=arguments?.getString("ui")=="true";super.onCreate(arguments);start()}
     override fun onStart() {
         var server:QRPairingServer?=null
         val diagnostics=java.util.concurrent.CopyOnWriteArrayList<String>()
@@ -55,8 +56,36 @@ class BootstrapRunner: Instrumentation() {
             try {exchange(qr.getString("nonce"))}catch(_:Exception){}
             check(confirmed==1 && connected==1)
             server.stop();server=null
-            finish(0,Bundle().apply{putString("stream","PASS: native AndroidKeyStore certificate/TLS, wrong fingerprint rejection, wrong nonce rejection, one-time acceptance, replay rejection; no production pairing changes")})
+            if(ui) testOverlayKeys()
+            finish(0,Bundle().apply{putString("stream","PASS: native AndroidKeyStore certificate/TLS, wrong fingerprint rejection, wrong nonce rejection, one-time acceptance, replay rejection"+(if(ui) ", focusable overlay DPAD move and save" else "")+"; no production pairing changes")})
         } catch(error:Throwable) {finish(1,Bundle().apply{putString("stream","FAIL: "+error.javaClass.simpleName+": "+error.message?.take(120)+" server="+diagnostics.joinToString(" | "))})}
         finally {server?.stop()}
+    }
+    private fun testOverlayKeys() {
+        check(android.provider.Settings.canDrawOverlays(targetContext))
+        val window=targetContext.getSystemService(android.content.Context.WINDOW_SERVICE) as android.view.WindowManager
+        var view:SubtitleCanvas?=null
+        val result=CountDownLatch(1);var saved:JSONObject?=null
+        try {
+            runOnMainSync {
+                view=SubtitleCanvas(targetContext){}.apply {
+                    isFocusableInTouchMode=true
+                    onControl={saved=it;result.countDown()}
+                }
+                val params=android.view.WindowManager.LayoutParams(-1,-1,android.view.WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+                    android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,android.graphics.PixelFormat.TRANSLUCENT)
+                window.addView(view,params)
+                view!!.message(JSONObject().put("type","roi_edit_start").put("ticket","native-tv-lab").put("box",JSONObject().put("x",.1).put("y",.6).put("w",.7).put("h",.2)))
+                check(view!!.requestFocus())
+            }
+            waitForIdleSync();Thread.sleep(700)
+            for(code in listOf(android.view.KeyEvent.KEYCODE_DPAD_CENTER,android.view.KeyEvent.KEYCODE_DPAD_RIGHT,android.view.KeyEvent.KEYCODE_DPAD_DOWN,
+                android.view.KeyEvent.KEYCODE_DPAD_CENTER,android.view.KeyEvent.KEYCODE_DPAD_RIGHT,android.view.KeyEvent.KEYCODE_DPAD_RIGHT,
+                android.view.KeyEvent.KEYCODE_DPAD_RIGHT,android.view.KeyEvent.KEYCODE_DPAD_CENTER)) {sendKeyDownUpSync(code);Thread.sleep(80)}
+            check(result.await(3,TimeUnit.SECONDS))
+            val value=requireNotNull(saved);check(value.getBoolean("save") && value.getString("ticket")=="native-tv-lab")
+            check(kotlin.math.abs(value.getJSONObject("box").getDouble("x")-.105)<.0001)
+            check(kotlin.math.abs(value.getJSONObject("box").getDouble("y")-.605)<.0001)
+        } finally {runOnMainSync{view?.let{if(it.isAttachedToWindow)window.removeViewImmediate(it)}}}
     }
 }

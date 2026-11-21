@@ -90,6 +90,7 @@ struct GamePackLibraryView: View {
                 if !library.selfTestReport.isEmpty { Text(library.selfTestReport).font(.footnote) }
             }
                 if let game = library.state.registry.packs.first(where:{ $0.manifest.gameId == library.state.registry.selectedGame }) { LabeledContent("اللعبة المختارة",value:game.manifest.gameTitle) }
+                else if let profile = model.gameProfiles.first(where:{$0.id == model.currentGame && $0.id != "general"}) { LabeledContent("اللعبة المختارة",value:profile.title) }
                 else { Text("لم تُختر لعبة") }
                 Button("Argos فقط / إلغاء اختيار اللعبة") { library.store.changeSelection(game:nil) }
                     .disabled(model.running || library.busy || library.state.registry.selectedGame == nil)

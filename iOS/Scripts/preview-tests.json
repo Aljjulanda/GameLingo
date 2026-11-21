@@ -46,7 +46,8 @@
     "GameLingoTests/PlayExperienceIntegrationTests/testManualCropReadsWholeSelectedTextAndExcludesOutsideRegion",
     "GameLingoTests/PlayExperienceIntegrationTests/testCurrentMenuOCRKeepsDynamicValuesAndMeasuresDecodedGlyphColor",
     "GameLingoTests/PlayExperienceIntegrationTests/testActualVisionOCRComparisonCorpusIsExportedWithoutPrivateImages",
-    "GameLingoTests/PlayExperienceIntegrationTests/testPhoneDestinationSurvivesTVLossAndProfileApplicationCannotReenter"
+    "GameLingoTests/PlayExperienceIntegrationTests/testPhoneDestinationSurvivesTVLossAndProfileApplicationCannotReenter",
+    "GameLingoTests/PlayExperienceIntegrationTests/testIdleWorkerActuallyInfersAndCannotApproveItsOwnUnreferencedOutput"
   ],
   "allowed_skips": [
     "GameLingoTests/NamesIntegrationTests/testNamesFileProtectionWhenRuntimeReportsIt",

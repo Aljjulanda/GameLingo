@@ -437,7 +437,7 @@ final class AppModel: ObservableObject {
                 }
                 self.refreshAddresses()
                 self.hub.validateAddress()
-                if !available { self.pipeline.interrupt(); self.sessionStatus = "بانتظار Wi-Fi" }
+                if !available { if self.policy.wanted { self.pipeline.interrupt(); self.sessionStatus = "بانتظار Wi-Fi" } }
                 else { self.recoverSession() }
             }
         }

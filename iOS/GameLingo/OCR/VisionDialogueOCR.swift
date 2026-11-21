@@ -15,7 +15,10 @@ final class VisionDialogueOCR {
     var captureLines = false
     var quality = QualitySettings()
     var strictRegion = false
-    private let imageContext = CIContext(options:[.cacheIntermediates:false])
+    private let imageContext: CIContext
+    init(softwareImageContext: Bool = false) {
+        imageContext = CIContext(options:[.cacheIntermediates:false,.useSoftwareRenderer:softwareImageContext])
+    }
     private func cropped(_ buffer: CVPixelBuffer, roi: SourceBox) throws -> CGImage {
         let width = Double(CVPixelBufferGetWidth(buffer)), height = Double(CVPixelBufferGetHeight(buffer))
         // Round inward: no pixel outside a manual selection reaches Vision.

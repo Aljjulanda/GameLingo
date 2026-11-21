@@ -19,7 +19,7 @@ def validate(path):
             raise ValueError('Missing executable or required resource')
         if any(name.endswith(('.p12', '.pfx', '.pem', '.key', '.mobileprovision')) or '/_CodeSignature/' in name for name in names):
             raise ValueError('Signing material must not be packaged in unsigned IPA')
-        if any(name.endswith(('.argosmodel', '/model.bin')) for name in names):
+        if any(name.endswith(('.argosmodel', '/model.bin', '.gguf', '.npz', '.safetensors', '.glpack', '.sqlite', '.gxt2', '.jsonl')) for name in names):
             raise ValueError('Test-only model weights must not be included in release IPA')
         info = plistlib.loads(archive.read(prefix + 'Info.plist'))
         if info.get('CFBundleExecutable') != 'GameLingo' or info.get('CFBundleIdentifier') != 'dev.gamelingo.ios':

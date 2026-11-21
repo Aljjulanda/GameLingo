@@ -47,12 +47,18 @@ final class OfflineTranslator {
     }
     var installed: Bool { Self.required.allSatisfy { FileManager.default.fileExists(atPath:folder.appendingPathComponent($0).path) } }
     func load(completion: @escaping (Result<Void,Error>) -> Void) {
+        lock.lock(); let generation = cancellationGeneration; lock.unlock()
         queue.async { [self] in
             do {
+                guard isCurrent(generation) else { throw CancellationError() }
                 guard installed else { throw LingoError.invalid("نزّل نموذج English → Arabic أولًا") }
+                lock.lock(); let alreadyLoaded = engine != nil; lock.unlock()
+                if alreadyLoaded { DispatchQueue.main.async { completion(.success(Void())) }; return }
                 var error: NSError?
                 guard let loaded = GLTranslation(modelPath:folder.path,error:&error) else { throw error ?? LingoError.invalid("تعذر تهيئة النموذج") as NSError }
-                lock.lock(); engine = loaded; lock.unlock()
+                lock.lock()
+                guard cancellationGeneration == generation else { lock.unlock(); throw CancellationError() }
+                engine = loaded; lock.unlock()
                 DispatchQueue.main.async { completion(.success(Void())) }
             } catch { DispatchQueue.main.async { completion(.failure(error)) } }
         }

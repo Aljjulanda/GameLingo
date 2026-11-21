@@ -5,6 +5,28 @@ import CoreImage
 @testable import GameLingo
 
 final class PlayExperienceIntegrationTests: XCTestCase {
+    func testIdleWorkerActuallyInfersAndCannotApproveItsOwnUnreferencedOutput() throws {
+        let folder = try XCTUnwrap(Bundle(for:Self.self).url(forResource:"en_ar",withExtension:nil))
+        let translator = OfflineTranslator(folder:folder)
+        let loaded = expectation(description:"Native idle worker model loaded")
+        translator.load { result in if case .failure(let error) = result { XCTFail(error.localizedDescription) }; loaded.fulfill() }
+        wait(for:[loaded],timeout:20)
+        let generated = expectation(description:"Actual unassisted proposal")
+        translator.propose("Do not open that door.") { result in
+            switch result {
+            case .failure(let error): XCTFail(error.localizedDescription)
+            case .success(let candidate):
+                XCTAssertFalse(candidate.isEmpty)
+                var example = ImprovementExample(game:"synthetic-idle",source:"Do not open that door.",context:"Arthur|We must stay here.",confidence:0.95,observations:2,trustedTarget:candidate,authority:"model-self")
+                XCTAssertNotNil(ImprovementGate.rejection(example,candidate:candidate,existing:[]))
+                example.authority = "pack-exact:synthetic-independent"; example.trustedTarget = "افتح الباب فورًا."
+                XCTAssertNotNil(ImprovementGate.rejection(example,candidate:candidate,existing:[]))
+            }
+            generated.fulfill()
+        }
+        wait(for:[generated],timeout:20)
+        translator.cancel()
+    }
     @MainActor
     func testPhoneDestinationSurvivesTVLossAndProfileApplicationCannotReenter() async throws {
         let originalQuality = QualitySettings.load()
@@ -52,7 +74,7 @@ final class PlayExperienceIntegrationTests: XCTestCase {
     }
     func testManualCropReadsWholeSelectedTextAndExcludesOutsideRegion() throws {
         let pixels = try frame([("OUTSIDE SECRET HUD",CGPoint(x:200,y:100),.white),("We must not leave John behind.",CGPoint(x:200,y:520),.white)])
-        let ocr = VisionDialogueOCR(); ocr.strictRegion = true; ocr.setBackground(true)
+        let ocr = VisionDialogueOCR(softwareImageContext:true); ocr.strictRegion = true; ocr.setBackground(true)
         let region = SourceBox(x:0.1,y:0.65,w:0.8,h:0.25)
         let lines = try ocr.menuLines(pixels,roi:region)
         XCTAssertTrue(lines.contains{$0.text.contains("John behind")},"Selected line must not be clipped")
@@ -63,7 +85,7 @@ final class PlayExperienceIntegrationTests: XCTestCase {
     }
     func testCurrentMenuOCRKeepsDynamicValuesAndMeasuresDecodedGlyphColor() throws {
         let pixels = try frame([("Moonlight Lodge",CGPoint(x:150,y:180),.white),("Save game",CGPoint(x:150,y:250),.yellow),("Return to camp",CGPoint(x:150,y:320),.white),("Coins 137",CGPoint(x:150,y:390),.white)])
-        let ocr = VisionDialogueOCR();ocr.setBackground(true)
+        let ocr = VisionDialogueOCR(softwareImageContext:true);ocr.setBackground(true)
         let region = SourceBox(x:0.05,y:0.15,w:0.7,h:0.65)
         let lines = try ocr.menuLines(pixels,roi:region)
         XCTAssertTrue(lines.contains{$0.text.contains("137")})
@@ -80,7 +102,7 @@ final class PlayExperienceIntegrationTests: XCTestCase {
         var rows: [[String:String]] = []
         for (id,source) in cases {
             let pixels = try frame([(source,CGPoint(x:160,y:520),.white)])
-            let ocr = VisionDialogueOCR();ocr.setBackground(true)
+            let ocr = VisionDialogueOCR(softwareImageContext:true);ocr.setBackground(true)
             let lines = try ocr.menuLines(pixels,roi:SourceBox(x:0.08,y:0.65,w:0.87,h:0.25))
             let text = lines.map(\.text).joined(separator:" ")
             XCTAssertFalse(text.isEmpty)
