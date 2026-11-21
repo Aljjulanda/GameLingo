@@ -45,7 +45,7 @@ with zipfile.ZipFile(apk) as archive:
 assert m['apk_signer_sha256']=='48cf8a45a37f4e5c338f98fa7d5135c7cdbaf59d50b39b8bf591a79622a28e38'
 apk_evidence=json.loads(Path(m['apk_verification']).read_text())
 assert apk_evidence['sha256']==hashlib.sha256(payloads[apk.name]).hexdigest()
-assert apk_evidence['tests']>=44 and apk_evidence['failures']==apk_evidence['errors']==apk_evidence['skips']==0
+assert apk_evidence['tests']>=45 and apk_evidence['failures']==apk_evidence['errors']==apk_evidence['skips']==0
 assert apk_evidence['android_tree']==subprocess.check_output(['git','rev-parse',m['source_commit']+':android-tv'],text=True).strip()
 qr_evidence=json.loads(Path(m['tcl_qr_evidence']).read_text())
 assert 'stream=PASS:' in qr_evidence['output'] and 'INSTRUMENTATION_CODE: 0' in qr_evidence['output']

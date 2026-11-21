@@ -19,7 +19,7 @@ def main():
     tests=failures=errors=skips=0
     for path in reports:
         root=ET.parse(path).getroot();tests+=int(root.attrib['tests']);failures+=int(root.attrib['failures']);errors+=int(root.attrib['errors']);skips+=int(root.attrib['skipped'])
-    assert tests>=44 and failures==errors==skips==0
+    assert tests>=45 and failures==errors==skips==0
     subprocess.run(['git','diff','--exit-code','HEAD','--','android-tv'],capture_output=True,check=True)
     digest=hashlib.sha256(a.apk.read_bytes()).hexdigest()
     evidence=dict(package='dev.gamelingo.tv',version='0.7.0-preview.1',version_code=11,bytes=a.apk.stat().st_size,sha256=digest,signer_sha256=signer,tests=tests,failures=failures,errors=errors,skips=skips,

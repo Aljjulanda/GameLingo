@@ -440,7 +440,7 @@ final class FramePipeline {
             menuLastSeen = now; menuReadings = rows
             menuItems = rows.enumerated().compactMap { index,line in
                 guard let translated = menuCache.get(menu.id+"|"+line.text), translated.count <= 240 else { return nil }
-                return MenuOverlayItem(id:menu.id+"-\(index)",source:line.text,translated:translated,box:line.box,color:menu.appearance.matchColor ? GlyphColorSampler.sample(buffer,box:line.box,context:previewContext) : nil)
+                return MenuOverlayItem(id:menu.id+"-\(index)",source:line.text,translated:SubtitlePresentation.clean(translated),box:line.box,color:menu.appearance.matchColor ? GlyphColorSampler.sample(buffer,box:line.box,context:previewContext) : nil)
             }
             publishMenu(menu,now:now)
             submitMenu(menu)

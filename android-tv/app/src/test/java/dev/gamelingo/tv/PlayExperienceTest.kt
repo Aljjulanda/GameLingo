@@ -58,4 +58,20 @@ class PlayExperienceTest {
         start();repeat(3){editor.key(KeyEvent.KEYCODE_DPAD_RIGHT)};editor.key(KeyEvent.KEYCODE_DPAD_CENTER)
         assertTrue(results.last().getBoolean("save"));assertEquals("test-ticket",results.last().getString("ticket"))
     }
+    @Test fun menuGlyphsStayAdjacentToOriginalOnEitherSideForArabicAndLatin() {
+        for(left in listOf(false,true)) for(text in listOf("نعم","John: نعم 11","Yes 11")) {
+            val message=menu(text)
+            message.getJSONObject("appearance").put("side",if(left) "left" else "right").put("background",false).put("outline",false).put("shadow",false)
+            message.getJSONArray("items").getJSONObject(0).getJSONObject("box").put("x",.6).put("w",.1)
+            val overlay=MenuOverlay();overlay.apply(message,0)
+            val bitmap=Bitmap.createBitmap(1920,1080,Bitmap.Config.ARGB_8888);overlay.draw(Canvas(bitmap),1920,1080,1)
+            val pixels=IntArray(1920*1080);bitmap.getPixels(pixels,0,1920,0,0,1920,1080)
+            var minX=1920;var maxX=-1
+            for(index in pixels.indices) if(Color.alpha(pixels[index])>30) {minX=minOf(minX,index%1920);maxX=maxOf(maxX,index%1920)}
+            assertTrue(maxX>=minX)
+            if(left) assertTrue("Left label must end beside original, not at the far edge: $text $maxX",maxX in 1110..1135)
+            else assertTrue("Right label must start beside original: $text $minX",minX in 1360..1385)
+            bitmap.recycle()
+        }
+    }
 }

@@ -35,10 +35,12 @@ class MenuOverlay {
             val x=(if(left) box.getDouble("x")*width-gap-boxWidth else (box.getDouble("x")+box.getDouble("w"))*width+gap).toFloat().coerceIn(0f,(width-boxWidth).toFloat().coerceAtLeast(0f))
             val rawColor=if(style.optBoolean("matchColor")) item.optString("color",style.optString("color","#FFFFFF")) else style.optString("color","#FFFFFF")
             paint.color=try{Color.parseColor(rawColor)}catch(_:Exception){Color.WHITE}
-            val text=item.getString("translated")
+            val text=TextPresentation.body(item.getString("translated"))
+            val rtl=QualityRenderPolicy.hasArabicLetters(text)
+            val alignment=if(QualityRenderPolicy.normalAlignment(if(left) "right" else "left",rtl)) Layout.Alignment.ALIGN_NORMAL else Layout.Alignment.ALIGN_OPPOSITE
             val layout=StaticLayout.Builder.obtain(text,0,text.length,paint,boxWidth)
-                .setAlignment(if(left) Layout.Alignment.ALIGN_OPPOSITE else Layout.Alignment.ALIGN_NORMAL)
-                .setTextDirection(TextDirectionHeuristics.FIRSTSTRONG_RTL).setIncludePad(false).build()
+                .setAlignment(alignment)
+                .setTextDirection(if(rtl) TextDirectionHeuristics.RTL else TextDirectionHeuristics.LTR).setIncludePad(false).build()
             val y=(box.getDouble("y")*height).toFloat().coerceIn(0f,(height-layout.height).toFloat().coerceAtLeast(0f))
             if(style.optBoolean("background",true)) canvas.drawRoundRect(x-4,y-3,x+boxWidth+4,y+layout.height+3,4f,4f,Paint().apply{color=0xbb000000.toInt()})
             canvas.save();canvas.translate(x,y)
