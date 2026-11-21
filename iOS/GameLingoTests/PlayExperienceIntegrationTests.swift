@@ -5,6 +5,24 @@ import CoreImage
 @testable import GameLingo
 
 final class PlayExperienceIntegrationTests: XCTestCase {
+    func testMenuConfigurationDoesNotCancelIndependentDialogueInference() throws {
+        let folder = try XCTUnwrap(Bundle(for:Self.self).url(forResource:"en_ar",withExtension:nil))
+        let translator = OfflineTranslator(folder:folder)
+        let loaded = expectation(description:"Shared inference worker loaded")
+        translator.load { result in if case .failure(let error) = result { XCTFail(error.localizedDescription) }; loaded.fulfill() }
+        wait(for:[loaded],timeout:20)
+        let pipeline = FramePipeline(translator:translator) { _ in }
+        let finished = expectation(description:"Dialogue survives unrelated menu configuration")
+        translator.translateDetailed("We must not leave John behind.") { result,_ in
+            switch result { case .success(let decision): XCTAssertFalse(decision.text.isEmpty); case .failure(let error): XCTFail(error.localizedDescription) }
+            finished.fulfill()
+        }
+        var options = GameOptions();options.menusEnabled = true
+        pipeline.configureMenus(options)
+        wait(for:[finished],timeout:20)
+        let stopped = expectation(description:"Idle pipeline drained")
+        pipeline.stop { stopped.fulfill() };wait(for:[stopped],timeout:5)
+    }
     func testIdleWorkerActuallyInfersAndCannotApproveItsOwnUnreferencedOutput() throws {
         let folder = try XCTUnwrap(Bundle(for:Self.self).url(forResource:"en_ar",withExtension:nil))
         let translator = OfflineTranslator(folder:folder)

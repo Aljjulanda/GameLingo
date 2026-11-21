@@ -61,7 +61,6 @@ final class FramePipeline {
         }
     }
     func configureMenus(_ value: GameOptions) {
-        translator.cancel()
         queue.async { [self] in
             menuOptions = value; menuEpoch = UUID(); menuIdentity = nil; menuItems = []; menuReadings = []; menuCache = BoundedLRU(capacity:128)
             publish(TVProtocol.envelope("menu_clear"))
