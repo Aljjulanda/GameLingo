@@ -91,7 +91,9 @@ final class AppModel: ObservableObject {
             guard !applyingProfile else { return }
             if oldValue.destination != gameOptions.destination {
                 localSubtitles.clear(); hub.publish(TVProtocol.envelope("subtitle_clear"))
+                localMenuItems = []; localMenuUntil = 0; hub.publish(TVProtocol.envelope("menu_clear"))
                 if previewActive { preview(false); preview(true) }
+                if running && gameOptions.destination.tvEnabled && !tvListening && !hubStarting { connectTV() }
             }
             if oldValue.menusEnabled != gameOptions.menusEnabled || oldValue.allowedMenus != gameOptions.allowedMenus || oldValue.menuRegion != gameOptions.menuRegion {
                 pipeline.configureMenus(gameOptions)
@@ -183,6 +185,7 @@ final class AppModel: ObservableObject {
         let id = game ?? "general"
         guard !profileReady || currentGame != id else { return }
         if running { stop(reason:"توقفت الجلسة لتبديل ملف اللعبة") }
+        regionTicket = nil; regionGame = nil; hub.publish(TVProtocol.envelope("roi_edit_end"))
         preview(false); pipeline.interrupt(); translator.cancel()
         outputFence.invalidate()
         do {
