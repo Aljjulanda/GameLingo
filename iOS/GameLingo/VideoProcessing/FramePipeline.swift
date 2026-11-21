@@ -429,13 +429,14 @@ final class FramePipeline {
     }
     private func processMenu(_ buffer: CVPixelBuffer, now: Double) {
         do {
-            let lines = try autoreleasepool { try ocr.menuLines(buffer,roi:menuOptions.menuRegion) }
+            let regions = menuOptions.allowedMenus.filter{$0.enabled && $0.valid}.map(\.region)
+            let lines = try autoreleasepool { try ocr.menuLines(buffer,regions:regions) }
             guard isActive(), let menu = MenuRecognition.recognized(menuOptions.allowedMenus,lines:lines) else { if menuIdentity != nil { clearMenu() }; return }
-            let rows = Array(lines.filter { menu.region.contains($0.box) }.sorted { a,b in abs(a.box.y-b.box.y) < 0.008 ? a.box.x < b.box.x : a.box.y < b.box.y }.prefix(24))
+            let rows = Array(lines.filter { menu.region.contains($0.box) && $0.text.count <= 120 }.sorted { a,b in abs(a.box.y-b.box.y) < 0.008 ? a.box.x < b.box.x : a.box.y < b.box.y }.prefix(20))
             if menuIdentity != menu.id { clearMenu(); menuIdentity = menu.id }
             menuLastSeen = now; menuReadings = rows
             menuItems = rows.enumerated().compactMap { index,line in
-                guard let translated = menuCache.get(menu.id+"|"+line.text) else { return nil }
+                guard let translated = menuCache.get(menu.id+"|"+line.text), translated.count <= 240 else { return nil }
                 return MenuOverlayItem(id:menu.id+"-\(index)",source:line.text,translated:translated,box:line.box,color:menu.appearance.matchColor ? GlyphColorSampler.sample(buffer,box:line.box,context:previewContext) : nil)
             }
             publishMenu(menu,now:now)

@@ -46,6 +46,9 @@ final class AppModel: ObservableObject {
     @Published var tvConnected = false
     @Published var tvDocuments = false
     @Published var tvSpeakers = false
+    @Published var tvMenus = false
+    @Published var tvRegionEditing = false
+    @Published var tvPersistentPreview = false
     @Published var readingActive = false
     @Published var readingPages: [String] = []
     @Published var readingPage = 0
@@ -106,7 +109,7 @@ final class AppModel: ObservableObject {
     private var regionTicket: UUID?
     private var regionGame: String?
     func startTVRegionEditing() {
-        guard tvConnected else { return }
+        guard tvConnected, tvRegionEditing else { errorMessage = "يلزم تحديث GameLingo TV لدعم تحديد المنطقة بالريموت"; return }
         let ticket = UUID(); regionTicket = ticket; regionGame = currentGame
         let b = settings.roi
         hub.publish(TVProtocol.envelope("roi_edit_start",fields:["ticket":ticket.uuidString,"box":["x":b.x,"y":b.y,"w":b.w,"h":b.h]]))
@@ -232,7 +235,7 @@ final class AppModel: ObservableObject {
     private var sessionStartedUptime = 0.0
     var performanceSnapshot: String {
         let values = [
-            "GameLingo 0.3.1 (9)", "Measurement started: \(sessionStarted.formatted())", sessionStatus, audioStatus,
+            "GameLingo 0.4.0 (10)", "Measurement started: \(sessionStarted.formatted())", sessionStatus, audioStatus,
             "CPU: \(NumericInput.format(cpuPercent))% (100%=one core)", "RSS: \(NumericInput.format(residentMegabytes)) MB", "Thermal: \(thermal.rawValue)",
             "Translation p95: \(NumericInput.format(metrics.translationP95)) ms", "OCR p95: \(NumericInput.format(metrics.ocrP95)) ms",
             "TV background render ACKs: \(backgroundDeliveries)", "Recovery backoff index: \(recoveryAttempts)",
@@ -264,7 +267,9 @@ final class AppModel: ObservableObject {
         modelDownload.completion = { [weak self] result in
             guard let self else { return }
             switch result {
-            case .success(let file): self.installModel(file,temporary:true)
+            case .success(let file):
+                guard self.modelBusy else { try? FileManager.default.removeItem(at:file); return }
+                self.installModel(file,temporary:true)
             case .failure(let error): self.modelBusy = false; self.modelStatus = "تعذر تنزيل النموذج"; self.errorMessage = error.localizedDescription
             }
         }
@@ -385,7 +390,10 @@ final class AppModel: ObservableObject {
             DispatchQueue.main.async { self?.tvConnected = false; self?.tvDocuments = false; self?.tvSpeakers = false; self?.regionTicket = nil; self?.regionGame = nil }
         }
         hub.onConnected = { [weak self] in self?.tvConnected = true }
-        hub.onCapabilities = { [weak self] in self?.tvDocuments = $0.contains("document_v1"); self?.tvSpeakers = $0.contains("speaker_v1") }
+        hub.onCapabilities = { [weak self] in
+            self?.tvDocuments = $0.contains("document_v1"); self?.tvSpeakers = $0.contains("speaker_v1")
+            self?.tvMenus = $0.contains("menu_v1"); self?.tvRegionEditing = $0.contains("roi_edit_v1"); self?.tvPersistentPreview = $0.contains("persistent_preview_v1")
+        }
         hub.onRenderSignature = { [weak self] trace in if self?.quality[.punctuationTrace] == true { self?.tvRenderSignature = trace } }
         hub.onDisplayAck = { [weak self] id in
             guard let self, self.policy.wanted, !self.displayedIDs.contains(id) else { return }
@@ -615,9 +623,10 @@ final class AppModel: ObservableObject {
         if let brightness = originalBrightness { UIScreen.main.brightness = brightness; originalBrightness = nil }
     }
     func loadModel() {
+        modelRequest = UUID(); let request = modelRequest
         modelBusy = true; modelReady = false; modelStatus = "جارٍ تحميل النموذج في الذاكرة…"
         translator.load { [weak self] result in
-            guard let self else { return }; self.modelBusy = false
+            guard let self, self.modelRequest == request else { return }; self.modelBusy = false
             switch result {
             case .success: self.modelReady = true; self.modelStatus = "English → Arabic جاهز دون إنترنت"; self.recoverSession()
             case .failure(let error): self.modelStatus = "النموذج غير جاهز"; self.errorMessage = error.localizedDescription
@@ -633,16 +642,18 @@ final class AppModel: ObservableObject {
     func importModel(_ url: URL) {
         guard !running, !modelBusy else { return }
         let access = url.startAccessingSecurityScopedResource()
+        modelRequest = UUID(); let request = modelRequest
         modelBusy = true; modelStatus = "جارٍ التحقق من النموذج وتثبيته…"
         translator.install(package:url) { [weak self] result in
             if access { url.stopAccessingSecurityScopedResource() }
-            self?.installed(result)
+            guard self?.modelRequest == request else { return }; self?.installed(result)
         }
     }
     private func installModel(_ url: URL, temporary: Bool) {
+        let request = modelRequest
         translator.install(package:url) { [weak self] result in
             if temporary { try? FileManager.default.removeItem(at:url) }
-            self?.installed(result)
+            guard self?.modelRequest == request else { return }; self?.installed(result)
         }
     }
     private func installed(_ result: Result<Void,Error>) {

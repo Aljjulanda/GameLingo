@@ -17,11 +17,12 @@ class BootstrapRunner: Instrumentation() {
     override fun onCreate(arguments:Bundle?) {super.onCreate(arguments);start()}
     override fun onStart() {
         var server:QRPairingServer?=null
+        val diagnostics=java.util.concurrent.CopyOnWriteArrayList<String>()
         try {
             val host=requireNotNull(QRPairingServer.localHost())
             var confirmed=0;var connected=0
             val ready=CountDownLatch(1)
-            server=QRPairingServer({_,answer->confirmed++;answer(true)},{_,_->connected++;ready.countDown()})
+            server=QRPairingServer({_,answer->confirmed++;answer(true)},{_,_->connected++;ready.countDown()},{diagnostics.add(it)})
             val qr=JSONObject(server.start(host))
             fun exchange(nonce:String,fingerprint:String=qr.getString("fingerprint")):String {
                 val trust=object:X509TrustManager {
@@ -55,7 +56,7 @@ class BootstrapRunner: Instrumentation() {
             check(confirmed==1 && connected==1)
             server.stop();server=null
             finish(0,Bundle().apply{putString("stream","PASS: native AndroidKeyStore certificate/TLS, wrong fingerprint rejection, wrong nonce rejection, one-time acceptance, replay rejection; no production pairing changes")})
-        } catch(error:Throwable) {finish(1,Bundle().apply{putString("stream","FAIL: "+error.javaClass.simpleName+": "+error.message?.take(120))})}
+        } catch(error:Throwable) {finish(1,Bundle().apply{putString("stream","FAIL: "+error.javaClass.simpleName+": "+error.message?.take(120)+" server="+diagnostics.joinToString(" | "))})}
         finally {server?.stop()}
     }
 }

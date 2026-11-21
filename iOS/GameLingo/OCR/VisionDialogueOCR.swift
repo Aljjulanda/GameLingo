@@ -27,11 +27,28 @@ final class VisionDialogueOCR {
     }
     func menuLines(_ buffer: CVPixelBuffer, roi: SourceBox) throws -> [OCRLine] {
         guard roi.isValid else { return [] }
+        return try menuLines(image:cropped(buffer,roi:roi),coordinateRegion:roi)
+    }
+    func menuLines(_ buffer: CVPixelBuffer, regions: [SourceBox]) throws -> [OCRLine] {
+        guard !regions.isEmpty, regions.count <= 32, regions.allSatisfy(\.isValid) else { return [] }
+        let image = CIImage(cvPixelBuffer:buffer), extent = image.extent
+        var masked = CIImage(color:CIColor.black).cropped(to:extent)
+        for region in regions {
+            let left = ceil(region.x*extent.width), right = floor((region.x+region.w)*extent.width)
+            let bottom = ceil((1-region.y-region.h)*extent.height), top = floor((1-region.y)*extent.height)
+            let rect = CGRect(x:left,y:bottom,width:right-left,height:top-bottom)
+            masked = image.cropped(to:rect).composited(over:masked)
+        }
+        guard let cg = imageContext.createCGImage(masked,from:extent) else { return [] }
+        let lines = try menuLines(image:cg,coordinateRegion:SourceBox(x:0,y:0,w:1,h:1))
+        return lines.filter { line in regions.contains{$0.contains(line.box,tolerance:0.002)} }
+    }
+    private func menuLines(image: CGImage, coordinateRegion roi: SourceBox) throws -> [OCRLine] {
         let request = VNRecognizeTextRequest()
         request.recognitionLanguages = ["en-US"]; request.recognitionLevel = .accurate
         request.usesLanguageCorrection = false; request.minimumTextHeight = 0.008
         request.usesCPUOnly = self.request.usesCPUOnly
-        try VNImageRequestHandler(cgImage:cropped(buffer,roi:roi),orientation:.up,options:[:]).perform([request])
+        try VNImageRequestHandler(cgImage:image,orientation:.up,options:[:]).perform([request])
         return Array((request.results ?? []).compactMap { observation -> OCRLine? in
             guard let candidate = observation.topCandidates(1).first, candidate.confidence >= 0.7 else { return nil }
             let box = project(observation.boundingBox,roi:roi)

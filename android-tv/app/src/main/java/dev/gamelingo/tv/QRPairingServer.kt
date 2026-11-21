@@ -14,7 +14,7 @@ import javax.net.ssl.*
 import javax.security.auth.x500.X500Principal
 
 /** Ephemeral LAN TLS bootstrap. The phone remains the authenticated subtitle server. */
-class QRPairingServer(private val confirm:(JSONObject,(Boolean)->Unit)->Unit,private val ready:(String,String)->Unit) {
+class QRPairingServer(private val confirm:(JSONObject,(Boolean)->Unit)->Unit,private val ready:(String,String)->Unit,private val handshakeFailure:((String)->Unit)?=null) {
     private val alias="gamelingo-qr-"+java.util.UUID.randomUUID().toString()
     private val session=java.util.UUID.randomUUID().toString()
     private val nonce=ByteArray(32).also{SecureRandom().nextBytes(it)}
@@ -61,7 +61,11 @@ class QRPairingServer(private val confirm:(JSONObject,(Boolean)->Unit)->Unit,pri
             try {
                 val socket=listener.accept() as SSLSocket;attempts++
                 socket.use { connection ->
-                    connection.soTimeout=8000;connection.startHandshake()
+                    connection.soTimeout=8000
+                    try { connection.startHandshake() } catch(error:Exception) {
+                        // Callback is test-only and precedes any secret HTTP body.
+                        handshakeFailure?.invoke(error.javaClass.simpleName+": "+error.message?.take(150));throw error
+                    }
                     val input=connection.inputStream.buffered()
                     fun line():String {
                         val bytes=ByteArrayOutputStream()

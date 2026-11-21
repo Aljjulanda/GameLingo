@@ -17,6 +17,7 @@ struct SubtitleSettingsView: View {
                     Picker("وجهة الترجمة والمعاينة",selection:$model.gameOptions.destination) { ForEach(DisplayDestination.allCases,id:\.self) { Text($0.title).tag($0) } }
                     Button(model.previewActive ? "المعاينة المستمرة تعمل" : "تشغيل معاينة النص المستمرة") { model.preview(true) }
                     Button("إنهاء المعاينة") { model.preview(false) }
+                    if model.tvConnected && !model.tvPersistentPreview { Text("تطبيق TV القديم لا يدعم المعاينة المستمرة؛ حدّثه لهذه الميزة.").font(.footnote) }
                     NavigationLink("عرض الترجمة داخل GameLingo") { PhoneTranslationView() }
                     Menu("تطبيق نمط") { ForEach(["Classic","Cinema","Gaming","Minimal"],id:\.self) { name in Button(name) { model.settings.display.preset(name) } } }
                     Button("استيراد مظهر محفوظ من Windows") { importing = true }
