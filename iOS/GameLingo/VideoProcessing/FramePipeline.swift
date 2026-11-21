@@ -3,6 +3,7 @@ import CoreVideo
 import CoreImage
 
 struct PipelineMetrics {
+    var lastFrameAt: Double?, lastOCRAt: Double?, lastTranslationAt: Double?
     var ocrMilliseconds = 0.0, translationMilliseconds = 0.0, frameMilliseconds = 0.0, samplingRate = 0.0
     var actualOCRRate = 0.0
     var frames: UInt64 = 0, dropped: UInt64 = 0
@@ -310,6 +311,7 @@ final class FramePipeline {
         guard let (buffer,received,stamp) = frame else { return }
         guard now-received < 1 else { return }
         lastSample = now; metrics.frames &+= 1; metrics.dropped = dropped
+        metrics.lastFrameAt = received
         if previewEnabled || previewRequested {
             previewRequested = false
             let lines = setupRequested ? (try? ocr.menuLines(buffer,roi:setupRegion)) ?? [] : []
@@ -368,6 +370,7 @@ final class FramePipeline {
             if quality[.speakerClassification] || quality[.visionNames] { metrics.nameConfidence = ocr.nameConfidence.summary }
             metrics.punctuationTrace = quality[.punctuationTrace] ? "OCR " + ocr.punctuationTrace + " | parsed " + SubtitlePresentation.punctuation(content.text) : ""
             metrics.recognitions &+= 1
+            metrics.lastOCRAt = ProcessInfo.processInfo.systemUptime
             metrics.actualOCRRate = Double(metrics.recognitions)/max(0.001,ProcessInfo.processInfo.systemUptime-startedAt)
             metrics.ocrMilliseconds = (ProcessInfo.processInfo.systemUptime-now)*1000
             ocrSamples.record(metrics.ocrMilliseconds); metrics.ocrP95 = ocrSamples.p95
@@ -432,7 +435,7 @@ final class FramePipeline {
             let regions = menuOptions.allowedMenus.filter{$0.enabled && $0.valid}.map(\.region)
             let lines = try autoreleasepool { try ocr.menuLines(buffer,regions:regions) }
             guard isActive(), let menu = MenuRecognition.recognized(menuOptions.allowedMenus,lines:lines) else { if menuIdentity != nil { clearMenu() }; return }
-            let rows = Array(lines.filter { menu.region.contains($0.box) && $0.text.count <= 120 }.sorted { a,b in abs(a.box.y-b.box.y) < 0.008 ? a.box.x < b.box.x : a.box.y < b.box.y }.prefix(20))
+            let rows = Array(MenuItemGrouping.rows(lines.filter { menu.region.contains($0.box) && $0.text.count <= 120 }).prefix(20))
             if menuIdentity != menu.id { clearMenu(); menuIdentity = menu.id }
             menuLastSeen = now; menuReadings = rows
             menuItems = rows.enumerated().compactMap { index,line in
@@ -539,6 +542,7 @@ final class FramePipeline {
                                 self.reportCapture()
                             }
                             self.publish(message)
+                            self.metrics.lastTranslationAt = ProcessInfo.processInfo.systemUptime
                             if self.learningConsent, decision.origin == .packExact, let pack = decision.pack {
                                 let example = ImprovementExample(game:self.namesSnapshot.game,source:engineInput,context:learningKey,confidence:job.confidence,trustedTarget:text,authority:"pack-exact:"+pack)
                                 DispatchQueue.main.async { self.onLearningExample?(example) }

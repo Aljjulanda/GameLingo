@@ -141,7 +141,7 @@ final class AppModel: ObservableObject {
         let epoch = fence.snapshot()
         DispatchQueue.main.async { if fence.accepts(epoch) { self?.route(message) } }
     })
-    private func route(_ message: [String:Any]) {
+    func route(_ message: [String:Any]) {
         let type = message["type"] as? String ?? ""
         guard running || ["subtitle_clear","document_hide","menu_clear"].contains(type) else { return }
         if gameOptions.destination.tvEnabled { hub.publish(message) }
@@ -177,6 +177,7 @@ final class AppModel: ObservableObject {
         catch { errorMessage = error.localizedDescription }
     }
     private func activateProfile(_ game: String?) {
+        guard !applyingProfile else { return }
         let id = game ?? "general"
         guard !profileReady || currentGame != id else { return }
         if running { stop(reason:"توقفت الجلسة لتبديل ملف اللعبة") }
@@ -187,7 +188,7 @@ final class AppModel: ObservableObject {
             let title = packLibrary.state.registry.packs.first(where:{$0.manifest.gameId == game})?.manifest.gameTitle ?? (id == "general" ? "عام" : id)
             try profileStore.ensure(id,title:title,migration:optionsSnapshot())
             let value = profileStore.profile(id)!.effective
-            applyingProfile = true; currentGame = id; gameOptions = value
+            applyingProfile = true; profileReady = true; currentGame = id; gameOptions = value
             settings.display = value.display; settings.roi = value.dialogueRegion; settings.advanced = value.advanced; quality = value.quality
             applyingProfile = false; profileReady = true; gameProfiles = profileStore.profiles
             pipeline.configureMenus(value)
@@ -234,10 +235,14 @@ final class AppModel: ObservableObject {
     private var lastSystemSample = 0.0
     private var sessionStartedUptime = 0.0
     var performanceSnapshot: String {
+        func age(_ at: Double?) -> String { at.map { NumericInput.format(max(0,ProcessInfo.processInfo.systemUptime-$0))+" s" } ?? "not observed" }
         let values = [
             "GameLingo 0.4.0 (10)", "Measurement started: \(sessionStarted.formatted())", sessionStatus, audioStatus,
             "CPU: \(NumericInput.format(cpuPercent))% (100%=one core)", "RSS: \(NumericInput.format(residentMegabytes)) MB", "Thermal: \(thermal.rawValue)",
             "Translation p95: \(NumericInput.format(metrics.translationP95)) ms", "OCR p95: \(NumericInput.format(metrics.ocrP95)) ms",
+            "PS5 native connected: \(streamConnected); encoded age: \(remoteMetrics.encodedFrameAge.map(NumericInput.format) ?? "none"); decoded age: \(remoteMetrics.decodedFrameAge.map(NumericInput.format) ?? "none")",
+            "Last processed frame age: \(age(metrics.lastFrameAt)); last OCR age: \(age(metrics.lastOCRAt)); last translation publication age: \(age(metrics.lastTranslationAt))",
+            "TV connected: \(tvConnected); destination: \(gameOptions.destination.rawValue)",
             "TV background render ACKs: \(backgroundDeliveries)", "Recovery backoff index: \(recoveryAttempts)",
             "PS5 reconnect attempts: \(remoteMetrics.attempts)", "Confirmed PS5 reconnects: \(remoteMetrics.successes)", "Failed PS5 reconnects: \(remoteMetrics.failures)",
             "Frame starvation events: \(remoteMetrics.starvations)", "Decoder IDR requests: \(remoteMetrics.decoderRequests)",
@@ -262,7 +267,7 @@ final class AppModel: ObservableObject {
         else { errorMessage = packLibrary.message }
     }
 
-    init() {
+    init(profileRoot: URL? = nil) {
         improvementWorker.onUpdate = { [weak self] status,snapshot in self?.improvementStatus = status; self?.pipeline.configureImprovedMemory(snapshot) }
         modelDownload.completion = { [weak self] result in
             guard let self else { return }
@@ -273,7 +278,7 @@ final class AppModel: ObservableObject {
             case .failure(let error): self.modelBusy = false; self.modelStatus = "تعذر تنزيل النموذج"; self.errorMessage = error.localizedDescription
             }
         }
-        do { profileStore = try GameProfileStore(root:FileManager.default.urls(for:.applicationSupportDirectory,in:.userDomainMask)[0].appendingPathComponent("GameProfiles",isDirectory:true)) }
+        do { profileStore = try GameProfileStore(root:profileRoot ?? FileManager.default.urls(for:.applicationSupportDirectory,in:.userDomainMask)[0].appendingPathComponent("GameProfiles",isDirectory:true)) }
         catch { errorMessage = error.localizedDescription }
         try? LocalizationInbox().prepare()
         packLibrary.store.configureQuality(PackQualityOptions(quality)); packLibrary.configureQuality(quality); pipeline.configureQuality(quality)
@@ -509,6 +514,7 @@ final class AppModel: ObservableObject {
     }
     func stop(reason: String = "أوقفها المستخدم") {
         outputFence.invalidate(); hub.publish(TVProtocol.envelope("subtitle_clear")); hub.publish(TVProtocol.envelope("menu_clear"))
+        regionTicket = nil; regionGame = nil; hub.publish(TVProtocol.envelope("roi_edit_end"))
         correctionsLibrary.clearRecent()
         recordSession("session.stop",reason+"; automatic recovery disabled")
         closeReading()
@@ -661,6 +667,7 @@ final class AppModel: ObservableObject {
     }
     func removeModel() {
         guard !running, !modelBusy else { return }
+        modelRequest = UUID(); modelDownload.discard()
         modelReady = false; modelBusy = true
         translator.remove { [weak self] result in
             guard let self else { return }; self.modelBusy = false; self.modelStatus = "النموذج غير مثبت"

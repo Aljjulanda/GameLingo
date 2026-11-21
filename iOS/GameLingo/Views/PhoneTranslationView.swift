@@ -51,7 +51,11 @@ struct MenuItemsOverlay: View {
                 Text(item.translated).font(.system(size:max(10,appearance.fontSize*viewport.w/1000)))
                     .foregroundColor(Color(hex:appearance.matchColor ? item.color ?? appearance.color : appearance.color))
                     .padding(3).background(appearance.background ? Color.black.opacity(0.7) : .clear)
-                    .shadow(color:appearance.shadow || appearance.outline ? .black : .clear,radius:appearance.outline ? 1 : 2)
+                    .shadow(color:appearance.outline ? .black : .clear,radius:0,x:1,y:0)
+                    .shadow(color:appearance.outline ? .black : .clear,radius:0,x:-1,y:0)
+                    .shadow(color:appearance.outline ? .black : .clear,radius:0,x:0,y:1)
+                    .shadow(color:appearance.outline ? .black : .clear,radius:0,x:0,y:-1)
+                    .shadow(color:appearance.shadow ? .black : .clear,radius:2,x:1,y:1)
                     .frame(width:max(60,viewport.w*0.26),alignment:left ? .trailing : .leading)
                     .position(x:viewport.x+viewport.w*(left ? item.box.x-appearance.gap-0.13 : item.box.x+item.box.w+appearance.gap+0.13),y:viewport.y+viewport.h*(item.box.y+item.box.h/2))
             }

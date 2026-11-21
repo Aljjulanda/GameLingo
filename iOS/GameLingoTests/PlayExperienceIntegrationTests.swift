@@ -5,6 +5,37 @@ import CoreImage
 @testable import GameLingo
 
 final class PlayExperienceIntegrationTests: XCTestCase {
+    @MainActor
+    func testPhoneDestinationSurvivesTVLossAndProfileApplicationCannotReenter() async throws {
+        let originalQuality = QualitySettings.load()
+        defer { originalQuality.save() }
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at:root) }
+        let model = AppModel(profileRoot:root)
+        for _ in 0..<100 {
+            if !model.gameProfiles.isEmpty { break }
+            try await Task.sleep(nanoseconds:50_000_000)
+        }
+        XCTAssertFalse(model.gameProfiles.isEmpty)
+        let game = model.currentGame
+        model.quality[.measurement] = true
+        XCTAssertEqual(model.currentGame,game)
+        XCTAssertEqual(model.gameProfiles.count,1,"Applying quality must not recursively create a profile")
+        model.gameOptions.destination = .phone; model.running = true
+        model.route(TVProtocol.envelope("subtitle_show",fields:["id":"one-result","translated":"لا تغادر بدونها."]))
+        XCTAssertEqual(model.localSubtitles.entries.count,1)
+        model.hub.onDisconnected?()
+        try await Task.sleep(nanoseconds:100_000_000)
+        XCTAssertEqual(model.localSubtitles.entries.first?.text,"لا تغادر بدونها.")
+        model.route(TVProtocol.envelope("subtitle_update",fields:["id":"one-result","translated":"لا تغادر بدونها! "]))
+        XCTAssertEqual(model.localSubtitles.entries.count,1)
+        model.preview(true); model.stop()
+        XCTAssertTrue(model.localSubtitles.preview)
+        XCTAssertTrue(model.localSubtitles.entries.isEmpty)
+        model.preview(false)
+        model.route(TVProtocol.envelope("subtitle_show",fields:["id":"late-result","translated":"متأخر"]))
+        XCTAssertTrue(model.localSubtitles.entries.isEmpty)
+    }
     private func frame(_ text: [(String,CGPoint,UIColor)]) throws -> CVPixelBuffer {
         let image = UIGraphicsImageRenderer(size:CGSize(width:1280,height:720)).image { context in
             UIColor.black.setFill(); context.fill(CGRect(x:0,y:0,width:1280,height:720))

@@ -27,9 +27,12 @@ class QRPairingServer(private val confirm:(JSONObject,(Boolean)->Unit)->Unit,pri
         require(Pairing.privateIp(host))
         val generator=KeyPairGenerator.getInstance(KeyProperties.KEY_ALGORITHM_RSA,"AndroidKeyStore")
         generator.initialize(KeyGenParameterSpec.Builder(alias,KeyProperties.PURPOSE_SIGN or KeyProperties.PURPOSE_DECRYPT)
-            .setKeySize(2048).setDigests(KeyProperties.DIGEST_SHA256,KeyProperties.DIGEST_SHA512)
+            // TLS hashes the handshake before asking AndroidKeyStore to sign.
+            // Android's documented TLS key requirement is DIGEST_NONE for that
+            // prehashed operation; certificate generation still uses SHA-256.
+            .setKeySize(2048).setDigests(KeyProperties.DIGEST_NONE,KeyProperties.DIGEST_SHA256,KeyProperties.DIGEST_SHA512)
             .setSignaturePaddings(KeyProperties.SIGNATURE_PADDING_RSA_PKCS1,KeyProperties.SIGNATURE_PADDING_RSA_PSS)
-            .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_RSA_PKCS1)
+            .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE,KeyProperties.ENCRYPTION_PADDING_RSA_PKCS1)
             .setCertificateSubject(X500Principal("CN=GameLingo TV one-time pairing"))
             .setCertificateSerialNumber(BigInteger(128,SecureRandom()))
             .setCertificateNotBefore(Date(System.currentTimeMillis()-86400000))
@@ -48,7 +51,10 @@ class QRPairingServer(private val confirm:(JSONObject,(Boolean)->Unit)->Unit,pri
         }
         val tls=SSLContext.getInstance("TLS").apply{init(arrayOf<KeyManager>(manager),null,SecureRandom())}
         val listener=tls.serverSocketFactory.createServerSocket(38444,2,InetAddress.getByName(host)) as SSLServerSocket
-        listener.enabledProtocols=arrayOf("TLSv1.2");listener.soTimeout=1000;server=listener
+        listener.enabledProtocols=arrayOf("TLSv1.2")
+        listener.enabledCipherSuites=listener.supportedCipherSuites.filter{it in listOf("TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256","TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384")}.toTypedArray()
+        require(listener.enabledCipherSuites.isNotEmpty())
+        listener.soTimeout=1000;server=listener
         val fingerprint=MessageDigest.getInstance("SHA-256").digest(chain[0].encoded).joinToString(""){"%02x".format(it)}
         Thread({serve(listener)},"gamelingo-qr-bootstrap").start()
         return JSONObject().put("v",1).put("kind","gamelingo-tv-pair").put("host",host).put("port",38444)

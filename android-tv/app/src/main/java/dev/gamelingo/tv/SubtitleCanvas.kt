@@ -58,7 +58,7 @@ class SubtitleCanvas(context: Context, private val report: (String)->Unit) : Vie
     }
     fun message(message: JSONObject?) {
         val now=SystemClock.elapsedRealtime()
-        if (message==null) { state.clear(); pending.clear();decorations.clear(); previewActive=false;contextLabel=null;contextUntil=0;document=null;menus.clear();regionEditor.end();onEditingChanged?.invoke(false); invalidate(); return }
+        if (message==null) { state.clear(); pending.clear();decorations.clear();contextLabel=null;contextUntil=0;document=null;menus.clear();regionEditor.end();onEditingChanged?.invoke(false); invalidate(); return }
         if(message.has("settings")) style=message.getJSONObject("settings")
         when(message.optString("type")) {
             "menu_snapshot" -> { menus.apply(message,now);removeCallbacks(tick);post(tick);invalidate() }

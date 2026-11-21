@@ -2,6 +2,21 @@ import XCTest
 @testable import LingoCore
 
 final class PlayExperienceTests: XCTestCase {
+    func testWrappedMenuContinuationDoesNotMergeSpacedRowsOrColumns() {
+        let input = [OCRLine(text:"A very long item",box:SourceBox(x:0.1,y:0.2,w:0.3,h:0.03)),
+                     OCRLine(text:"continues here",box:SourceBox(x:0.1,y:0.235,w:0.2,h:0.03)),
+                     OCRLine(text:"Next item 137",box:SourceBox(x:0.1,y:0.32,w:0.3,h:0.03)),
+                     OCRLine(text:"On",box:SourceBox(x:0.6,y:0.32,w:0.05,h:0.03))]
+        let rows = MenuItemGrouping.rows(input)
+        XCTAssertEqual(rows.count,3);XCTAssertEqual(rows[0].text,"A very long item continues here")
+        XCTAssertTrue(rows.contains{$0.text == "Next item 137"})
+    }
+    func testStopAndNewSessionInvalidateAlreadyQueuedPublication() {
+        let fence = DeliveryFence(); let queued = fence.snapshot()
+        fence.invalidate(); XCTAssertFalse(fence.accepts(queued))
+        let next = fence.snapshot(); XCTAssertTrue(fence.accepts(next))
+        fence.invalidate(); XCTAssertFalse(fence.accepts(next)); XCTAssertFalse(fence.accepts(queued))
+    }
     func testProfilesMigrateOnlyFirstScopeAndRetainUndoAndDisabledOptions() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at:root) }

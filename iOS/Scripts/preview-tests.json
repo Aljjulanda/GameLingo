@@ -45,7 +45,8 @@
     "GameLingoTests/QualityIntegrationTests/testRealArgosProvenanceCacheAndUnchangedLegacyOutput",
     "GameLingoTests/PlayExperienceIntegrationTests/testManualCropReadsWholeSelectedTextAndExcludesOutsideRegion",
     "GameLingoTests/PlayExperienceIntegrationTests/testCurrentMenuOCRKeepsDynamicValuesAndMeasuresDecodedGlyphColor",
-    "GameLingoTests/PlayExperienceIntegrationTests/testActualVisionOCRComparisonCorpusIsExportedWithoutPrivateImages"
+    "GameLingoTests/PlayExperienceIntegrationTests/testActualVisionOCRComparisonCorpusIsExportedWithoutPrivateImages",
+    "GameLingoTests/PlayExperienceIntegrationTests/testPhoneDestinationSurvivesTVLossAndProfileApplicationCannotReenter"
   ],
   "allowed_skips": [
     "GameLingoTests/NamesIntegrationTests/testNamesFileProtectionWhenRuntimeReportsIt",
