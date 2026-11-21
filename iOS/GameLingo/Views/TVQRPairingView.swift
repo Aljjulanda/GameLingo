@@ -33,8 +33,8 @@ struct TVQRPairingView: View {
                 Button("مسح رمز جديد") { task?.cancel(); self.invitation = nil; fingerprint = "" }.disabled(busy)
             } else if DataScannerViewController.isSupported && DataScannerViewController.isAvailable {
                 QRScanner { value in
-                    do { invitation = try QRBootstrap.decode(value,now:TVHub.now()) }
-                    catch { status = error.localizedDescription }
+                    do { invitation = try QRBootstrap.decode(value,now:TVHub.now()); return true }
+                    catch { status = error.localizedDescription; return false }
                 }.frame(minHeight:280)
             } else { Text("الكاميرا غير متاحة؛ فعّل إذن الكاميرا أو استخدم الإدخال اليدوي من شاشة الاتصال.") }
             if busy { ProgressView() }
@@ -45,7 +45,7 @@ struct TVQRPairingView: View {
 }
 
 private struct QRScanner: UIViewControllerRepresentable {
-    var recognized: (String) -> Void
+    var recognized: (String) -> Bool
     func makeCoordinator() -> Coordinator { Coordinator(recognized) }
     func makeUIViewController(context: Context) -> DataScannerViewController {
         let scanner = DataScannerViewController(recognizedDataTypes:[.barcode(symbologies:[.qr])],qualityLevel:.balanced,recognizesMultipleItems:false,isHighFrameRateTrackingEnabled:false,isHighlightingEnabled:true)
@@ -55,12 +55,12 @@ private struct QRScanner: UIViewControllerRepresentable {
     func updateUIViewController(_ controller: DataScannerViewController, context: Context) {}
     static func dismantleUIViewController(_ controller: DataScannerViewController, coordinator: Coordinator) { controller.stopScanning() }
     class Coordinator: NSObject, DataScannerViewControllerDelegate {
-        let recognized: (String) -> Void
+        let recognized: (String) -> Bool
         private var delivered = false
-        init(_ recognized: @escaping (String) -> Void) { self.recognized = recognized }
+        init(_ recognized: @escaping (String) -> Bool) { self.recognized = recognized }
         func dataScanner(_ scanner: DataScannerViewController, didAdd addedItems: [RecognizedItem], allItems: [RecognizedItem]) {
             guard !delivered else { return }
-            for case .barcode(let code) in addedItems { if let value = code.payloadStringValue { delivered = true; scanner.stopScanning(); recognized(value); break } }
+            for case .barcode(let code) in addedItems { if let value = code.payloadStringValue, recognized(value) { delivered = true; scanner.stopScanning(); break } }
         }
     }
 }
