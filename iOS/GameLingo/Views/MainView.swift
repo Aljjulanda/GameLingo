@@ -88,6 +88,7 @@ struct ConnectionView: View {
                     }
                 }
                 Section("اتصال TCL") {
+                    NavigationLink("مسح QR المعروض على TV") { TVQRPairingView() }
                     Text(model.tvStatus)
                     Text("تُمنع مهلة القفل أثناء الاستماع. العمل خارج التطبيق يتطلب تفعيل تجربة الخلفية، ويظل خاضعًا لسماح iOS.").font(.footnote).foregroundColor(.secondary)
                     if !model.addresses.isEmpty {

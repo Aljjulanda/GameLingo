@@ -26,6 +26,7 @@
 <key>UIBackgroundModes</key><array><string>audio</string></array>
 <key>NSBonjourServices</key><array><string>_gamelingo._tcp</string></array>
 <key>NSLocalNetworkUsageDescription</key><string>يستخدم GameLingo الشبكة المحلية للاتصال بـPS5 وإرسال الترجمة إلى تطبيق TCL الحالي.</string>
+<key>NSCameraUsageDescription</key><string>مسح رمز جلسة اقتران GameLingo المعروض على التلفزيون، دون حفظ صور الكاميرا.</string>
 <key>UILaunchScreen</key><dict/>
 <key>UISupportedInterfaceOrientations</key><array><string>UIInterfaceOrientationPortrait</string><string>UIInterfaceOrientationLandscapeLeft</string><string>UIInterfaceOrientationLandscapeRight</string></array>
 <key>CFBundleLocalizations</key><array><string>ar</string><string>en</string></array>

@@ -302,7 +302,7 @@ final class TVHub {
         }
         authenticated = true
         lastPong = ProcessInfo.processInfo.systemUptime
-        let capabilities = (message["features"] as? [String] ?? []).prefix(8).filter { ["document_v1","speaker_v1","display_ack"].contains($0) }
+        let capabilities = (message["features"] as? [String] ?? []).prefix(8).filter { ["document_v1","speaker_v1","display_ack","menu_v1","roi_edit_v1","persistent_preview_v1"].contains($0) }
         DispatchQueue.main.async { self.onCapabilities?(capabilities) }
         stage = "connected"
         diagnostic("auth.ok", "اكتملت المصادقة؛ التلفزيون متصل")
@@ -349,6 +349,17 @@ final class TVHub {
     }
     static func now() -> Int64 { Int64(Date().timeIntervalSince1970*1000) }
     func publish(_ message: [String:Any]) { queue.async { [self] in if authenticated { enqueue(message) } } }
+    func prepareQRBootstrap(_ completion: @escaping (Result<(String,String),Error>) -> Void) {
+        queue.async { [self] in
+            do {
+                guard listener != nil, let identity, Self.localAddresses().contains(listeningHost) else { throw LingoError.invalid("شغّل اتصال التلفزيون على عنوان Wi-Fi الحالي أولًا") }
+                let random = try KeychainStore.random(4).reduce(UInt32(0)) { ($0 << 8) | UInt32($1) }
+                pin = String(format:"%06u",random % 1_000_000); failures = 0; deadline = ProcessInfo.processInfo.systemUptime+120
+                let host = listeningHost, code = identity.fingerprint+"-"+pin
+                DispatchQueue.main.async { completion(.success((host,code))) }
+            } catch { DispatchQueue.main.async { completion(.failure(error)) } }
+        }
+    }
     func configure(_ value: TVSettings, kind: String = "settings_sync", showSpeakers: Bool? = nil, speakerColor: String? = nil) {
         queue.async { [self] in
             settings = value

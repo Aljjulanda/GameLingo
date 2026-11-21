@@ -16,6 +16,7 @@ class MainActivity : Activity() {
     private lateinit var position: Button
     private lateinit var start: Button
     private lateinit var panel: LinearLayout
+    private var qrServer: QRPairingServer? = null
     private val liveStatus = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
         if (key == "status") refresh()
     }
@@ -58,6 +59,7 @@ class MainActivity : Activity() {
         }
         button("إخفاء النص وإيقاف الخدمة") { stopService(Intent(this, OverlayService::class.java)); refresh() }
         button("الاتصال بـ Windows / iPhone") { connectionDialog() }
+        button("اقتران iPhone عبر QR مؤقت") { qrPairing() }
         button("تحديد منطقة الحوار بالريموت") {
             if(OverlayService.active) startService(Intent(this,OverlayService::class.java).setAction("editRegion"))
         }
@@ -99,6 +101,42 @@ class MainActivity : Activity() {
                 } else status.text = "يلزم إذن الظهور فوق التطبيقات"
             }.show()
     }
+    private fun qrPairing() {
+        qrServer?.stop()
+        val host=QRPairingServer.localHost()
+        if(host==null) {status.text="اتصل بشبكة محلية أولًا";return}
+        if(!Settings.canDrawOverlays(this)) {status.text="فعّل إذن الظهور فوق التطبيقات أولًا";return}
+        val dialog=android.app.AlertDialog.Builder(this).setTitle("QR لمرة واحدة · دقيقتان").setNegativeButton("إلغاء",null).create()
+        val server=QRPairingServer({ body,answer -> runOnUiThread {
+            if(isFinishing) {answer(false);return@runOnUiThread}
+            val device=body.optString("name","iPhone").take(80)
+            val fingerprint=body.optString("code").substringBefore('-').takeLast(12)
+            android.app.AlertDialog.Builder(this).setTitle("تأكيد هوية الآيفون")
+                .setMessage("هل تقرن $device؟\nبصمة المصدر: $fingerprint\nقارنها بما يظهر على الآيفون.")
+                .setPositiveButton("اقتران") {_,_->answer(true)}.setNegativeButton("رفض") {_,_->answer(false)}.setOnCancelListener{answer(false)}.show()
+        } },{ phone,code -> runOnUiThread {
+            startForegroundService(Intent(this,OverlayService::class.java).setAction("connect").putExtra("host",phone).putExtra("code",code))
+            dialog.dismiss()
+        } })
+        qrServer=server
+        Thread {
+            try {
+                val payload=server.start(host)
+                val matrix=com.google.zxing.MultiFormatWriter().encode(payload,com.google.zxing.BarcodeFormat.QR_CODE,640,640)
+                val pixels=IntArray(640*640){ index->if(matrix[index%640,index/640]) android.graphics.Color.BLACK else android.graphics.Color.WHITE }
+                val bitmap=android.graphics.Bitmap.createBitmap(pixels,640,640,android.graphics.Bitmap.Config.ARGB_8888)
+                runOnUiThread {
+                    if(isFinishing || qrServer!==server) {server.stop();return@runOnUiThread}
+                    val form=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER}
+                    form.addView(ImageView(this).apply{setImageBitmap(bitmap)},LinearLayout.LayoutParams(dp(320),dp(320)))
+                    form.addView(TextView(this).apply{text="امسح من GameLingo على iPhone. تأكد من اسم التلفزيون ثم وافق على الجهاز هنا. لا تُشارك صورة الرمز.";textSize=17f;setPadding(18,8,18,8)})
+                    dialog.setView(form);dialog.setOnDismissListener{server.stop();if(qrServer===server)qrServer=null};dialog.show()
+                    android.os.Handler(mainLooper).postDelayed({if(qrServer===server){dialog.dismiss();status.text="انتهت صلاحية QR؛ أنشئ رمزًا جديدًا"}},120000)
+                }
+            } catch(_:Exception) {server.stop();runOnUiThread{status.text="تعذر إنشاء جلسة QR المحلية؛ استخدم الإدخال اليدوي"}}
+        }.start()
+    }
+    override fun onDestroy() {qrServer?.stop();qrServer=null;super.onDestroy()}
     override fun onResume() { super.onResume(); prefs.registerOnSharedPreferenceChangeListener(liveStatus); refresh() }
     override fun onPause() { prefs.unregisterOnSharedPreferenceChangeListener(liveStatus); super.onPause() }
     private fun refresh() {
