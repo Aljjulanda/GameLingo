@@ -46,10 +46,11 @@ final class GameProfileStore {
     }
     func profile(_ id: String) -> GameProfile? { profiles.first { $0.id == id } }
     private func commit(_ next: [GameProfile]) throws { try UserDataFile.write(JSONEncoder().encode(next),to:file); profiles = next }
-    func ensure(_ id: String, title: String, migration: GameOptions? = nil) throws {
+    func ensure(_ id: String, title: String, migration: GameOptions? = nil, packEnabled: Bool = true) throws {
         guard UserDataFile.validGame(id), !title.isEmpty, title.count <= 100, profiles.count < 64 || profile(id) != nil else { throw LingoError.invalid("معرّف أو اسم اللعبة غير صالح") }
         guard profile(id) == nil else { return }
         var value = GameProfile(id:id,title:title)
+        value.options.packEnabled = packEnabled
         // Only the first selected scope receives the legacy global configuration.
         if profiles.isEmpty, let migration, migration.valid { value.options = migration }
         try commit(profiles+[value])

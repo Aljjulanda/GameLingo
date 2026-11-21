@@ -16,7 +16,6 @@ sys.path.insert(0,str(ROOT/'.build/model-python'))
 import ctranslate2
 
 ASSETS = {
-    'opus-2020': ('https://object.pouta.csc.fi/Tatoeba-MT-models/eng-ara/opus-2020-07-03.zip','Apache-2.0','https://huggingface.co/Helsinki-NLP/opus-mt-en-ar'),
     'opus-big-2022': ('https://object.pouta.csc.fi/Tatoeba-MT-models/eng-ara/opusTCv20210807+bt_transformer-big_2022-02-25.zip','CC-BY-4.0','https://huggingface.co/Helsinki-NLP/opus-mt-tc-big-en-ar'),
 }
 BUILD = ROOT/'.build/opus-comparison'

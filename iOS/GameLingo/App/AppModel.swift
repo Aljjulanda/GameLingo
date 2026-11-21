@@ -169,7 +169,9 @@ final class AppModel: ObservableObject {
         else { gameOptions.allowedMenus.append(menu) }
     }
     private func optionsSnapshot() -> GameOptions {
-        var value = gameOptions; value.display = settings.display; value.dialogueRegion = settings.roi; value.advanced = settings.advanced; value.quality = quality; return value
+        var value = gameOptions; value.display = settings.display; value.dialogueRegion = settings.roi; value.advanced = settings.advanced; value.quality = quality
+        value.packEnabled = packLibrary.state.registry.packs.first(where:{$0.manifest.gameId == currentGame})?.enabled ?? gameOptions.packEnabled
+        return value
     }
     private func saveCurrentProfile() {
         guard profileReady, !applyingProfile, let profileStore, profileStore.profile(currentGame)?.enabled == true else { return }
@@ -186,7 +188,9 @@ final class AppModel: ObservableObject {
         do {
             guard let profileStore else { return }
             let title = packLibrary.state.registry.packs.first(where:{$0.manifest.gameId == game})?.manifest.gameTitle ?? (id == "general" ? "عام" : id)
-            try profileStore.ensure(id,title:title,migration:optionsSnapshot())
+            let packEnabled = packLibrary.state.registry.packs.first(where:{$0.manifest.gameId == id})?.enabled ?? true
+            var migration = optionsSnapshot(); migration.packEnabled = packEnabled
+            try profileStore.ensure(id,title:title,migration:migration,packEnabled:packEnabled)
             let value = profileStore.profile(id)!.effective
             applyingProfile = true; profileReady = true; currentGame = id; gameOptions = value
             settings.display = value.display; settings.roi = value.dialogueRegion; settings.advanced = value.advanced; quality = value.quality
@@ -310,6 +314,7 @@ final class AppModel: ObservableObject {
             self.namesLibrary.select(self.packLibrary.state.registry.selectedGame)
             self.correctionsLibrary.select(self.packLibrary.state.registry.selectedGame)
             self.pipeline.configurePackNames(names); self.refreshPackNamePairs()
+            self.saveCurrentProfile()
         }
         do {
             if let data = try KeychainStore.read("consoles.v1") {

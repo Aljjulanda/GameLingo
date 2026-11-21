@@ -32,7 +32,11 @@ final class ModelDownloadService: NSObject, ObservableObject, URLSessionDownload
             try FileManager.default.setAttributes([.protectionKey:FileProtectionType.completeUntilFirstUserAuthentication],ofItemAtPath:root.path)
             #endif
             if let data = try? UserDataFile.read(resumeFile), !data.isEmpty { task = session.downloadTask(withResumeData:data) }
-            else { task = session.downloadTask(with:OfflineTranslator.modelURL) }
+            else {
+                var request = URLRequest(url:OfflineTranslator.modelURL)
+                request.setValue("GameLingo/1.0",forHTTPHeaderField:"User-Agent"); request.setValue("application/octet-stream",forHTTPHeaderField:"Accept")
+                task = session.downloadTask(with:request)
+            }
             active = true; status = "تنزيل Argos EN → AR مع التحقق بعد الاكتمال"; task?.resume()
         } catch { completion?(.failure(error)) }
     }
@@ -56,7 +60,7 @@ final class ModelDownloadService: NSObject, ObservableObject, URLSessionDownload
     func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
         guard task?.taskIdentifier == downloadTask.taskIdentifier, !cancelled.contains(downloadTask.taskIdentifier) else { return }
         do {
-            guard (downloadTask.response as? HTTPURLResponse)?.statusCode == 200, downloadTask.response?.url?.scheme == "https",
+            guard [200,206].contains((downloadTask.response as? HTTPURLResponse)?.statusCode ?? 0), downloadTask.response?.url?.scheme == "https",
                   try location.resourceValues(forKeys:[.fileSizeKey]).fileSize == Int(OfflineTranslator.modelSize) else { throw LingoError.invalid("استجابة أو حجم حزمة النموذج غير صالح") }
             let ready = root.appendingPathComponent("verified-next-"+UUID().uuidString+".argosmodel")
             try FileManager.default.moveItem(at:location,to:ready)

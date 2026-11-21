@@ -40,7 +40,7 @@ final class ImprovementWorker {
             guard consent, !busy, accepts(id), let store else { return }
             do { try store.prune() } catch { report("تعذر تنظيف الأمثلة؛ توقفت الدورة");return }
             let handled = Set(store.proposals.map(\.id))
-            let work = Array(store.raw.filter{!handled.contains($0.id) && $0.observations >= 2}.prefix(10))
+            let work = Array(store.raw.filter{!handled.contains($0.id) && $0.observations >= 2 && $0.confidence >= 0.9 && !$0.context.isEmpty && $0.authority?.hasPrefix("pack-exact:") == true && $0.trustedTarget != nil}.prefix(10))
             guard !work.isEmpty else { report("لا أمثلة مؤهلة بعد؛ يلزم OCR متكرر ومرجع حزمة حرفي وسياق");return }
             busy = true; report("دورة محلية محدودة خارج اللعب · \(work.count) أمثلة")
             process(work,index:0,accepted:0,id:id,translator:translator)
