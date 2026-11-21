@@ -31,7 +31,12 @@ final class ModelDownloadService: NSObject, ObservableObject, URLSessionDownload
             #if os(iOS)
             try FileManager.default.setAttributes([.protectionKey:FileProtectionType.completeUntilFirstUserAuthentication],ofItemAtPath:root.path)
             #endif
-            if let data = try? UserDataFile.read(resumeFile), !data.isEmpty { task = session.downloadTask(withResumeData:data) }
+            if let data = try? UserDataFile.read(resumeFile), !data.isEmpty {
+                task = session.downloadTask(withResumeData:data)
+                // Consume the blob. If the OS rejects stale/corrupt resume data
+                // without returning a new blob, the next action starts cleanly.
+                try? FileManager.default.removeItem(at:resumeFile)
+            }
             else {
                 var request = URLRequest(url:OfflineTranslator.modelURL)
                 request.setValue("GameLingo/1.0",forHTTPHeaderField:"User-Agent"); request.setValue("application/octet-stream",forHTTPHeaderField:"Accept")
