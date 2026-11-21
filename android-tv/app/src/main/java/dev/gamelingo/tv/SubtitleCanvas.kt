@@ -11,6 +11,10 @@ import android.view.View
 import org.json.JSONObject
 
 class SubtitleCanvas(context: Context, private val report: (String)->Unit) : View(context) {
+    var onControl: ((JSONObject)->Unit)? = null
+    var onEditingChanged: ((Boolean)->Unit)? = null
+    val menus = MenuOverlay()
+    val regionEditor = RegionEditor { result -> onControl?.invoke(result);onEditingChanged?.invoke(false);invalidate() }
     var onRendered: ((String)->Unit)? = null
     var onRenderedTrace: ((String,String)->Unit)? = null
     private val traceRequested = java.util.LinkedHashSet<String>()
@@ -27,7 +31,7 @@ class SubtitleCanvas(context: Context, private val report: (String)->Unit) : Vie
     private val pending=java.util.ArrayDeque<Queued>()
     var style = JSONObject()
     private val ink = TextPaint(Paint.ANTI_ALIAS_FLAG)
-    private var previewUntil = 0L
+    var previewActive = false; private set
     private var contextLabel: JSONObject? = null
     private var contextUntil=0L
     private var warned=false
@@ -45,21 +49,25 @@ class SubtitleCanvas(context: Context, private val report: (String)->Unit) : Vie
             val before=state.entries.size
             state.expire(now); invalidate()
             if(before!=state.entries.size) android.util.Log.i("GameLingoExpiry","active="+state.entries.size)
-            if (state.entries.isNotEmpty() || pending.isNotEmpty() || previewUntil > now || contextUntil>now) {
+            if (state.entries.isNotEmpty() || pending.isNotEmpty() || contextUntil>now || menus.until>now) {
                 val deadline=listOfNotNull(state.entries.minOfOrNull { it.until-n("fade_ms",200.0).toLong() },
-                    previewUntil.takeIf {it>now},contextUntil.takeIf {it>now}).minOrNull() ?: now
+                    contextUntil.takeIf {it>now},menus.until.takeIf{it>now}).minOrNull() ?: now
                 postDelayed(this,(deadline-now).coerceIn(50,1000))
             }
         }
     }
     fun message(message: JSONObject?) {
         val now=SystemClock.elapsedRealtime()
-        if (message==null) { state.clear(); pending.clear();decorations.clear(); previewUntil=0;contextLabel=null;contextUntil=0;document=null; invalidate(); return }
+        if (message==null) { state.clear(); pending.clear();decorations.clear(); previewActive=false;contextLabel=null;contextUntil=0;document=null;menus.clear();regionEditor.end();onEditingChanged?.invoke(false); invalidate(); return }
         if(message.has("settings")) style=message.getJSONObject("settings")
         when(message.optString("type")) {
+            "menu_snapshot" -> { menus.apply(message,now);removeCallbacks(tick);post(tick);invalidate() }
+            "menu_clear" -> {menus.clear();invalidate()}
+            "roi_edit_start" -> {regionEditor.start(message);onEditingChanged?.invoke(true);invalidate()}
+            "roi_edit_end" -> {regionEditor.end();onEditingChanged?.invoke(false);invalidate()}
             "document_show" -> {
                 if(message.optString("translated").length !in 1..2400) return
-                document=message;state.clear();pending.clear();decorations.clear();previewUntil=0;contextLabel=null;contextUntil=0
+                document=message;state.clear();pending.clear();decorations.clear();contextLabel=null;contextUntil=0
                 removeCallbacks(tick);invalidate()
             }
             "document_hide" -> { document=null;invalidate() }
@@ -77,14 +85,15 @@ class SubtitleCanvas(context: Context, private val report: (String)->Unit) : Vie
             "settings_sync", "subtitle_style_update", "subtitle_position_update", "subtitle_timing_update" -> {
                 style=message.getJSONObject("settings"); while(state.entries.size>n("max_entries",3.0).toInt().coerceIn(1,3)) state.entries.removeAt(0); invalidate()
             }
-            "subtitle_preview_show" -> { previewUntil=now+8000; removeCallbacks(tick); post(tick) }
-            "subtitle_preview_hide" -> { previewUntil=0; invalidate() }
+            "subtitle_preview_show" -> { previewActive=true; invalidate() }
+            "subtitle_preview_hide" -> {
+                previewActive=false; state.clear();pending.clear();decorations.clear();document=null;contextLabel=null;contextUntil=0;invalidate()
+            }
             "subtitle_source_gone" -> {
                 state.disappeared(message.optString("id"),now,(n("min_seconds",4.0)*1000).toLong(),(n("disappearance_grace",1.5)*1000).toLong())
                 removeCallbacks(tick); post(tick)
             }
             "subtitle_show", "subtitle_update" -> {
-                previewUntil=0
                 val eventId = message.getString("id")
                 if(message.optBoolean("quality_trace",false)) traceRequested.add(eventId) else traceRequested.remove(eventId)
                 while(traceRequested.size > 64) traceRequested.remove(traceRequested.first())
@@ -101,12 +110,17 @@ class SubtitleCanvas(context: Context, private val report: (String)->Unit) : Vie
         }
     }
     override fun onDetachedFromWindow() { removeCallbacks(tick); super.onDetachedFromWindow() }
+    override fun onKeyDown(code:Int,event:android.view.KeyEvent):Boolean {
+        if(regionEditor.key(code)) {invalidate();return true};return super.onKeyDown(code,event)
+    }
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         val now=SystemClock.elapsedRealtime()
         measuredDocument=null
         measuredParagraphDirections=emptyList()
-        if(document!=null) { drawDocument(canvas);return }
+        if(regionEditor.active) {regionEditor.draw(canvas,width,height);return}
+        if(!previewActive) menus.draw(canvas,width,height,now)
+        if(document!=null && !previewActive) { drawDocument(canvas);return }
         state.expire(now)
         val hadPending=pending.isNotEmpty()
         while(pending.isNotEmpty()) {
@@ -136,7 +150,7 @@ class SubtitleCanvas(context: Context, private val report: (String)->Unit) : Vie
         val renderEntries=state.visibleEntries()
         decorations.keys.retainAll(state.entries.map {it.id}.toSet())
         if(state.visualCompactions>compactions) android.util.Log.i("GameLingoDedup","visual_compactions="+state.visualCompactions+" visible="+renderEntries.size+" active_events="+state.entries.size)
-        val texts:List<CharSequence> = if(previewUntil>now) listOf(
+        val texts:List<CharSequence> = if(previewActive) listOf(
             SpeakerText.inline("جملة سابقة للمعاينة","Morgan",b("show_speakers",false),color("speaker_color","#A6C7D8")),
             SpeakerText.inline(sample,"Alex",b("show_speakers",false),color("speaker_color","#A6C7D8"))) else renderEntries.map {
             QualitySubtitleText.inline(it.text,it.speaker,b("show_speakers",true),color("speaker_color","#A6C7D8"),Color.rgb(160,172,180),decorations[it.id] ?: SubtitleQuality())
@@ -150,7 +164,7 @@ class SubtitleCanvas(context: Context, private val report: (String)->Unit) : Vie
         val safe=n("margin",24.0).coerceIn(0f,width/4f)
         val boxWidth=(width*n("max_width",60.0).coerceIn(10f,100f)/100).toInt().coerceAtMost((width-2*safe).toInt()).coerceAtLeast(100)
         val layouts=texts.mapIndexed { index,it ->
-            val rtl=if(previewUntil>now) true else QualityRenderPolicy.rtl(renderEntries[index].text,decorations[renderEntries[index].id] ?: SubtitleQuality())
+            val rtl=if(previewActive) true else QualityRenderPolicy.rtl(renderEntries[index].text,decorations[renderEntries[index].id] ?: SubtitleQuality())
             val alignment=style.optString("alignment","center")
             val align=if(alignment!in listOf("right","left")) Layout.Alignment.ALIGN_CENTER else if(QualityRenderPolicy.normalAlignment(alignment,rtl)) Layout.Alignment.ALIGN_NORMAL else Layout.Alignment.ALIGN_OPPOSITE
             val available=(boxWidth-2*px).coerceAtLeast(30f)
@@ -179,7 +193,7 @@ class SubtitleCanvas(context: Context, private val report: (String)->Unit) : Vie
         for(i in texts.indices.reversed()) {
             val layout=layouts[i]; val h=layout.height+2*py
             if(drawn>0 && (drawn>=retained || top-h<safe)) {
-                if(previewUntil<=now) {
+                if(!previewActive) {
                     val retainedIds=renderEntries.takeLast(drawn).map {it.id}.toSet()
                     state.entries.removeAll {it.id !in retainedIds}
                 }
@@ -189,7 +203,7 @@ class SubtitleCanvas(context: Context, private val report: (String)->Unit) : Vie
             top-=h
             val actualWidth=widths[i]
             val left=anchorX-actualWidth/2
-            val fade=if(previewUntil>now) 1f else state.alpha(renderEntries[i],now,n("fade_ms",200.0).toLong())
+            val fade=if(previewActive) 1f else state.alpha(renderEntries[i],now,n("fade_ms",200.0).toLong())
             val alpha=(if(i==texts.lastIndex) 1f else n("older_opacity",85.0)/100)*fade
             val bg=Paint(Paint.ANTI_ALIAS_FLAG)
             val rect=RectF(left,top,left+actualWidth,top+h)
@@ -202,7 +216,7 @@ class SubtitleCanvas(context: Context, private val report: (String)->Unit) : Vie
             if(b("shadow",true)) ink.setShadowLayer(n("shadow_blur",2.0),n("shadow_x",0.0),n("shadow_y",2.0),color("shadow_color","#000000",n("shadow_opacity",80.0)*alpha))
             if(b("outline",true)) { ink.style=Paint.Style.STROKE;ink.strokeWidth=n("outline_width",2.0);ink.color=color("outline_color","#000000",100*alpha);layout.draw(canvas) }
             ink.style=Paint.Style.FILL;ink.color=color("text_color","#FFFFFF",n("text_opacity",100.0)*alpha);layout.draw(canvas);canvas.restore()
-            if(previewUntil<=now && acknowledged.add(renderEntries[i].id)) {
+            if(!previewActive && acknowledged.add(renderEntries[i].id)) {
                 if(acknowledged.size>128) acknowledged.remove(acknowledged.first())
                 if(traceRequested.contains(renderEntries[i].id) && onRenderedTrace != null) {
                     onRenderedTrace?.invoke(renderEntries[i].id,PunctuationTrace.signature(texts[i].toString(),layouts[i].getParagraphDirection(0)))

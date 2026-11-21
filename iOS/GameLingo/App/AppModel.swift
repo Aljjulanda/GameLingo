@@ -11,6 +11,7 @@ final class AppModel: ObservableObject {
             pipeline.configure(mode:settings.mode,thermal:ProcessInfo.processInfo.thermalState.rawValue,lowPower:ProcessInfo.processInfo.isLowPowerModeEnabled)
             if oldValue.advanced != settings.advanced { pipeline.configureAdvanced(settings.advanced) }
             if oldValue.display != settings.display || oldValue.advanced.showSpeakers != settings.advanced.showSpeakers || oldValue.advanced.speakerColor != settings.advanced.speakerColor { scheduleStyle() }
+            saveCurrentProfile()
         }
     }
     @Published var quality = QualitySettings.load() {
@@ -19,6 +20,7 @@ final class AppModel: ObservableObject {
             if oldValue[.measurement] != quality[.measurement] { packLibrary.metrics = HybridMetrics(); packLibrary.store.resetMetrics() }
             if (!oldValue[.learnNames] && quality[.learnNames]) || oldValue[.packLabels] != quality[.packLabels] || oldValue[.packMarkup] != quality[.packMarkup] { refreshPackNamePairs() }
             if !quality[.corrections] { correctionsLibrary.clearRecent() }
+            saveCurrentProfile()
         }
     }
     @Published var qualityCaptureActive = false
@@ -65,6 +67,40 @@ final class AppModel: ObservableObject {
     @Published var loginRequired = false
     @Published var pairing = false
     @Published var addresses: [String] = []
+    @Published var localSubtitles = LocalSubtitleState()
+    @Published var previewFrame: UIImage?
+    @Published var setupLines: [OCRLine] = []
+    @Published var localMenuItems: [MenuOverlayItem] = []
+    @Published var localMenuAppearance = MenuAppearance()
+    @Published var localMenuUntil = 0.0
+    @Published var gameOptions = GameOptions() {
+        didSet {
+            guard !applyingProfile else { return }
+            if oldValue.destination != gameOptions.destination {
+                localSubtitles.clear(); hub.publish(TVProtocol.envelope("subtitle_clear"))
+                if previewActive { preview(false); preview(true) }
+            }
+            if oldValue.menusEnabled != gameOptions.menusEnabled || oldValue.allowedMenus != gameOptions.allowedMenus || oldValue.menuRegion != gameOptions.menuRegion {
+                pipeline.configureMenus(gameOptions)
+            }
+            saveCurrentProfile()
+        }
+    }
+    @Published var previewActive = false
+    @Published var currentGame = "general"
+    @Published var gameProfiles: [GameProfile] = []
+    private var profileStore: GameProfileStore?
+    private var applyingProfile = false
+    private var profileReady = false
+    private var profileSelection: String?
+    private var regionTicket: UUID?
+    private var regionGame: String?
+    func startTVRegionEditing() {
+        guard tvConnected else { return }
+        let ticket = UUID(); regionTicket = ticket; regionGame = currentGame
+        let b = settings.roi
+        hub.publish(TVProtocol.envelope("roi_edit_start",fields:["ticket":ticket.uuidString,"box":["x":b.x,"y":b.y,"w":b.w,"h":b.h]]))
+    }
     let packLibrary = GamePackLibrary()
     let namesLibrary = GameNamesLibrary()
     let correctionsLibrary = CorrectionsLibrary()
@@ -87,7 +123,80 @@ final class AppModel: ObservableObject {
     lazy var translator = OfflineTranslator(packs:packLibrary.store)
     let hub = TVHub()
     let remote = RemotePlayService()
-    private lazy var pipeline = FramePipeline(translator:translator,publish:{ [weak hub = self.hub] in hub?.publish($0) })
+    private lazy var pipeline = FramePipeline(translator:translator,publish:{ [weak self] message in
+        DispatchQueue.main.async { self?.route(message) }
+    })
+    private func route(_ message: [String:Any]) {
+        let type = message["type"] as? String ?? ""
+        guard running || ["subtitle_clear","document_hide","menu_clear"].contains(type) else { return }
+        if gameOptions.destination.tvEnabled { hub.publish(message) }
+        if gameOptions.destination.phoneEnabled {
+            localSubtitles.apply(message,settings:settings.display,now:ProcessInfo.processInfo.systemUptime)
+            if type == "menu_clear" { localMenuItems = []; localMenuUntil = 0 }
+            if type == "menu_snapshot", let raw = message["items"], let data = try? JSONSerialization.data(withJSONObject:raw),
+               let items = try? JSONDecoder().decode([MenuOverlayItem].self,from:data), items.count <= 24,
+               let style = message["appearance"], let styleData = try? JSONSerialization.data(withJSONObject:style),
+               let appearance = try? JSONDecoder().decode(MenuAppearance.self,from:styleData), appearance.valid {
+                localMenuItems = items; localMenuAppearance = appearance; localMenuUntil = ProcessInfo.processInfo.systemUptime+1.8
+            }
+        }
+    }
+    func framePreview(_ enabled: Bool) { pipeline.setPreview(enabled); if !enabled { previewFrame = nil; setupLines = [] } }
+    func captureMenuSetup(_ region: SourceBox) { setupLines = []; pipeline.requestSetupFrame(region:region) }
+    func saveRegion(_ box: SourceBox, menu: Bool) {
+        guard box.isValid else { return }
+        if menu { gameOptions.menuRegion = box }
+        else { settings.roi = box; gameOptions.manualDialogueRegion = true; pipeline.configureRegion(box,manual:true) }
+    }
+    func saveMenu(_ menu: AllowedMenu) {
+        guard menu.valid, gameOptions.allowedMenus.count < 32 || gameOptions.allowedMenus.contains(where:{$0.id == menu.id}) else { errorMessage = "اختر ثلاثة دلائل ثابتة مميزة مع مواقعها على الأقل؛ لا تستخدم قيمًا رقمية متغيرة"; return }
+        if let i = gameOptions.allowedMenus.firstIndex(where:{$0.id == menu.id}) { gameOptions.allowedMenus[i] = menu }
+        else { gameOptions.allowedMenus.append(menu) }
+    }
+    private func optionsSnapshot() -> GameOptions {
+        var value = gameOptions; value.display = settings.display; value.dialogueRegion = settings.roi; value.advanced = settings.advanced; value.quality = quality; return value
+    }
+    private func saveCurrentProfile() {
+        guard profileReady, !applyingProfile, let profileStore, profileStore.profile(currentGame)?.enabled == true else { return }
+        do { try profileStore.update(currentGame,options:optionsSnapshot()); gameProfiles = profileStore.profiles }
+        catch { errorMessage = error.localizedDescription }
+    }
+    private func activateProfile(_ game: String?) {
+        let id = game ?? "general"
+        guard !profileReady || currentGame != id else { return }
+        if running { stop(reason:"توقفت الجلسة لتبديل ملف اللعبة") }
+        preview(false); pipeline.interrupt(); translator.cancel()
+        do {
+            guard let profileStore else { return }
+            let title = packLibrary.state.registry.packs.first(where:{$0.manifest.gameId == game})?.manifest.gameTitle ?? (id == "general" ? "عام" : id)
+            try profileStore.ensure(id,title:title,migration:optionsSnapshot())
+            let value = profileStore.profile(id)!.effective
+            applyingProfile = true; currentGame = id; gameOptions = value
+            settings.display = value.display; settings.roi = value.dialogueRegion; settings.advanced = value.advanced; quality = value.quality
+            applyingProfile = false; profileReady = true; gameProfiles = profileStore.profiles
+            pipeline.configureMenus(value)
+            pipeline.configureRegion(value.dialogueRegion,manual:value.manualDialogueRegion)
+            if let pack = packLibrary.state.registry.packs.first(where:{$0.manifest.gameId == id}), pack.enabled != value.packEnabled { packLibrary.store.enable(pack.id,value.packEnabled) }
+        } catch { applyingProfile = false; errorMessage = error.localizedDescription }
+    }
+    func selectGame(_ id: String) { if running { stop(reason:"توقفت الجلسة لتبديل اللعبة") }; packLibrary.store.changeSelection(game:id == "general" ? nil : id) }
+    func addGame(title: String) {
+        do { let id = "game-"+UUID().uuidString.lowercased(); try profileStore?.ensure(id,title:title); gameProfiles = profileStore?.profiles ?? []; selectGame(id) }
+        catch { errorMessage = error.localizedDescription }
+    }
+    func changeProfile(_ action: String) {
+        if running { stop(reason:"توقفت الجلسة لتعديل ملف اللعبة") }
+        do {
+            switch action {
+            case "disable": try profileStore?.enable(currentGame,false)
+            case "enable": try profileStore?.enable(currentGame,true)
+            case "reset": try profileStore?.reset(currentGame)
+            case "undo": try profileStore?.undo(currentGame)
+            default: break
+            }
+            profileReady = false; activateProfile(currentGame == "general" ? nil : currentGame)
+        } catch { errorMessage = error.localizedDescription }
+    }
     private let monitor = NWPathMonitor()
     private var timer: Timer?
     private var styleTask: Task<Void,Never>?
@@ -138,6 +247,8 @@ final class AppModel: ObservableObject {
     }
 
     init() {
+        do { profileStore = try GameProfileStore(root:FileManager.default.urls(for:.applicationSupportDirectory,in:.userDomainMask)[0].appendingPathComponent("GameProfiles",isDirectory:true)) }
+        catch { errorMessage = error.localizedDescription }
         try? LocalizationInbox().prepare()
         packLibrary.store.configureQuality(PackQualityOptions(quality)); packLibrary.configureQuality(quality); pipeline.configureQuality(quality)
         pipeline.onCaptureState = { [weak self] active,file in self?.qualityCaptureActive = active; self?.qualityCaptureFile = file }
@@ -148,6 +259,7 @@ final class AppModel: ObservableObject {
         }
 #endif
         pipeline.captureAction()
+        pipeline.onPreview = { [weak self] image,lines in self?.previewFrame = UIImage(cgImage:image); if !lines.isEmpty { self?.setupLines = lines } }
         namesLibrary.onChange = { [weak self] store,snapshot in self?.pipeline.configureNames(store,snapshot:snapshot) }
         pipeline.configureNames(namesLibrary.store,snapshot:namesLibrary.snapshot)
         correctionsLibrary.onChange = { [weak self] snapshot in
@@ -160,6 +272,7 @@ final class AppModel: ObservableObject {
         }
         packLibrary.onNamesChanged = { [weak self] names in
             guard let self else { return }
+            self.activateProfile(self.packLibrary.state.registry.selectedGame)
             self.namesLibrary.select(self.packLibrary.state.registry.selectedGame)
             self.correctionsLibrary.select(self.packLibrary.state.registry.selectedGame)
             self.pipeline.configurePackNames(names); self.refreshPackNamePairs()
@@ -224,6 +337,13 @@ final class AppModel: ObservableObject {
             } catch { self.errorMessage = error.localizedDescription }
         }
         hub.onStatus = { [weak self] in self?.tvStatus = $0 }
+        hub.onControl = { [weak self] message in
+            guard let self else { return }
+            if message["type"] as? String == "roi_edit_request" { self.startTVRegionEditing(); return }
+            guard let ticket = self.regionTicket, message["ticket"] as? String == ticket.uuidString, self.regionGame == self.currentGame else { return }
+            self.regionTicket = nil; self.regionGame = nil
+            if message["save"] as? Bool == true, let raw = message["box"], let data = try? JSONSerialization.data(withJSONObject:raw), let box = try? JSONDecoder().decode(SourceBox.self,from:data), box.isValid { self.saveRegion(box,menu:false) }
+        }
         hub.onPairing = { [weak self] _,code in self?.pairingCode = code; self?.hubStarting = false }
         hub.onDiagnostics = { [weak self] in self?.tvDiagnostics = $0 }
         hub.onListening = { [weak self] listening in
@@ -237,9 +357,8 @@ final class AppModel: ObservableObject {
         }
         hub.onListenerFailure = { [weak self] in self?.hubStarting = false; self?.scheduleRecovery() }
         let processor = self.pipeline
-        hub.onDisconnected = { [weak self,weak processor] in
-            processor?.tvDisconnected()
-            DispatchQueue.main.async { self?.tvConnected = false; self?.tvDocuments = false; self?.tvSpeakers = false }
+        hub.onDisconnected = { [weak self] in
+            DispatchQueue.main.async { self?.tvConnected = false; self?.tvDocuments = false; self?.tvSpeakers = false; self?.regionTicket = nil; self?.regionGame = nil }
         }
         hub.onConnected = { [weak self] in self?.tvConnected = true }
         hub.onCapabilities = { [weak self] in self?.tvDocuments = $0.contains("document_v1"); self?.tvSpeakers = $0.contains("speaker_v1") }
@@ -269,6 +388,7 @@ final class AppModel: ObservableObject {
                 self.networkStatus = available ? (path.usesInterfaceType(.wifi) ? "Wi-Fi متصل" : "الشبكة متاحة") : "الشبكة غير متاحة"
                 let changed = self.policy.network != available
                 self.policy.network = available
+                self.remote.networkChanged(available)
                 if self.policy.wanted && changed {
                     if !available { self.networkInterruptions += 1 }
                     self.recordSession(available ? "network.restored" : "network.unavailable","NWPathMonitor availability transition")
@@ -291,6 +411,7 @@ final class AppModel: ObservableObject {
         if !addresses.contains(settings.localIP), let first = addresses.first { settings.localIP = first }
     }
     func sampleSystem() {
+        localSubtitles.expire(now:ProcessInfo.processInfo.systemUptime)
         packLibrary.refreshMetrics()
         let now = ProcessInfo.processInfo.systemUptime
         if policy.wanted && lastSystemSample > 0 && now-lastSystemSample > 8 { recordSession("execution.callback_gap","Main callback gap=\(Int(now-lastSystemSample))s; OS suspension is not confirmed") }
@@ -347,7 +468,7 @@ final class AppModel: ObservableObject {
             if policy.experimentalAudio { audio.start() }
             try remote.connect(console)
             pipeline.start(roi:settings.roi,mode:settings.mode); pipelineActive = true; running = true
-            if !tvListening && !hubStarting { connectTV() }
+            if gameOptions.destination.tvEnabled && !tvListening && !hubStarting { connectTV() }
             UIApplication.shared.isIdleTimerDisabled = true
             applyDim()
         } catch { policy.stop(); SessionIntentStore.save(false); audio.stop(); errorMessage = error.localizedDescription }
@@ -360,6 +481,8 @@ final class AppModel: ObservableObject {
         SessionIntentStore.save(false); UIDevice.current.isBatteryMonitoringEnabled = false
         pipelineActive = false; sessionStatus = reason
         running = false; pairing = false; loginRequired = false; remote.stop(); pipeline.stop()
+        localSubtitles.clear()
+        localMenuItems = []; localMenuUntil = 0
         UIApplication.shared.isIdleTimerDisabled = policy.foreground && tvListening
         if let brightness = originalBrightness { UIScreen.main.brightness = brightness; originalBrightness = nil }
     }
@@ -450,7 +573,7 @@ final class AppModel: ObservableObject {
         if let console = consoles.first(where:{ $0.id == settings.selectedConsoleID }) {
             remote.recover(console,stalled:streamConnected && pipeline.frameAge > 12)
         }
-        if !tvListening && !hubStarting { connectTV(automatic:true) }
+        if gameOptions.destination.tvEnabled && !tvListening && !hubStarting { connectTV(automatic:true) }
         sessionStatus = streamConnected ? "الترجمة نشطة" : "جارٍ استرداد الاتصال"
     }
     func applyDim() {
@@ -513,7 +636,12 @@ final class AppModel: ObservableObject {
             if case .failure(let error) = result { self.errorMessage = error.localizedDescription }
         }
     }
-    func preview(_ show: Bool) { hub.configure(settings.display,kind:show ? "subtitle_preview_show" : "subtitle_preview_hide") }
+    func preview(_ show: Bool) {
+        previewActive = show
+        let kind = show ? "subtitle_preview_show" : "subtitle_preview_hide"
+        if !show || gameOptions.destination.tvEnabled { hub.configure(settings.display,kind:kind) }
+        if !show || gameOptions.destination.phoneEnabled { localSubtitles.apply(TVProtocol.envelope(kind),settings:settings.display,now:ProcessInfo.processInfo.systemUptime) }
+    }
     private func scheduleStyle() {
         styleTask?.cancel()
         styleTask = Task { [weak self] in

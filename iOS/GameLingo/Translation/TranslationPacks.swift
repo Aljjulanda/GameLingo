@@ -115,7 +115,7 @@ final class TranslationPackStore {
     func changeSelection(game: String?) {
         queue.async { [self] in
             do {
-                guard game == nil || state.registry.packs.contains(where:{ $0.manifest.gameId == game }) else { throw PackFailure.invalid }
+                guard game == nil || game.map(UserDataFile.validGame) == true else { throw PackFailure.invalid }
                 if state.registry.selectedGame == game && (state.loaded || game == nil) { return }
                 var next = state.registry; next.selectedGame = game; try save(next); state.registry = next; activate()
             } catch { state.error = "تعذر حفظ اختيار اللعبة"; notify() }

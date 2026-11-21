@@ -32,7 +32,7 @@ enum QualityFlag: String, CaseIterable, Codable {
     }
 }
 
-struct QualitySettings: Equatable {
+struct QualitySettings: Codable, Equatable {
     private var enabled = Set<QualityFlag>()
     var noHitThreshold = 20
     var settleSeconds = 3.0

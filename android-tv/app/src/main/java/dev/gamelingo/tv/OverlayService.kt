@@ -52,6 +52,12 @@ class OverlayService : Service() {
             val existing = view
             if (existing == null) {
                 val label = SubtitleCanvas(this, ::status).apply {
+                    onControl={message->receiver?.control(message)}
+                    onEditingChanged={editing->
+                        val options=params()
+                        if(editing) options.flags=WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+                        view?.let { wm.updateViewLayout(it,options);it.isFocusableInTouchMode=editing;if(editing)it.requestFocus() }
+                    }
                     onRendered={ id -> receiver?.acknowledge(id) }
                     onRenderedTrace={ id,trace -> receiver?.acknowledge(id,trace) }
                     val saved=prefs.getString("display_settings",null)
@@ -62,6 +68,7 @@ class OverlayService : Service() {
                 Log.i("GameLingo", "Overlay attached")
             } else { wm.updateViewLayout(existing, params()) }
             when (intent?.action) {
+                "editRegion" -> {receiver?.control(org.json.JSONObject().put("type","roi_edit_request"))}
                 "move" -> {
                     val place=Placement.from(prefs.getString("position",null))
                     val settings=view?.style ?: org.json.JSONObject()
@@ -81,8 +88,8 @@ class OverlayService : Service() {
                 else -> {
                     receiver?.stop(); receiver = null; live = false; handler.removeCallbacks(hide)
                     view?.apply { visibility = View.VISIBLE; message(org.json.JSONObject().put("type","subtitle_preview_show")) }
-                    status("اختبار الطبقة · ١٠ دقائق")
-                    handler.removeCallbacks(expire); handler.postDelayed(expire, 600_000)
+                    status("معاينة مستمرة · أوقفها من التطبيق")
+                    handler.removeCallbacks(expire)
                 }
             }
         } catch (e: RuntimeException) { Log.e("GameLingo", "Overlay unavailable", e); stopSelf() }

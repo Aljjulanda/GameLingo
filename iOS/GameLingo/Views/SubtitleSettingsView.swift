@@ -14,8 +14,10 @@ struct SubtitleSettingsView: View {
         NavigationView {
             Form {
                 Section("المعاينة والأنماط") {
-                    Button("معاينة مباشرة على التلفزيون") { model.preview(true) }
+                    Picker("وجهة الترجمة والمعاينة",selection:$model.gameOptions.destination) { ForEach(DisplayDestination.allCases,id:\.self) { Text($0.title).tag($0) } }
+                    Button(model.previewActive ? "المعاينة المستمرة تعمل" : "تشغيل معاينة النص المستمرة") { model.preview(true) }
                     Button("إنهاء المعاينة") { model.preview(false) }
+                    NavigationLink("عرض الترجمة داخل GameLingo") { PhoneTranslationView() }
                     Menu("تطبيق نمط") { ForEach(["Classic","Cinema","Gaming","Minimal"],id:\.self) { name in Button(name) { model.settings.display.preset(name) } } }
                     Button("استيراد مظهر محفوظ من Windows") { importing = true }
                     Text("تُحفظ الإعدادات على iPhone وتُرسل تلقائيًا إلى التلفزيون المتصل. يمكن استيراد ملف settings.json السابق لنقل مظهرك الحالي.").font(.footnote).foregroundColor(.secondary)
@@ -98,7 +100,7 @@ struct SubtitleSettingsView: View {
     }
 }
 
-private extension Color {
+extension Color {
     init(hex: String) {
         let value = UInt64(hex.dropFirst(),radix:16) ?? 0xffffff
         self.init(.sRGB,red:Double((value >> 16)&255)/255,green:Double((value >> 8)&255)/255,blue:Double(value&255)/255,opacity:1)

@@ -16,6 +16,7 @@ final class TVHub {
     var onRenderSignature: ((String) -> Void)?
     var onDisplayAck: ((String) -> Void)?
     var onListenerFailure: (() -> Void)?
+    var onControl: (([String:Any]) -> Void)?
     private let queue = DispatchQueue(label:"dev.gamelingo.tv")
     private var listener: NWListener?
     private var client: NWConnection?
@@ -40,6 +41,7 @@ final class TVHub {
     private var pendingDisplay = Set<String>()
     private var bonjourEnabled = true
     private var lastPong = 0.0
+    private var previewActive = false
     private var settingsWire: [String:Any] {
         var value = settings.wire; value["show_speakers"] = showSpeakers; value["speaker_color"] = speakerColor
         return value
@@ -251,6 +253,9 @@ final class TVHub {
                 if !self.authenticated { try self.authenticate(message) }
                 else {
                     switch message["type"] as? String {
+                    case "roi_edit_request", "roi_edit_result":
+                        guard message["session"] as? String == self.sequence.session else { throw LingoError.invalid("جلسة التحكم غير صالحة") }
+                        DispatchQueue.main.async { self.onControl?(message) }
                     case "subtitle_ack":
                         if let id = message["id"] as? String, self.pendingDisplay.remove(id) != nil {
                             let trace = message["render_signature"] as? String
@@ -303,6 +308,7 @@ final class TVHub {
         diagnostic("auth.ok", "اكتملت المصادقة؛ التلفزيون متصل")
         enqueue(TVProtocol.envelope("connection_status",fields:["state":"connected","session":sequence.session,"time_ms":Self.now(),"capabilities":["subtitle_ack","document_v1","speaker_v1"]]),stamp:false)
         enqueue(TVProtocol.envelope("settings_sync",fields:["settings":settingsWire]))
+        if previewActive { enqueue(TVProtocol.envelope("subtitle_preview_show",fields:["settings":settingsWire])) }
         // Never keep or replay a subtitle across reconnection.
         let timer = DispatchSource.makeTimerSource(queue:queue)
         timer.schedule(deadline:.now()+6,repeating:6)
@@ -346,6 +352,8 @@ final class TVHub {
     func configure(_ value: TVSettings, kind: String = "settings_sync", showSpeakers: Bool? = nil, speakerColor: String? = nil) {
         queue.async { [self] in
             settings = value
+            if kind == "subtitle_preview_show" { previewActive = true }
+            if kind == "subtitle_preview_hide" { previewActive = false }
             if let showSpeakers { self.showSpeakers = showSpeakers }
             if let speakerColor, speakerColor.range(of:"^#[0-9A-Fa-f]{6}$",options:.regularExpression) != nil { self.speakerColor = speakerColor }
             if authenticated { enqueue(TVProtocol.envelope(kind,fields:["settings":settingsWire])) }

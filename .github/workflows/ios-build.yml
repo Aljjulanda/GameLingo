@@ -14,7 +14,7 @@ on:
         default: macos-15-intel
         options: ['macos-15-intel', 'macos-15']
   push:
-    branches: ['main', 'codex/**', '!codex/quality-fixes-1']
+    branches: ['main', 'codex/**', '!codex/quality-fixes-1', '!codex/play-experience-preview']
     paths: ['iOS/**', 'tools/pack_converter/**', '.github/workflows/ios-build.yml']
   pull_request:
     paths: ['iOS/**', 'tools/pack_converter/**', '.github/workflows/ios-build.yml']

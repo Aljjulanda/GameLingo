@@ -1,7 +1,7 @@
 name: GameLingo focused quality checkpoint
 on:
   push:
-    branches: ['codex/quality-fixes-1']
+    branches: ['codex/quality-fixes-1', 'codex/play-experience-preview']
   workflow_dispatch:
 permissions:
   contents: read

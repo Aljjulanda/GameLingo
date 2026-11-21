@@ -2,6 +2,7 @@ import Foundation
 import CoreVideo
 import Vision
 import ImageIO
+import CoreImage
 
 final class VisionDialogueOCR {
     private let request: VNRecognizeTextRequest = {
@@ -13,6 +14,31 @@ final class VisionDialogueOCR {
     var qualityTrace = false
     var captureLines = false
     var quality = QualitySettings()
+    var strictRegion = false
+    private let imageContext = CIContext(options:[.cacheIntermediates:false])
+    private func cropped(_ buffer: CVPixelBuffer, roi: SourceBox) throws -> CGImage {
+        let width = Double(CVPixelBufferGetWidth(buffer)), height = Double(CVPixelBufferGetHeight(buffer))
+        // Round inward: no pixel outside a manual selection reaches Vision.
+        let left = ceil(roi.x*width), right = floor((roi.x+roi.w)*width)
+        let bottom = ceil((1-roi.y-roi.h)*height), top = floor((1-roi.y)*height)
+        let rect = CGRect(x:left,y:bottom,width:right-left,height:top-bottom)
+        guard rect.width >= 2, rect.height >= 2, let image = imageContext.createCGImage(CIImage(cvPixelBuffer:buffer).cropped(to:rect),from:rect) else { throw LingoError.invalid("منطقة القراءة صغيرة جدًا") }
+        return image
+    }
+    func menuLines(_ buffer: CVPixelBuffer, roi: SourceBox) throws -> [OCRLine] {
+        guard roi.isValid else { return [] }
+        let request = VNRecognizeTextRequest()
+        request.recognitionLanguages = ["en-US"]; request.recognitionLevel = .accurate
+        request.usesLanguageCorrection = false; request.minimumTextHeight = 0.008
+        request.usesCPUOnly = self.request.usesCPUOnly
+        try VNImageRequestHandler(cgImage:cropped(buffer,roi:roi),orientation:.up,options:[:]).perform([request])
+        return Array((request.results ?? []).compactMap { observation -> OCRLine? in
+            guard let candidate = observation.topCandidates(1).first, candidate.confidence >= 0.7 else { return nil }
+            let box = project(observation.boundingBox,roi:roi)
+            guard roi.contains(box,tolerance:0.002) else { return nil }
+            return OCRLine(text:candidate.string,box:box,confidence:Double(candidate.confidence))
+        }.prefix(64))
+    }
     private(set) var nameConfidence = NameConfidenceCounts()
     private var dictionaryKey: String?
     var configuredCustomWords: [String] { request.customWords }
@@ -72,12 +98,13 @@ final class VisionDialogueOCR {
     func recognize(_ buffer: CVPixelBuffer, roi: SourceBox, knownNames: String = "", dictionaryNames: String? = nil) throws -> (String,SourceBox) {
         guard roi.isValid else { throw LingoError.invalid("منطقة الحوار غير صالحة") }
         // Vision's ROI is lower-left origin. The shared TV protocol uses top-left origin.
-        request.regionOfInterest = CGRect(x:roi.x,y:1-roi.y-roi.h,width:roi.w,height:roi.h)
+        request.regionOfInterest = strictRegion ? CGRect(x:0,y:0,width:1,height:1) : CGRect(x:roi.x,y:1-roi.y-roi.h,width:roi.w,height:roi.h)
         let dictionary = quality[.visionNames] ? (dictionaryNames ?? knownNames) : nil
         if dictionary != dictionaryKey {
             request.customWords = dictionary.map { VisionNameDictionary.words([$0]) } ?? []; dictionaryKey = dictionary
         }
-        try VNImageRequestHandler(cvPixelBuffer:buffer,orientation:.up,options:[:]).perform([request])
+        if strictRegion { try VNImageRequestHandler(cgImage:cropped(buffer,roi:roi),orientation:.up,options:[:]).perform([request]) }
+        else { try VNImageRequestHandler(cvPixelBuffer:buffer,orientation:.up,options:[:]).perform([request]) }
         var lines: [OCRLine] = [], raw: [OCRLine] = []
         for observation in request.results ?? [] {
             guard let candidate = observation.topCandidates(1).first else { continue }

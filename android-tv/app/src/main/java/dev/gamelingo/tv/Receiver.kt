@@ -181,7 +181,7 @@ class Receiver(context: Context, private val render: (JSONObject?) -> Unit, priv
                         "subtitle_show", "subtitle_update", "subtitle_hide", "subtitle_clear", "subtitle_source_gone", "context_show", "context_present", "context_clear" -> {
                             if (session.isEmpty() || m.optString("session") != session || m.getLong("seq") <= sequence) return@onMain
                             sequence = m.getLong("seq")
-                            if (m.getString("type") in listOf("subtitle_clear","subtitle_hide")) { render(null); return@onMain }
+                            if (m.getString("type") in listOf("subtitle_clear","subtitle_hide")) { render(m); return@onMain }
                             if(m.getString("type")=="subtitle_source_gone") { render(m); return@onMain }
                             if(m.getString("type").startsWith("context_")) { render(m); return@onMain }
                             val left = m.optLong("expires_at",Long.MAX_VALUE) - (serverTime + SystemClock.elapsedRealtime() - syncTime)
@@ -212,6 +212,10 @@ class Receiver(context: Context, private val render: (JSONObject?) -> Unit, priv
                             render(m)
                         }
                         "heartbeat" -> { serverTime = m.getLong("time_ms"); syncTime = SystemClock.elapsedRealtime() }
+                        "menu_snapshot", "menu_clear", "roi_edit_start", "roi_edit_end" -> {
+                            if(session.isEmpty() || m.optString("session")!=session || m.getLong("seq")<=sequence) return@onMain
+                            sequence=m.getLong("seq"); render(m)
+                        }
                         "document_show", "document_hide" -> {
                             if(session.isEmpty() || m.optString("session")!=session || m.getLong("seq")<=sequence) return@onMain
                             sequence=m.getLong("seq")
@@ -236,6 +240,9 @@ class Receiver(context: Context, private val render: (JSONObject?) -> Unit, priv
                 else { diagnostic(failure.code,failure.text,false); retry(failure.text) }
             }
         })
+    }
+    fun control(message: JSONObject) {
+        if(session.isNotEmpty()) { message.put("v",1).put("session",session); socket?.send(message.toString()) }
     }
     private fun dispose() {
         ++epoch

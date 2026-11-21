@@ -74,9 +74,9 @@ final class OfflineTranslator {
                 let normalized = DialogueText.normalized(text)
                 let packKey = packs?.outputKey ?? ""
                 if lastPackKey != packKey { cache = BoundedLRU(capacity:256); lastPackKey = packKey }
-                let key = Self.modelID+"/commands-v2/en/ar/"+quality.outputKey+"/"+names.outputKey+"/"+corrections.outputKey+"/"+packKey+"/"+normalized
+                let key = Self.modelID+"/"+category+"/commands-v2/en/ar/"+quality.outputKey+"/"+names.outputKey+"/"+corrections.outputKey+"/"+packKey+"/"+normalized
                 let selectedGame = packs?.publication("",origin:.rule).game
-                let corrected = packs == nil || corrections.matches(game:selectedGame) ? corrections.lookup(text) : nil
+                let corrected = category == "dialogue" && (packs == nil || corrections.matches(game:selectedGame)) ? corrections.lookup(text) : nil
                 let selected = corrected != nil ? packs?.publication(eventID ?? "",origin:.userCorrection) : nil
                 let lookup = corrected != nil ? PackLookupOutcome(game:selected?.game,pack:selected?.pack) : packs?.lookupDetailed(text,category:category,eventID:eventID) ?? PackLookupOutcome(fallback:.noDatabase)
                 let fallback = category == "dialogue" ? lookup.fallback : TranslationFallback.notDialogue

@@ -36,6 +36,9 @@ final class RemotePlayService {
     private var retries = 0
     private var startedAt = 0.0
     private var accounting = RecoveryAccounting()
+    private var recoveryPolicy = StreamRecoveryPolicy()
+    private var networkAvailable = true
+    func networkChanged(_ available: Bool) { control.async { self.networkAvailable = available } }
     var onState: ((String) -> Void)?
     var onLoginPIN: (() -> Void)?
     var onFrame: ((CVPixelBuffer) -> Void)?
@@ -57,9 +60,18 @@ final class RemotePlayService {
     /// Preserve healthy/starting sessions; restart only after confirmed frame starvation.
     func recover(_ console: ConsoleCredentials, stalled: Bool = false) {
         control.async { [self] in
-            guard accounting.reserveRecovery(hasSession:session != nil,stalled:stalled,age:ProcessInfo.processInfo.systemUptime-startedAt,now:ProcessInfo.processInfo.systemUptime) else { return }
+            guard networkAvailable else { return }
+            let now = ProcessInfo.processInfo.systemUptime
+            var confirmed = false
+            if stalled, let health = context?.decoder.healthSnapshot() {
+                let clock = DispatchTime.now().uptimeNanoseconds
+                let encoded = health.lastInputNanoseconds > 0 ? Double(clock-health.lastInputNanoseconds)/1_000_000_000 : nil
+                let decoded = health.lastOutputNanoseconds > 0 ? Double(clock-health.lastOutputNanoseconds)/1_000_000_000 : nil
+                confirmed = recoveryPolicy.replacementNeeded(encodedAge:encoded,decodedAge:decoded,sessionAge:now-startedAt,now:now)
+            } else { recoveryPolicy.resetObservation() }
+            guard accounting.reserveRecovery(hasSession:session != nil,stalled:confirmed,age:now-startedAt,now:now) else { return }
             if session != nil {
-                telemetry("video.starvation","No decoded frame for >12 seconds; replacing current session")
+                telemetry("video.starvation","Encoded and decoded video silent >20s on repeated observations; replacing serially without wake")
                 DispatchQueue.main.async { self.onInterruption?() }
             }
             telemetry("reconnect.attempt",stalled ? "frame starvation" : "session unavailable; execution/network trigger")
@@ -150,19 +162,7 @@ final class RemotePlayService {
                     self.telemetry(self.accounting.metrics.failures > failures ? "reconnect.failure" : "ps5.disconnected","Native reason=\(reason); uptime=\(Int(uptime))s")
                     self.closeSession()
                     DispatchQueue.main.async { self.onInterruption?() }
-                    self.retries += 1
-                    guard self.retries <= 5 else { self.wanted = nil; self.accounting.stop(); self.state("توقف البث (\(reason))؛ أعد الاتصال يدويًا"); DispatchQueue.main.async { self.onStopped?() }; return }
-                    self.accounting.scheduleRetry()
-                    self.telemetry("reconnect.scheduled","Native service owns the pending retry; lifecycle requests cannot bypass it")
-                    self.state("انقطع البث (\(reason))؛ إعادة الاتصال \(self.retries)/5")
-                    self.control.asyncAfter(deadline: .now()+Double(min(16,1 << self.retries))) {
-                        if self.sessionEpoch == epoch, let wanted = self.wanted {
-                            guard self.accounting.beginRetry(now:ProcessInfo.processInfo.systemUptime) else { return }
-                            self.sessionEpoch += 1
-                            self.telemetry("reconnect.attempt","Native retry after disconnect")
-                            self.start(wanted,epoch:self.sessionEpoch)
-                        }
-                    }
+                    self.scheduleRetry(epoch:epoch,reason:"انقطع البث (\(reason))")
                 default: break
                 }
             }
@@ -191,8 +191,28 @@ final class RemotePlayService {
         }
         if error != 0 || session == nil {
             accounting.ended(); telemetry("ps5.start_failed","Native start error=\(error)")
-            closeSession(); wanted = nil; state("تعذر بدء البث (\(error))"); DispatchQueue.main.async { self.onStopped?() }
+            closeSession(); scheduleRetry(epoch:epoch,reason:"تعذر بدء البث (\(error))")
         } else { telemetry("ps5.start","Native start accepted; waiting for connected event") }
+    }
+    private func scheduleRetry(epoch: Int, reason: String) {
+        guard wanted != nil, sessionEpoch == epoch else { return }
+        retries = min(6,retries+1)
+        accounting.scheduleRetry()
+        let delay = StreamRecoveryPolicy.delay(retries)
+        telemetry("reconnect.scheduled","Single native retry owner; delay=\(Int(delay))s; no wake")
+        state(reason+"؛ إعادة محاولة الاتصال دون إيقاظ بعد \(Int(delay)) ثانية")
+        awaitRetry(epoch:epoch,delay:delay)
+    }
+    private func awaitRetry(epoch: Int, delay: Double) {
+        control.asyncAfter(deadline:.now()+delay) { [weak self] in
+            guard let self, self.sessionEpoch == epoch, let wanted = self.wanted else { return }
+            // A missing network does not spend attempts or create a second timer.
+            guard self.networkAvailable else { self.awaitRetry(epoch:epoch,delay:5); return }
+            guard self.accounting.beginRetry(now:ProcessInfo.processInfo.systemUptime) else { return }
+            self.sessionEpoch += 1
+            self.telemetry("reconnect.attempt","Serial native retry; connection only, no wake")
+            self.start(wanted,epoch:self.sessionEpoch)
+        }
     }
     private func closeSession() {
         let hadSession = session != nil

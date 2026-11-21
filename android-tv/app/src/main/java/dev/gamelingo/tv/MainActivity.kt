@@ -50,7 +50,7 @@ class MainActivity : Activity() {
             if (OverlayService.active) startService(Intent(this, OverlayService::class.java).setAction("move"))
             refresh()
         }
-        start = button("عرض نص الاختبار لمدة ١٠ دقائق") {
+        start = button("تشغيل معاينة النص المستمرة") {
             if (Settings.canDrawOverlays(this)) {
                 startForegroundService(Intent(this, OverlayService::class.java))
                 status.text = "اختر مدخل PlayStation بالريموت وتحقق من ظهور النص."
@@ -58,6 +58,9 @@ class MainActivity : Activity() {
         }
         button("إخفاء النص وإيقاف الخدمة") { stopService(Intent(this, OverlayService::class.java)); refresh() }
         button("الاتصال بـ Windows / iPhone") { connectionDialog() }
+        button("تحديد منطقة الحوار بالريموت") {
+            if(OverlayService.active) startService(Intent(this,OverlayService::class.java).setAction("editRegion"))
+        }
         button("تشخيص الاتصال") {
             val log = TextView(this).apply {
                 text = prefs.getString("connection_diagnostics","لم تُسجل محاولة اتصال بعد")

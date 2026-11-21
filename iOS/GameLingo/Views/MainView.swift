@@ -120,7 +120,10 @@ struct TranslationView: View {
             Form {
                 Section("اللغات") { LabeledContent("المصدر",value:"English"); LabeledContent("الهدف",value:"العربية") }
                 Section("حزم الألعاب") {
+                    NavigationLink("ملفات الألعاب والقوائم") { GameProfilesView() }
                     NavigationLink("مكتبة ترجمات الألعاب") { GamePackLibraryView(library:model.packLibrary) }.accessibilityIdentifier("gamePacks.library")
+                    NavigationLink("عرض الترجمة على الآيفون") { PhoneTranslationView() }
+                    NavigationLink("معاينة اللعبة وتحديد مناطق القراءة") { GameFrameEditorView() }
                 }
                 QualitySettingsSection()
                 Section("تشغيل الجلسة والخلفية") {
