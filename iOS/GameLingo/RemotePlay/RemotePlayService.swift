@@ -65,8 +65,8 @@ final class RemotePlayService {
             var confirmed = false
             if stalled, let health = context?.decoder.healthSnapshot() {
                 let clock = DispatchTime.now().uptimeNanoseconds
-                let encoded = health.lastInputNanoseconds > 0 ? Double(clock-health.lastInputNanoseconds)/1_000_000_000 : nil
-                let decoded = health.lastOutputNanoseconds > 0 ? Double(clock-health.lastOutputNanoseconds)/1_000_000_000 : nil
+                let encoded = health.lastInputNanoseconds > 0 ? Double(clock-health.lastInputNanoseconds)/1_000_000_000 : now-startedAt
+                let decoded = health.lastOutputNanoseconds > 0 ? Double(clock-health.lastOutputNanoseconds)/1_000_000_000 : now-startedAt
                 confirmed = recoveryPolicy.replacementNeeded(encodedAge:encoded,decodedAge:decoded,sessionAge:now-startedAt,now:now)
             } else { recoveryPolicy.resetObservation() }
             guard accounting.reserveRecovery(hasSession:session != nil,stalled:confirmed,age:now-startedAt,now:now) else { return }

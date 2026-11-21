@@ -41,10 +41,10 @@ class QRPairingServer(private val confirm:(JSONObject,(Boolean)->Unit)->Unit,pri
         val manager=object:X509KeyManager {
             override fun getClientAliases(t:String?,i:Array<java.security.Principal>?):Array<String>?=null
             override fun chooseClientAlias(t:Array<String>?,i:Array<java.security.Principal>?,s:Socket?):String?=null
-            override fun getServerAliases(t:String?,i:Array<java.security.Principal>?):Array<String> = arrayOf(alias)
-            override fun chooseServerAlias(t:String?,i:Array<java.security.Principal>?,s:Socket?):String=alias
-            override fun getCertificateChain(a:String?):Array<X509Certificate> = chain
-            override fun getPrivateKey(a:String?):PrivateKey=key
+            override fun getServerAliases(t:String?,i:Array<java.security.Principal>?):Array<String>? = if(t=="RSA") arrayOf(alias) else null
+            override fun chooseServerAlias(t:String?,i:Array<java.security.Principal>?,s:Socket?):String?=if(t=="RSA") alias else null
+            override fun getCertificateChain(a:String?):Array<X509Certificate>? = if(a==alias) chain else null
+            override fun getPrivateKey(a:String?):PrivateKey?=if(a==alias) key else null
         }
         val tls=SSLContext.getInstance("TLS").apply{init(arrayOf<KeyManager>(manager),null,SecureRandom())}
         val listener=tls.serverSocketFactory.createServerSocket(38444,2,InetAddress.getByName(host)) as SSLServerSocket

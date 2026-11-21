@@ -1,5 +1,5 @@
 {
-  "profile": "quality-preview-1",
+  "profile": "play-preview-1",
   "selected": [
     "GameLingoTests/AppleIntegrationTests/testNativeArgosAndContextRuleBenchmarkOnSyntheticDialogue",
     "GameLingoTests/AppleIntegrationTests/testNativeTranslationCanRetireImmediatelyAfterSynchronousResult",
@@ -42,7 +42,10 @@
     "GameLingoTests/QualityIntegrationTests/testGameSwitchCannotShowPreviousGamesWorkingCount",
     "GameLingoTests/QualityIntegrationTests/testOptInCaptureExcludesBackupAndNeverResumes",
     "GameLingoTests/QualityIntegrationTests/testCompleteProtectionWhenRuntimeReportsFileProtection",
-    "GameLingoTests/QualityIntegrationTests/testRealArgosProvenanceCacheAndUnchangedLegacyOutput"
+    "GameLingoTests/QualityIntegrationTests/testRealArgosProvenanceCacheAndUnchangedLegacyOutput",
+    "GameLingoTests/PlayExperienceIntegrationTests/testManualCropReadsWholeSelectedTextAndExcludesOutsideRegion",
+    "GameLingoTests/PlayExperienceIntegrationTests/testCurrentMenuOCRKeepsDynamicValuesAndMeasuresDecodedGlyphColor",
+    "GameLingoTests/PlayExperienceIntegrationTests/testActualVisionOCRComparisonCorpusIsExportedWithoutPrivateImages"
   ],
   "allowed_skips": [
     "GameLingoTests/NamesIntegrationTests/testNamesFileProtectionWhenRuntimeReportsIt",

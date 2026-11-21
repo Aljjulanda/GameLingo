@@ -133,8 +133,10 @@ final class AppModel: ObservableObject {
     lazy var translator = OfflineTranslator(packs:packLibrary.store)
     let hub = TVHub()
     let remote = RemotePlayService()
-    private lazy var pipeline = FramePipeline(translator:translator,publish:{ [weak self] message in
-        DispatchQueue.main.async { self?.route(message) }
+    private let outputFence = DeliveryFence()
+    private lazy var pipeline = FramePipeline(translator:translator,publish:{ [weak self,fence = self.outputFence] message in
+        let epoch = fence.snapshot()
+        DispatchQueue.main.async { if fence.accepts(epoch) { self?.route(message) } }
     })
     private func route(_ message: [String:Any]) {
         let type = message["type"] as? String ?? ""
@@ -176,6 +178,7 @@ final class AppModel: ObservableObject {
         guard !profileReady || currentGame != id else { return }
         if running { stop(reason:"توقفت الجلسة لتبديل ملف اللعبة") }
         preview(false); pipeline.interrupt(); translator.cancel()
+        outputFence.invalidate()
         do {
             guard let profileStore else { return }
             let title = packLibrary.state.registry.packs.first(where:{$0.manifest.gameId == game})?.manifest.gameTitle ?? (id == "general" ? "عام" : id)
@@ -478,6 +481,7 @@ final class AppModel: ObservableObject {
         guard settings.roi.isValid else { errorMessage = "اضبط منطقة الحوار داخل حدود صورة البث أولًا"; return }
         do {
             improvementWorker.cancel(); translator.cancel()
+            outputFence.invalidate()
             packLibrary.store.resetMetrics()
             policy.start(); policy.experimentalAudio = settings.advanced.backgroundAudio
             SessionIntentStore.save(true); initialBattery = -1; batteryUsed = nil; UIDevice.current.isBatteryMonitoringEnabled = true
@@ -496,6 +500,7 @@ final class AppModel: ObservableObject {
         } catch { policy.stop(); SessionIntentStore.save(false); audio.stop(); errorMessage = error.localizedDescription }
     }
     func stop(reason: String = "أوقفها المستخدم") {
+        outputFence.invalidate(); hub.publish(TVProtocol.envelope("subtitle_clear")); hub.publish(TVProtocol.envelope("menu_clear"))
         correctionsLibrary.clearRecent()
         recordSession("session.stop",reason+"; automatic recovery disabled")
         closeReading()

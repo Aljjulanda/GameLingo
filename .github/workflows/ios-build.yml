@@ -7,7 +7,7 @@ on:
         description: 'Approved preview defers Vision/Files hardware acceptance and excludes production typewriter'
         type: choice
         default: full
-        options: ['quality-preview-1', 'full']
+        options: ['play-preview-1', 'full']
       runner:
         description: 'Mac architecture only; Xcode stays 16.4'
         type: choice
@@ -45,14 +45,14 @@ jobs:
       - name: Reproduce LAN listener binding and endpoint representation
         run: swift iOS/Scripts/probe-lan.swift
       - name: Record approved preview scope and toolchain
-        if: ${{ inputs.validation_profile == 'quality-preview-1' }}
+        if: ${{ inputs.validation_profile == 'play-preview-1' }}
         run: |
           test "$(uname -m)" = x86_64
           xcodebuild -version | tee /tmp/gamelingo-xcode-version.txt
           grep -q '^Xcode 16.4$' /tmp/gamelingo-xcode-version.txt
           python3 iOS/Scripts/preview-tests.py filters
           mkdir -p iOS/build/logs
-          python3 -c 'import json,os,platform,subprocess; from pathlib import Path; Path("iOS/build/logs/preview-environment.json").write_text(json.dumps(dict(profile="quality-preview-1",source_commit=os.environ["GITHUB_SHA"],architecture=platform.machine(),runner="macos-15-intel",xcode=subprocess.check_output(["xcodebuild","-version"],text=True)),indent=2))'
+          python3 -c 'import json,os,platform,subprocess; from pathlib import Path; Path("iOS/build/logs/preview-environment.json").write_text(json.dumps(dict(profile="play-preview-1",source_commit=os.environ["GITHUB_SHA"],architecture=platform.machine(),runner="macos-15-intel",xcode=subprocess.check_output(["xcodebuild","-version"],text=True)),indent=2))'
       - name: Install native build dependencies
         run: brew install cmake ninja protobuf
       - name: Restore native dependency build cache
@@ -99,18 +99,18 @@ jobs:
       - name: Archive and package unsigned IPA
         run: bash iOS/Scripts/build-unsigned.sh
       - name: Core and Apple integration tests
-        if: ${{ inputs.validation_profile != 'quality-preview-1' }}
+        if: ${{ inputs.validation_profile != 'play-preview-1' }}
         env:
           SKIP_CORE_TESTS: '1'
         run: bash iOS/Scripts/test.sh
       - name: Approved preview native Argos SQLite import names corrections and WSS gates
-        if: ${{ inputs.validation_profile == 'quality-preview-1' }}
+        if: ${{ inputs.validation_profile == 'play-preview-1' }}
         env:
           SKIP_CORE_TESTS: '1'
           IOS_PREVIEW: '1'
         run: bash iOS/Scripts/test.sh
       - name: Native Files picker selection and sandbox import
-        if: ${{ inputs.validation_profile != 'quality-preview-1' }}
+        if: ${{ inputs.validation_profile != 'play-preview-1' }}
         run: bash iOS/Scripts/test-picker-ui.sh
       - name: Upload approved unsigned IPA after required gates pass
         uses: actions/upload-artifact@v7
