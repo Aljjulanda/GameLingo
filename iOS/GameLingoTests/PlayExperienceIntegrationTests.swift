@@ -23,7 +23,8 @@ final class PlayExperienceIntegrationTests: XCTestCase {
         try VNImageRequestHandler(cgImage:cropped,orientation:.up,options:[:]).perform([raw])
         let observations = (raw.results ?? []).compactMap { observation -> [String:Any]? in
             guard let candidate = observation.topCandidates(1).first else { return nil }
-            return ["text":candidate.string,"confidence":Double(candidate.confidence),"box":NSStringFromCGRect(observation.boundingBox)]
+            let b = observation.boundingBox
+            return ["text":candidate.string,"confidence":Double(candidate.confidence),"box":["x":Double(b.minX),"y":Double(b.minY),"w":Double(b.width),"h":Double(b.height)]]
         }
         let repeated = try ocr.menuLines(pixels,roi:region)
         ocr.strictRegion = true;ocr.captureLines = true
