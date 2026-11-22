@@ -2,9 +2,38 @@ import XCTest
 import UIKit
 import CoreVideo
 import CoreImage
+import Vision
 @testable import GameLingo
 
 final class PlayExperienceIntegrationTests: XCTestCase {
+    /// Investigation only; not included in the release acceptance selection.
+    func testDiagnoseFirstCorpusFrameAndRawVisionConfidence() throws {
+        let source = "Do not open that door."
+        let pixels = try frame([(source,CGPoint(x:160,y:520),.white)])
+        let region = SourceBox(x:0.08,y:0.65,w:0.87,h:0.25)
+        let ocr = VisionDialogueOCR(softwareImageContext:true);ocr.setBackground(true)
+        let first = try ocr.menuLines(pixels,roi:region)
+        let context = CIContext(options:[.useSoftwareRenderer:true,.cacheIntermediates:false])
+        let image = CIImage(cvPixelBuffer:pixels)
+        let full = try XCTUnwrap(context.createCGImage(image,from:image.extent))
+        let rect = CGRect(x:ceil(region.x*1280),y:ceil((1-region.y-region.h)*720),width:floor((region.x+region.w)*1280)-ceil(region.x*1280),height:floor((1-region.y)*720)-ceil((1-region.y-region.h)*720))
+        let cropped = try XCTUnwrap(context.createCGImage(image.cropped(to:rect),from:rect))
+        let raw = VNRecognizeTextRequest();raw.recognitionLanguages = ["en-US"];raw.recognitionLevel = .accurate
+        raw.usesLanguageCorrection = false;raw.minimumTextHeight = 0.008;raw.usesCPUOnly = true
+        try VNImageRequestHandler(cgImage:cropped,orientation:.up,options:[:]).perform([raw])
+        let observations = (raw.results ?? []).compactMap { observation -> [String:Any]? in
+            guard let candidate = observation.topCandidates(1).first else { return nil }
+            return ["text":candidate.string,"confidence":Double(candidate.confidence),"box":NSStringFromCGRect(observation.boundingBox)]
+        }
+        let repeated = try ocr.menuLines(pixels,roi:region)
+        ocr.strictRegion = true;ocr.captureLines = true
+        let dialogue = try ocr.recognize(pixels,roi:region)
+        let data = try JSONSerialization.data(withJSONObject:["source":source,"first_menu":first.map(\.text),"raw_menu_observations":observations,"repeated_menu":repeated.map(\.text),"dialogue":dialogue.0,"raw_dialogue":ocr.lastLines.map{["text":$0.text,"confidence":$0.confidence]}],options:[.prettyPrinted,.sortedKeys])
+        let result = XCTAttachment(data:data,uniformTypeIdentifier:"public.json");result.name = "failed-corpus-first-frame-diagnosis";result.lifetime = .keepAlways;add(result)
+        for (name,cg) in [("failed-corpus-full-frame",full),("failed-corpus-cropped-frame",cropped)] {
+            let attachment = XCTAttachment(image:UIImage(cgImage:cg));attachment.name = name;attachment.lifetime = .keepAlways;add(attachment)
+        }
+    }
     func testMenuConfigurationDoesNotCancelIndependentDialogueInference() throws {
         let folder = try XCTUnwrap(Bundle(for:Self.self).url(forResource:"en_ar",withExtension:nil))
         let translator = OfflineTranslator(folder:folder)
