@@ -10,10 +10,11 @@ cleanup() {
   export_attachments
 }
 export_attachments() {
-  if [[ -d build/GameLingoTests.xcresult ]]; then
-    xcrun xcresulttool export attachments --path build/GameLingoTests.xcresult \
-      --output-path build/logs/test-attachments || true
-  fi
+  for result in build/GameLingoTests*.xcresult; do
+    [[ -d "$result" ]] || continue
+    xcrun xcresulttool export attachments --path "$result" \
+      --output-path "build/logs/test-attachments/$(basename "$result" .xcresult)" || true
+  done
 }
 trap cleanup EXIT
 for attempt in {1..60}; do
@@ -42,26 +43,70 @@ fi
 # before xcodebuild runs. Keep the command nonempty for the unfiltered route.
 TEST_COMMAND=(xcodebuild test-without-building -project GameLingo.xcodeproj -scheme GameLingo -configuration Debug
   -destination "$DESTINATION" -derivedDataPath build/DerivedData
-  -resultBundlePath build/GameLingoTests.xcresult
   CODE_SIGN_ENTITLEMENTS='' ARCHS="$ARCH" ONLY_ACTIVE_ARCH=YES)
 if [[ "${IOS_PREVIEW:-0}" == 1 ]]; then
   IOS_TEST_FILTERS="$(python3 Scripts/preview-tests.py filters)"
   export IOS_TEST_FILTERS
 fi
 FILTER_COUNT=0
+SHARED_COUNT=0
+ISOLATED_COUNT=0
+SHARED_FILTERS=()
+ISOLATED_FILTERS=()
+ISOLATED_IDS=''
+if [[ "${IOS_ISOLATE_VISION:-0}" == 1 ]]; then
+  [[ -n "${IOS_TEST_FILTERS:-}" ]] || { echo 'Vision isolation requires explicit test filters'; exit 2; }
+  ISOLATED_IDS="$(python3 Scripts/preview-tests.py isolated)"
+  [[ -n "$ISOLATED_IDS" ]] || { echo 'Missing isolated Vision identifiers'; exit 2; }
+fi
+is_isolated() {
+  local identifier
+  while IFS= read -r identifier; do
+    [[ "$1" == "$identifier" ]] && return 0
+  done <<< "$ISOLATED_IDS"
+  return 1
+}
 if [[ -n "${IOS_TEST_FILTERS:-}" ]]; then
   while IFS= read -r filter; do
     [[ -z "$filter" ]] && continue
     [[ "$filter" =~ ^GameLingoTests/[A-Za-z0-9_]+(/[A-Za-z0-9_]+)?$ ]] || { echo 'Invalid focused XCTest identifier'; exit 2; }
-    TEST_COMMAND+=("-only-testing:$filter")
+    if [[ "${IOS_ISOLATE_VISION:-0}" == 1 ]]; then
+      [[ "$filter" =~ ^GameLingoTests/[A-Za-z0-9_]+/[A-Za-z0-9_]+$ ]] || { echo 'Vision isolation requires individual test methods'; exit 2; }
+    fi
+    if [[ "${IOS_ISOLATE_VISION:-0}" == 1 ]] && is_isolated "$filter"; then
+      ISOLATED_FILTERS+=("-only-testing:$filter")
+      ISOLATED_COUNT=$((ISOLATED_COUNT+1))
+    else
+      SHARED_FILTERS+=("-only-testing:$filter")
+      SHARED_COUNT=$((SHARED_COUNT+1))
+    fi
     FILTER_COUNT=$((FILTER_COUNT+1))
     printf 'Focused native test identifier: %s\n' "$filter"
   done <<< "$IOS_TEST_FILTERS"
   ((FILTER_COUNT > 0)) || { echo 'Focused test list was empty'; exit 2; }
 fi
-"${TEST_COMMAND[@]}" 2>&1 | tee build/logs/apple-tests.log
-test -d build/GameLingoTests.xcresult || { echo 'Missing native XCTest result bundle'; exit 1; }
-grep -Eq 'Executed [1-9][0-9]* tests?' build/logs/apple-tests.log || { echo 'No native XCTest cases executed'; exit 1; }
+: > build/logs/apple-tests.log
+run_batch() {
+  local bundle="$1"
+  shift
+  local log="build/logs/$(basename "$bundle" .xcresult).log"
+  "${TEST_COMMAND[@]}" -resultBundlePath "$bundle" "$@" 2>&1 | tee "$log" | tee -a build/logs/apple-tests.log
+  test -d "$bundle" || { echo 'Missing native XCTest result bundle'; exit 1; }
+  grep -Eq 'Executed [1-9][0-9]* tests?' "$log" || { echo 'No native XCTest cases executed'; exit 1; }
+}
+if ((FILTER_COUNT == 0)); then
+  run_batch build/GameLingoTests.xcresult
+elif ((SHARED_COUNT > 0)); then
+  run_batch build/GameLingoTests.xcresult "${SHARED_FILTERS[@]}"
+fi
+# Fresh test sessions avoid sharing Vision/VideoToolbox simulator driver state
+# between image cases. Each selected case runs exactly once; any failure stops
+# the runner. Do not retry a crash or merge a later pass over an earlier failure.
+if ((ISOLATED_COUNT > 0)); then
+  for ((index=0; index<ISOLATED_COUNT; index++)); do
+    run_batch "build/GameLingoTests-Vision-$index.xcresult" "${ISOLATED_FILTERS[$index]}"
+  done
+fi
 
 if [[ "${IOS_PREVIEW:-0}" == 1 ]]; then
   python3 Scripts/preview-tests.py verify build/logs/apple-tests.log

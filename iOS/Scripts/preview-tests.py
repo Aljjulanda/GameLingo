@@ -14,6 +14,8 @@ def manifest():
     assert selected and len(selected) == len(set(selected))
     assert not set(selected) & set(value['deferred'])
     assert set(value['allowed_skips']) <= set(selected)
+    assert set(value.get('isolated', [])) <= set(selected)
+    assert len(value.get('isolated', [])) == len(set(value.get('isolated', [])))
     for identifier in selected + value['deferred']:
         target, cls, method = identifier.split('/')
         assert target == 'GameLingoTests'
@@ -26,6 +28,8 @@ def manifest():
 
 
 def verify(log, value):
+    assert 'Restarting after unexpected exit' not in log, 'Unexpected test process restart'
+    assert '** TEST EXECUTE FAILED **' not in log, 'Failed native test session'
     outcomes = {}
     for cls, method, outcome in re.findall(
         r"Test Case '-\[GameLingoTests\.([A-Za-z0-9_]+) ([A-Za-z0-9_]+)\]' (passed|failed|skipped)", log
@@ -46,6 +50,8 @@ if __name__ == '__main__':
     value = manifest()
     if sys.argv[1] == 'filters':
         print('\n'.join(value['selected']))
+    elif sys.argv[1] == 'isolated':
+        print('\n'.join(value.get('isolated', [])))
     elif sys.argv[1] == 'verify':
         path = Path(sys.argv[2])
         result = verify(path.read_text(), value)

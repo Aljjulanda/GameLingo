@@ -108,6 +108,7 @@ jobs:
         env:
           SKIP_CORE_TESTS: '1'
           IOS_PREVIEW: '1'
+          IOS_ISOLATE_VISION: '1'
         run: bash iOS/Scripts/test.sh
       - name: Native Files picker selection and sandbox import
         if: ${{ inputs.validation_profile != 'play-preview-1' }}

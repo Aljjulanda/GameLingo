@@ -32,6 +32,11 @@ class PreviewGateTests(unittest.TestCase):
             with self.subTest(log=log[:80]), self.assertRaises(AssertionError):
                 preview.verify(log, self.value)
 
+    def test_crash_or_failed_session_cannot_be_hidden_by_later_passes(self):
+        for marker in ['Restarting after unexpected exit, crash, or test timeout', '** TEST EXECUTE FAILED **']:
+            with self.subTest(marker=marker), self.assertRaises(AssertionError):
+                preview.verify(marker+'\n'+self.log(), self.value)
+
     def test_production_has_no_typewriter_integration(self):
         for name in ['VideoProcessing/FramePipeline.swift', 'App/AppModel.swift']:
             source = (preview.IOS / 'GameLingo' / name).read_text(encoding='utf-8')

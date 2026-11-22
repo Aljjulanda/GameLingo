@@ -15,6 +15,10 @@ on:
         description: 'Also run the real Files picker UI checks; not a release build'
         type: boolean
         default: false
+      isolate_vision:
+        description: 'Run each selected Vision image case once in a fresh test session'
+        type: boolean
+        default: false
 permissions:
   contents: read
 concurrency:
@@ -55,6 +59,7 @@ jobs:
         env:
           SKIP_CORE_TESTS: '1'
           IOS_TEST_FILTERS: ${{ inputs.test_filters }}
+          IOS_ISOLATE_VISION: ${{ inputs.isolate_vision && '1' || '0' }}
         run: |
           if [[ -z "$IOS_TEST_FILTERS" ]]; then
             export IOS_TEST_FILTERS=$'GameLingoTests/QualityIntegrationTests\nGameLingoTests/AppleIntegrationTests/testManualSmartReadingUsesFreshFrameAndReturnsToDialogue\nGameLingoTests/AppleIntegrationTests/testExistingTVWSSPairingAndReconnectDoNotReplayDialogue'
@@ -70,7 +75,7 @@ jobs:
           name: GameLingo-quality-native-validation
           path: |
             iOS/build/logs/
-            iOS/build/GameLingoTests.xcresult
+            iOS/build/GameLingoTests*.xcresult
             iOS/build/GameLingoPickerUI.xcresult
           if-no-files-found: warn
           retention-days: 14

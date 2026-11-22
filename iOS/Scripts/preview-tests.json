@@ -54,6 +54,11 @@
     "GameLingoTests/NamesIntegrationTests/testNamesFileProtectionWhenRuntimeReportsIt",
     "GameLingoTests/QualityIntegrationTests/testCompleteProtectionWhenRuntimeReportsFileProtection"
   ],
+  "isolated": [
+    "GameLingoTests/PlayExperienceIntegrationTests/testActualVisionOCRComparisonCorpusIsExportedWithoutPrivateImages",
+    "GameLingoTests/PlayExperienceIntegrationTests/testCurrentMenuOCRKeepsDynamicValuesAndMeasuresDecodedGlyphColor",
+    "GameLingoTests/PlayExperienceIntegrationTests/testManualCropReadsWholeSelectedTextAndExcludesOutsideRegion"
+  ],
   "deferred": [
     "GameLingoTests/AppleIntegrationTests/testVisionStructuredSpeakerAboveAndOnBothSides",
     "GameLingoTests/AppleIntegrationTests/testVisionWrappedSpeakerIsExcludedFromEngineSource",
