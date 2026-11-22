@@ -147,14 +147,20 @@ final class PlayExperienceIntegrationTests: XCTestCase {
             ("negation","Do not open that door."),("pronouns","She gave him the map."),("name","John will meet Arthur at dawn."),
             ("idiom","We are running out of time."),("cut","If you see him, tell him that"),("number","Collect 11 coins before leaving."),
             ("negation-heldout","I never said she stole the key."),("pronouns-heldout","They told us to wait here.")]
-        var rows: [[String:String]] = []
+        var rows: [[String:Any]] = []
         for (id,source) in cases {
             let pixels = try frame([(source,CGPoint(x:160,y:520),.white)])
-            let ocr = VisionDialogueOCR(softwareImageContext:true);ocr.setBackground(true)
-            let lines = try ocr.menuLines(pixels,roi:SourceBox(x:0.08,y:0.65,w:0.87,h:0.25))
-            let text = lines.map(\.text).joined(separator:" ")
-            XCTAssertFalse(text.isEmpty)
-            rows.append(["id":id,"correct_source":source,"vision_ocr":text])
+            let ocr = VisionDialogueOCR(softwareImageContext:true);ocr.setBackground(true);ocr.strictRegion = true
+            let region = SourceBox(x:0.08,y:0.65,w:0.87,h:0.25)
+            // Measure the dialogue path used by these source sentences. The
+            // menu reader deliberately disables correction and rejects <0.7;
+            // Vision gives the first fixture 0.5 there, versus 1.0 for dialogue.
+            // Off-centre dialogue needs two consecutive observations under the
+            // unchanged structural gate. This is stabilization, not test retry.
+            let first = try ocr.recognize(pixels,roi:region).0
+            let text = try ocr.recognize(pixels,roi:region).0
+            XCTAssertFalse(text.isEmpty,"Dialogue OCR returned no accepted text for \(id)")
+            rows.append(["id":id,"correct_source":source,"vision_ocr":text,"ocr_path":"dialogue-strict-region","first_dialogue_read":first,"observations":2,"confidence":ocr.confidence])
         }
         let data = try JSONSerialization.data(withJSONObject:rows,options:[.sortedKeys,.prettyPrinted])
         let attachment = XCTAttachment(data:data,uniformTypeIdentifier:"public.json");attachment.name = "play-vision-ocr-corpus";attachment.lifetime = .keepAlways;add(attachment)
