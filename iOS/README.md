@@ -2,6 +2,8 @@
 
 Current accepted simulator checkpoint: [unregistered menus on demand and optional reading suggestions](../validation/CURRENT-MENU-1-RESULTS-AR.md), with 204 Core / 51 passed Native tests, two declared simulator skips, a verified unsigned IPA and 20 reviewed RTL screenshots. Physical-device acceptance remains pending. [Resume notes](../validation/CURRENT-MENU-1-RESUME-AR.md) retain failed-run evidence and subsequent work. Earlier [UI results](../validation/UI-SETUP-2-RESUME-AR.md) and [play-preview delivery](PLAY-PREVIEW-1.md) are historical checkpoints, not certification of later code.
 
+Published preview: [iPhone UI and menus](https://github.com/Aljjulanda/GameLingo/releases/tag/ios-v0.4.0-preview.2), unsigned IPA from the accepted build, internal version still 0.4.0 (10). [TV UI 0.8.0-preview.1](https://github.com/Aljjulanda/GameLingo/releases/tag/tv-v0.8.0-preview.1) is a separate compatible update. No physical-device acceptance is implied by publication.
+
 This is a new native iOS target inside the restored GameLingo Windows/Android TV repository. Existing platform code is preserved. The actual iPhone app has compiled, linked and archived unsigned with Xcode 16.4 in GitHub Actions; 16 core tests and 7 Apple integration tests passed. **Physical iPhone/PS5/TV acceptance has not been performed.** Read `../docs/IOS_ARCHITECTURE.md` before changing the protocol and `VALIDATION.md` for the recorded build results. The Arabic delivery report is in [DELIVERY_AR.md](DELIVERY_AR.md).
 
 ## Implemented source
