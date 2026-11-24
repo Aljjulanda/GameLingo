@@ -171,7 +171,7 @@ final class PlayExperienceIntegrationTests: XCTestCase {
         let menuRead = expectation(description:"Unregistered synthetic menu translated")
         let submenuRead = expectation(description:"Changed synthetic submenu replaces old items")
         let dialogueRead = expectation(description:"Fresh dialogue returns after explicit menu close")
-        var first = false, second = false, dialogue = false
+        var first = false, second = false, dialogue = false, menuClosed = false
         var trace: [[String:Any]] = []
         let diagnosticStarted = ProcessInfo.processInfo.systemUptime
         func observation(_ line: OCRLine) -> [String:Any] {
@@ -179,6 +179,16 @@ final class PlayExperienceIntegrationTests: XCTestCase {
         }
         let pipeline = FramePipeline(translator:translator,softwareImageContext:true) { message in
             DispatchQueue.main.async {
+                if message["type"] as? String == "subtitle_show" {
+                    let source = message["source"] as? String ?? ""
+                    let text = message["translated"] as? String ?? ""
+                    let arabic = text.unicodeScalars.contains(where:{(0x0600...0x06ff).contains($0.value)})
+                    trace.append(["stage":"dialogue-publication","seconds":ProcessInfo.processInfo.systemUptime-diagnosticStarted,
+                        "source":source,"has_arabic":arabic,"menu_closed":menuClosed])
+                    if trace.count > 60 { trace.remove(at:8) }
+                    XCTAssertTrue(menuClosed,"Menu mode must not publish dialogue")
+                    XCTAssertTrue(["Follow me to the gate.","Follow me to the gate"].contains(source),"Menu text must never reappear as dialogue")
+                }
                 if message["type"] as? String == "subtitle_show", let source = message["source"] as? String,
                    ["Follow me to the gate.","Follow me to the gate"].contains(source),
                    let text = message["translated"] as? String, text.unicodeScalars.contains(where:{(0x0600...0x06ff).contains($0.value)}), !dialogue {
@@ -214,7 +224,8 @@ final class PlayExperienceIntegrationTests: XCTestCase {
 #endif
         pipeline.onMetrics = { metrics in
             trace.append(["stage":"metrics","seconds":ProcessInfo.processInfo.systemUptime-diagnosticStarted,
-                "ocr_ms":metrics.ocrMilliseconds,"frames":metrics.frames,"recognitions":metrics.recognitions,"queue":metrics.queueDepth])
+                "ocr_ms":metrics.ocrMilliseconds,"translation_ms":metrics.translationMilliseconds,
+                "frames":metrics.frames,"recognitions":metrics.recognitions,"queue":metrics.queueDepth])
             if trace.count > 60 { trace.remove(at:8) }
         }
         // A live menu remains on screen while OCR initializes. The previous
@@ -237,8 +248,13 @@ final class PlayExperienceIntegrationTests: XCTestCase {
         pipeline.requestCurrentMenu(ticket:UUID())
         await feed(initial,until:menuRead,timeout:30)
         await feed(changed,until:submenuRead,timeout:10)
+        menuClosed = true
         pipeline.closeCurrentMenu()
-        await feed(pixels,until:dialogueRead,timeout:10)
+        // Full acceptance run 45414008583 measured 8.62s + 4.29s for
+        // the two real software dialogue reads, before inference/callback.
+        // Give this CPU-only fixture the same 30s acquisition budget as the
+        // first menu. Production pacing, freshness and assertions stay intact.
+        await feed(pixels,until:dialogueRead,timeout:30)
         let payload = try JSONSerialization.data(withJSONObject:["source":"Authored synthetic menu lifecycle; not gameplay","trace":trace],options:[.prettyPrinted,.sortedKeys])
         let diagnostic = XCTAttachment(data:payload,uniformTypeIdentifier:"public.json")
         diagnostic.name = "synthetic-current-menu-lifecycle"; diagnostic.lifetime = .keepAlways; add(diagnostic)
