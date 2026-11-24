@@ -76,6 +76,31 @@ final class CurrentMenuTests: XCTestCase {
         XCTAssertNil(MenuTerminology.translation("Not save")); XCTAssertNil(MenuTerminology.translation("Save 2"))
         XCTAssertNil(MenuTerminology.translation("Sett1ngs"))
     }
+    func testColdOCRSeedsOnlyRegionAndRequiresTwoFreshConfirmations() {
+        var state = CurrentMenuSession(); let ticket = UUID(), rows = column(["Settings","Audio","Back"])
+        state.request(ticket,now:10); state.beginFrame()
+        state.prepareFreshFrame(rows,width:1280,height:720)
+        XCTAssertFalse(state.expire(now:23.6,sourceAge:0.1))
+        XCTAssertNotNil(state.region); XCTAssertTrue(state.rows.isEmpty); XCTAssertFalse(state.stable)
+        XCTAssertFalse(state.accepts(ticket:ticket,generation:state.generation,source:"Settings",now:23.6))
+        state.observe(rows,width:1280,height:720,now:23.7); XCTAssertFalse(state.stable)
+        state.observe(rows,width:1280,height:720,now:24.2); XCTAssertTrue(state.stable)
+        XCTAssertTrue(state.accepts(ticket:ticket,generation:state.generation,source:"Settings",now:24.3))
+    }
+    func testSourceStoppingDuringColdOCRStillClosesAtOriginalLease() {
+        var state = CurrentMenuSession(); state.request(UUID(),now:10); state.beginFrame()
+        XCTAssertTrue(state.expire(now:23.6,sourceAge:8.94))
+        state.prepareFreshFrame(column(["Settings","Audio"]),width:1280,height:720)
+        XCTAssertFalse(state.active); XCTAssertTrue(state.rows.isEmpty)
+    }
+    func testFreshDecodedFramesCannotAuthorizeAnOldTranslation() {
+        var state = CurrentMenuSession(); let ticket = UUID(), rows = column(["Settings","Audio"])
+        state.request(ticket,now:10)
+        state.observe(rows,width:1280,height:720,now:10.1); state.observe(rows,width:1280,height:720,now:10.6)
+        let generation = state.generation
+        XCTAssertFalse(state.expire(now:12.4,sourceAge:0.1))
+        XCTAssertFalse(state.accepts(ticket:ticket,generation:generation,source:"Settings",now:12.4))
+    }
     func testNumbersSignsDecimalsAndPercentMustSurvive() {
         XCTAssertTrue(MenuTranslationGuard.safe("السطوع ٨٠٪",source:"Brightness 80%"))
         XCTAssertTrue(MenuTranslationGuard.safe("قيمة -٢٫٥",source:"Value -2.5"))

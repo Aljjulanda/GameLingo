@@ -99,6 +99,12 @@ final class PlayExperienceIntegrationTests: XCTestCase {
         XCTAssertEqual(model.localSubtitles.entries.first?.text,"لا تغادر بدونها.")
         model.route(TVProtocol.envelope("subtitle_update",fields:["id":"one-result","translated":"لا تغادر بدونها! "]))
         XCTAssertEqual(model.localSubtitles.entries.count,1)
+        model.closeCurrentMenu()
+        let lateItems = [MenuOverlayItem(id:"late-menu-item",source:"Audio",translated:"الصوت",box:SourceBox(x:0.1,y:0.2,w:0.2,h:0.04),color:nil)]
+        let itemJSON = try JSONSerialization.jsonObject(with:JSONEncoder().encode(lateItems))
+        let styleJSON = try JSONSerialization.jsonObject(with:JSONEncoder().encode(MenuAppearance()))
+        model.route(TVProtocol.envelope("menu_snapshot",fields:["menu_id":"current-"+UUID().uuidString,"items":itemJSON,"appearance":styleJSON,"lease_ms":1800]))
+        XCTAssertTrue(model.localMenuItems.isEmpty,"A queued manual-menu snapshot must not return after Close while dialogue is still running")
         model.preview(true); model.stop()
         XCTAssertTrue(model.localSubtitles.preview)
         XCTAssertTrue(model.localSubtitles.entries.isEmpty)
@@ -136,7 +142,7 @@ final class PlayExperienceIntegrationTests: XCTestCase {
             trace.append(["stage":"state","seconds":ProcessInfo.processInfo.systemUptime-diagnosticStarted,
                 "active":state.active,"status":state.status,"sources":state.sources.map(observation),
                 "translated_sources":state.items.map(\.source),"pending":state.pending,"rejected":state.rejectedSources.sorted()])
-            trace = Array(trace.suffix(60))
+            if trace.count > 60 { trace.remove(at:8) }
             let sources = Set(state.items.map(\.source))
             if sources == Set(["Settings","Audio","Back"]), !first { first = true; menuRead.fulfill() }
             if sources == Set(["Graphics","Language","Exit"]), !second { second = true; submenuRead.fulfill() }
@@ -147,21 +153,31 @@ final class PlayExperienceIntegrationTests: XCTestCase {
             trace.append(["stage":"ocr","seconds":ProcessInfo.processInfo.systemUptime-diagnosticStarted,
                 "milliseconds":milliseconds,"arrival_age":arrivalAge,
                 "region":["x":region.x,"y":region.y,"w":region.w,"h":region.h],"observations":lines.map(observation)])
-            trace = Array(trace.suffix(60))
+            if trace.count > 60 { trace.remove(at:8) }
         }
 #endif
+        // A live menu remains on screen while OCR initializes. The previous
+        // 3.5-second feed accidentally disconnected during the measured 13.56s
+        // cold software Vision read. Runtime freshness stays at 1.5 seconds.
+        func feed(_ pixels: CVPixelBuffer, until expected: XCTestExpectation, timeout: TimeInterval) async {
+            let producer = Task { @MainActor in
+                while !Task.isCancelled {
+                    pipeline.offer(pixels)
+                    try? await Task.sleep(nanoseconds:100_000_000)
+                }
+            }
+            await fulfillment(of:[expected],timeout:timeout)
+            producer.cancel(); await producer.value
+        }
+        let initial = try frame([("Settings",CGPoint(x:140,y:170),.white),("Audio",CGPoint(x:140,y:290),.white),("Back",CGPoint(x:140,y:410),.white)])
+        let changed = try frame([("Graphics",CGPoint(x:140,y:170),.white),("Language",CGPoint(x:140,y:290),.white),("Exit",CGPoint(x:140,y:410),.white)])
+        let pixels = try frame([("Follow me to the gate.",CGPoint(x:260,y:530),.white)])
         pipeline.start(roi:.dialogue,mode:.balanced); pipeline.setBackground(true)
         pipeline.requestCurrentMenu(ticket:UUID())
-        let initial = try frame([("Settings",CGPoint(x:140,y:170),.white),("Audio",CGPoint(x:140,y:290),.white),("Back",CGPoint(x:140,y:410),.white)])
-        for _ in 0..<35 { pipeline.offer(initial); try await Task.sleep(nanoseconds:100_000_000) }
-        await fulfillment(of:[menuRead],timeout:10)
-        let changed = try frame([("Graphics",CGPoint(x:140,y:170),.white),("Language",CGPoint(x:140,y:290),.white),("Exit",CGPoint(x:140,y:410),.white)])
-        for _ in 0..<35 { pipeline.offer(changed); try await Task.sleep(nanoseconds:100_000_000) }
-        await fulfillment(of:[submenuRead],timeout:10)
+        await feed(initial,until:menuRead,timeout:30)
+        await feed(changed,until:submenuRead,timeout:10)
         pipeline.closeCurrentMenu()
-        let pixels = try frame([("Follow me to the gate.",CGPoint(x:260,y:530),.white)])
-        for _ in 0..<35 { pipeline.offer(pixels); try await Task.sleep(nanoseconds:100_000_000) }
-        await fulfillment(of:[dialogueRead],timeout:10)
+        await feed(pixels,until:dialogueRead,timeout:10)
         let payload = try JSONSerialization.data(withJSONObject:["source":"Authored synthetic menu lifecycle; not gameplay","trace":trace],options:[.prettyPrinted,.sortedKeys])
         let diagnostic = XCTAttachment(data:payload,uniformTypeIdentifier:"public.json")
         diagnostic.name = "synthetic-current-menu-lifecycle"; diagnostic.lifetime = .keepAlways; add(diagnostic)

@@ -319,7 +319,7 @@ final class FramePipeline {
     private func sample() {
         let now = ProcessInfo.processInfo.systemUptime
         let menuTicket = currentMenu.ticket
-        if currentMenu.expire(now:now), let ticket = menuTicket {
+        if currentMenu.active, currentMenu.expire(now:now,sourceAge:frameAge), let ticket = menuTicket {
             translator.cancel(); clearMenu(); resetDialogueAfterMenu()
             reportCurrentMenu(ticket:ticket)
         }
@@ -342,8 +342,8 @@ final class FramePipeline {
             if let cg = previewContext.createCGImage(image,from:image.extent) { DispatchQueue.main.async { self.onPreview?(cg,lines) } }
         }
         if currentMenu.active && !reading {
-            processCurrentMenu(buffer,now:now)
-            if currentMenu.active { return }
+            processCurrentMenu(buffer,received:received,now:now)
+            return // Dialogue resumes from the next fresh frame, never this menu frame.
         }
         if menuOptions.menusEnabled && !reading { processMenu(buffer,now:now) }
         else if !menuItems.isEmpty { clearMenu() }
@@ -500,9 +500,10 @@ final class FramePipeline {
         }
         DispatchQueue.main.async { self.onCurrentMenu?(ticket,state) }
     }
-    private func processCurrentMenu(_ buffer: CVPixelBuffer, now: Double) {
+    private func processCurrentMenu(_ buffer: CVPixelBuffer, received: Double, now: Double) {
         guard now-currentMenuLastSample >= 0.5, let ticket = currentMenu.ticket else { return }
         currentMenuLastSample = now
+        if currentMenu.region == nil { currentMenu.beginFrame(); reportCurrentMenu(ticket:ticket) }
         do {
             let width = CVPixelBufferGetWidth(buffer), height = CVPixelBufferGetHeight(buffer)
             // A broad read happens only on explicit acquisition. Subsequent
@@ -521,13 +522,23 @@ final class FramePipeline {
             ocrSamples.record(metrics.ocrMilliseconds); metrics.ocrP95 = ocrSamples.p95
             metrics.actualOCRRate = Double(metrics.recognitions)/max(0.001,ProcessInfo.processInfo.systemUptime-startedAt)
             if now-lastMetrics >= 1 { lastMetrics = now; let value = metrics; DispatchQueue.main.async { self.onMetrics?(value) } }
+            let finished = ProcessInfo.processInfo.systemUptime
+            guard frameAge < CurrentMenuSession.maximumObservationAge else {
+                finishCurrentMenu("توقفت إطارات المصدر أثناء القراءة؛ تحقق من البث وأعد الطلب"); return
+            }
+            if finished-received >= CurrentMenuSession.maximumObservationAge {
+                currentMenu.prepareFreshFrame(lines,width:width,height:height)
+                menuEpoch = UUID(); menuIdentity = nil; menuReadings = []; menuItems = []
+                publish(TVProtocol.envelope("menu_clear")); reportCurrentMenu(ticket:ticket)
+                return
+            }
             let previous = currentMenu.generation
-            currentMenu.observe(lines,width:width,height:height,now:now)
+            currentMenu.observe(lines,width:width,height:height,now:received)
             guard currentMenu.active, let context = currentMenuContext() else {
                 translator.cancel(); clearMenu(); resetDialogueAfterMenu(); reportCurrentMenu(ticket:ticket); return
             }
             if currentMenu.generation != previous { menuEpoch = UUID() }
-            menuIdentity = context.id; menuReadings = currentMenu.stable ? currentMenu.rows : []; menuLastSeen = now
+            menuIdentity = context.id; menuReadings = currentMenu.stable ? currentMenu.rows : []; menuLastSeen = received
             currentMenuAspect = Double(width)/Double(max(1,height))
             menuItems = CurrentMenuLayout.overlay(currentMenuTranslations(context),appearance:context.appearance,aspect:currentMenuAspect,sourceBoxes:currentMenu.rows.map(\.box))
             if context.appearance.matchColor {

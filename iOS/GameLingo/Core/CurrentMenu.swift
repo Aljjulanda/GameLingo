@@ -13,6 +13,7 @@ struct CurrentMenuReadout {
 /// Ephemeral manual intent. Templates and game identity are not prerequisites.
 /// Only fresh OCR observations advance stability; no bitmap hash counts as one.
 struct CurrentMenuSession {
+    static let maximumObservationAge = 1.5
     private(set) var ticket: UUID?
     private(set) var generation: UInt64 = 0
     private(set) var rows: [OCRLine] = []
@@ -21,6 +22,7 @@ struct CurrentMenuSession {
     private(set) var lastSeen = 0.0
     private var requestedAt = 0.0
     private var dimensions = ""
+    private var hasInput = false
     private(set) var status = "القراءة مغلقة"
     var active: Bool { ticket != nil }
     var stable: Bool { active && confirmations >= 2 && !rows.isEmpty }
@@ -28,16 +30,39 @@ struct CurrentMenuSession {
         close(); self.ticket = ticket; requestedAt = now; status = "بانتظار إطار جديد للقائمة…"
     }
     mutating func close(_ message: String = "أُغلقت القائمة؛ عاد مسار الحوار") {
-        ticket = nil; generation &+= 1; rows = []; region = nil; confirmations = 0; lastSeen = 0; dimensions = ""; status = message
+        ticket = nil; generation &+= 1; rows = []; region = nil; confirmations = 0; lastSeen = 0; dimensions = ""; hasInput = false; status = message
     }
-    @discardableResult mutating func expire(now: Double) -> Bool {
-        guard active, now-(lastSeen > 0 ? lastSeen : requestedAt) > (lastSeen > 0 ? 1.5 : 6) else { return false }
+    @discardableResult mutating func expire(now: Double, sourceAge: Double? = nil) -> Bool {
+        guard active else { return false }
+        let age = hasInput ? (sourceAge ?? (now-(lastSeen > 0 ? lastSeen : requestedAt))) : now-requestedAt
+        guard age > (hasInput ? Self.maximumObservationAge : 6) else { return false }
         close("توقفت إطارات القائمة؛ تحقق من بث PS5 وأعد الطلب"); return true
+    }
+    mutating func beginFrame() {
+        guard active else { return }
+        if !hasInput { status = "جارٍ قراءة إطار القائمة…" }
+        hasInput = true
+    }
+    /// Cold OCR may be slow even while decoded frames keep arriving. Its old
+    /// geometry can bound the next crop, but its text never counts as a fresh
+    /// confirmation or becomes eligible for translation/publication.
+    mutating func prepareFreshFrame(_ observations: [OCRLine], width: Int, height: Int) {
+        guard active, width > 0, height > 0 else { return }
+        beginFrame()
+        let size = "\(width)x\(height)"
+        guard dimensions.isEmpty || dimensions == size else { close("تغير مقاس المصدر؛ أعد طلب القائمة"); return }
+        guard let candidate = CurrentMenuLayout.candidate(observations) else {
+            close("لم تظهر قائمة واضحة؛ أعد الطلب أو استخدم قراءة النص"); return
+        }
+        dimensions = size; seedRegion(candidate)
+        generation &+= 1; rows = []; confirmations = 0; lastSeen = 0
+        status = "تأخرت القراءة؛ نتحقق من إطار حديث قبل العرض…"
     }
     /// Any semantic row change invalidates pending results immediately. Geometry
     /// jitter is tolerated, while current boxes always replace previous boxes.
     mutating func observe(_ observations: [OCRLine], width: Int, height: Int, now: Double) {
         guard active else { return }
+        beginFrame()
         guard width > 0, height > 0 else { close("تعذر تحديد مقاس المصدر؛ أعد الطلب"); return }
         let size = "\(width)x\(height)"
         if !dimensions.isEmpty && dimensions != size { close("تغير مقاس المصدر؛ أعد طلب القائمة"); return }
@@ -53,16 +78,18 @@ struct CurrentMenuSession {
         if same { confirmations = min(3,confirmations+1) }
         else { generation &+= 1; confirmations = 1 }
         rows = candidate; lastSeen = now
-        if region == nil {
-            let union = StructuredDialogue.union(candidate)
-            let x = max(0,union.x-0.08), y = max(0,union.y-0.06)
-            region = SourceBox(x:x,y:y,w:min(1-x,union.w+0.16),h:min(1-y,union.h+0.12))
-        }
+        seedRegion(candidate)
         status = stable ? "القائمة الحالية · أغلِق القراءة عند العودة للعب" : "جارٍ تثبيت عناصر القائمة…"
     }
     func accepts(ticket: UUID, generation: UInt64, source: String, now: Double) -> Bool {
-        stable && self.ticket == ticket && self.generation == generation && now-lastSeen < 1.5 &&
+        stable && self.ticket == ticket && self.generation == generation && now-lastSeen < Self.maximumObservationAge &&
         rows.contains { CurrentMenuLayout.key($0.text) == CurrentMenuLayout.key(source) }
+    }
+    private mutating func seedRegion(_ candidate: [OCRLine]) {
+        guard region == nil else { return }
+        let union = StructuredDialogue.union(candidate)
+        let x = max(0,union.x-0.08), y = max(0,union.y-0.06)
+        region = SourceBox(x:x,y:y,w:min(1-x,union.w+0.16),h:min(1-y,union.h+0.12))
     }
 }
 

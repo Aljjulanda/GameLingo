@@ -19,6 +19,10 @@ on:
         description: 'Run each selected Vision image case once in a fresh test session'
         type: boolean
         default: false
+      core_tests:
+        description: 'Also run portable Core regressions before the selected native cases'
+        type: boolean
+        default: false
 permissions:
   contents: read
 concurrency:
@@ -57,7 +61,7 @@ jobs:
         run: python3 iOS/Scripts/validate-source.py
       - name: Focused Apple runtime tests (not release certification)
         env:
-          SKIP_CORE_TESTS: '1'
+          SKIP_CORE_TESTS: ${{ inputs.core_tests && '0' || '1' }}
           IOS_TEST_FILTERS: ${{ inputs.test_filters }}
           IOS_ISOLATE_VISION: ${{ inputs.isolate_vision && '1' || '0' }}
         run: |
