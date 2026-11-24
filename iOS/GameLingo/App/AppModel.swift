@@ -54,12 +54,23 @@ final class AppModel: ObservableObject {
     @Published var readingPage = 0
     @Published var readingStatus = "القراءة مغلقة"
     @Published var currentMenuReadout = CurrentMenuReadout()
+    @Published private(set) var menuSuggestionVisible = false
+    private(set) var menuSuggestionToken = UUID()
+    func receiveMenuSuggestion(_ visible: Bool, token: UUID, expiresAt: Double) {
+        guard token == menuSuggestionToken else { return }
+        menuSuggestionVisible = visible && ProcessInfo.processInfo.systemUptime < expiresAt && gameOptions.suggestMenus == true && running && streamConnected && !readingActive && currentMenuTicket == nil
+    }
+    private func configureMenuOptions() {
+        menuSuggestionToken = UUID(); menuSuggestionVisible = false
+        pipeline.configureMenus(gameOptions,suggestionToken:menuSuggestionToken)
+    }
     private var currentMenuTicket: UUID?
     func translateCurrentMenu() {
         guard running, modelReady, streamConnected, !readingActive else {
             errorMessage = "ابدأ بث PS5 وأغلق قراءة المستند قبل طلب القائمة"; return
         }
         let ticket = UUID(); currentMenuTicket = ticket
+        menuSuggestionVisible = false
         currentMenuReadout = CurrentMenuReadout(active:true,status:"بانتظار إطار جديد للقائمة…")
         pipeline.requestCurrentMenu(ticket:ticket)
     }
@@ -113,8 +124,8 @@ final class AppModel: ObservableObject {
                 if previewActive { preview(false); preview(true) }
                 if running && gameOptions.destination.tvEnabled && !tvListening && !hubStarting { connectTV() }
             }
-            if oldValue.menusEnabled != gameOptions.menusEnabled || oldValue.allowedMenus != gameOptions.allowedMenus || oldValue.menuRegion != gameOptions.menuRegion || oldValue.currentMenuAppearance != gameOptions.currentMenuAppearance {
-                pipeline.configureMenus(gameOptions)
+            if oldValue.menusEnabled != gameOptions.menusEnabled || oldValue.allowedMenus != gameOptions.allowedMenus || oldValue.menuRegion != gameOptions.menuRegion || oldValue.currentMenuAppearance != gameOptions.currentMenuAppearance || oldValue.suggestMenus != gameOptions.suggestMenus {
+                configureMenuOptions()
             }
             saveCurrentProfile()
         }
@@ -221,7 +232,7 @@ final class AppModel: ObservableObject {
             display.revision = max(settings.display.revision+1,Int64(Date().timeIntervalSince1970*1000))
             settings.display = display; settings.roi = value.dialogueRegion; settings.advanced = value.advanced; quality = value.quality
             applyingProfile = false; profileReady = true; gameProfiles = profileStore.profiles
-            pipeline.configureMenus(value)
+            configureMenuOptions()
             pipeline.configureRegion(value.dialogueRegion,manual:value.manualDialogueRegion)
             if let pack = packLibrary.state.registry.packs.first(where:{$0.manifest.gameId == id}), pack.enabled != value.packEnabled { packLibrary.store.enable(pack.id,value.packEnabled) }
         } catch { applyingProfile = false; errorMessage = error.localizedDescription }
@@ -371,6 +382,7 @@ final class AppModel: ObservableObject {
             guard let self else { return }
             if connected && !self.policy.wanted { return }
             self.streamConnected = connected
+            if !connected { self.configureMenuOptions() }
             if !connected && self.policy.wanted {
                 self.sessionStatus = !self.policy.canExecute ? "بانتظار السماح بالتنفيذ" : !self.policy.network ? "بانتظار الشبكة" : "جارٍ استرداد بث PS5"
             }
@@ -441,6 +453,7 @@ final class AppModel: ObservableObject {
             guard let self, self.currentMenuTicket == ticket else { return }
             self.currentMenuReadout = state
         }
+        pipeline.onMenuSuggestion = { [weak self] token,visible,expiresAt in self?.receiveMenuSuggestion(visible,token:token,expiresAt:expiresAt) }
         pipeline.onReading = { [weak self] ticket,active,pages,status in
             guard let self, self.readingTicket == ticket else { return }
             self.readingActive = active; self.readingPages = pages; self.readingStatus = status; self.readingPage = 0
@@ -530,6 +543,7 @@ final class AppModel: ObservableObject {
         do {
             improvementWorker.cancel(); translator.cancel()
             outputFence.invalidate()
+            configureMenuOptions()
             packLibrary.store.resetMetrics()
             policy.start(); policy.experimentalAudio = settings.advanced.backgroundAudio
             SessionIntentStore.save(true); initialBattery = -1; batteryUsed = nil; UIDevice.current.isBatteryMonitoringEnabled = true
@@ -548,6 +562,7 @@ final class AppModel: ObservableObject {
         } catch { policy.stop(); SessionIntentStore.save(false); audio.stop(); errorMessage = error.localizedDescription }
     }
     func stop(reason: String = "أوقفها المستخدم") {
+        menuSuggestionToken = UUID(); menuSuggestionVisible = false
         outputFence.invalidate(); hub.publish(TVProtocol.envelope("subtitle_clear")); hub.publish(TVProtocol.envelope("menu_clear"))
         regionTicket = nil; regionGame = nil; hub.publish(TVProtocol.envelope("roi_edit_end"))
         correctionsLibrary.clearRecent()

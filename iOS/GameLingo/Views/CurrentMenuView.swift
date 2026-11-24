@@ -21,7 +21,7 @@ struct CurrentMenuView: View {
                 if model.currentMenuReadout.withheld > 0 {
                     Text("بعض العناصر لا تتسع بجوار الأصل أو لم تجتز التحقق. راجع النص الكامل هنا؛ جرّب تغيير الجهة أو تصغير خط القائمة.").font(.footnote)
                 }
-                Text("قراءة عند الطلب للعناصر الواضحة، بلا قالب أو ملف لعبة خاص. قد يفوت OCR نصًا غير واضح؛ أعد الطلب عند الانتقال خارج المنطقة المقروءة. افتح قائمة اللعبة قبل الطلب وأغلق هذه القراءة عند الرجوع للعب.").font(.footnote).foregroundColor(.secondary)
+                Text("لا تحتاج قالبًا أو ملف لعبة. أعد الطلب إذا انتقلت القائمة خارج المنطقة المقروءة، وأغلق القراءة عند الرجوع للعب.").font(.footnote).foregroundColor(.secondary)
             }
             Section("عناصر آخر قراءة") {
                 if model.currentMenuReadout.sources.isEmpty { Text("ستظهر هنا عناصر الإطار الجديد وترجمتها.").foregroundColor(.secondary) }
@@ -39,14 +39,16 @@ struct CurrentMenuView: View {
             }
             Section("المحاذاة بجوار الأصل") {
                 Picker("الجهة",selection:appearance.side) { Text("يمين الأصل").tag("right"); Text("يسار الأصل").tag("left") }
-                PreciseNumberControl(title:"الفجوة كنسبة من الصورة",value:appearance.gap,range:0...0.15,step:0.005,defaultValue:0.012)
-                PreciseNumberControl(title:"حجم خط القائمة",value:appearance.fontSize,range:10...72,defaultValue:22)
-                Toggle("خلفية للوضوح",isOn:appearance.background)
-                Toggle("حد للنص",isOn:appearance.outline)
-                Toggle("ظل",isOn:appearance.shadow)
-                Toggle("تقدير لون الحروف من البث",isOn:appearance.matchColor)
-                ColorPicker("اللون اليدوي والاحتياطي",selection:Binding(get:{Color(hex:appearance.wrappedValue.color)},set:{appearance.wrappedValue.color = $0.hexRGB}),supportsOpacity:false)
-                Text("الألوان تقريبية؛ لا تطابق مضمونًا للخط أو HDR. تُعرض العناصر التي تتسع فقط بجوار الأصل، والنص الكامل في القائمة أعلاه.").font(.footnote).foregroundColor(.secondary)
+                DisclosureGroup("ضبط المظهر والمسافة") {
+                    PreciseNumberControl(title:"الفجوة كنسبة من الصورة",value:appearance.gap,range:0...0.15,step:0.005,defaultValue:0.012)
+                    PreciseNumberControl(title:"حجم خط القائمة",value:appearance.fontSize,range:10...72,defaultValue:22)
+                    Toggle("خلفية للوضوح",isOn:appearance.background)
+                    Toggle("حد للنص",isOn:appearance.outline)
+                    Toggle("ظل",isOn:appearance.shadow)
+                    Toggle("تقدير لون الحروف من البث",isOn:appearance.matchColor)
+                    ColorPicker("اللون اليدوي والاحتياطي",selection:Binding(get:{Color(hex:appearance.wrappedValue.color)},set:{appearance.wrappedValue.color = $0.hexRGB}),supportsOpacity:false)
+                    Text("الألوان تقريبية؛ لا تطابق مضمونًا للخط أو HDR. تُعرض العناصر التي تتسع فقط بجوار الأصل، والنص الكامل في القائمة أعلاه.").font(.footnote).foregroundColor(.secondary)
+                }
                 if model.gameOptions.destination.phoneEnabled {
                     Toggle("معاينة الصورة ومحاذاة العربية",isOn:$showingFrame)
                         .onChange(of:showingFrame) { model.framePreview($0) }
@@ -66,10 +68,15 @@ struct CurrentMenuView: View {
                     Text("المحاذاة على التلفزيون تحتاج اتصالًا ومستقبلًا يدعم القوائم. تبقى قائمة القراءة هنا متاحة.").font(.footnote)
                 }
             }
+            Section("اقتراح القراءة") {
+                Toggle("اقتراح القوائم من منطقة الحوار",isOn:Binding(get:{model.gameOptions.suggestMenus == true},set:{model.gameOptions.suggestMenus = $0}))
+                Text("خيار مغلق افتراضيًا. يستخدم قراءات الحوار الجارية فقط، دون مسح إضافي للشاشة. يقترح القراءة عند تكرر عدة عناصر قائمة واضحة؛ القوائم خارج منطقة الحوار أو غير الواضحة تحتاج الزر أعلاه. لا يعرض ترجمة تلقائية.")
+                    .font(.footnote).foregroundColor(.secondary)
+            }
             Section {
                 Button("إغلاق القائمة والعودة للحوار") { model.closeCurrentMenu(); dismiss() }
             }
-        }.navigationTitle("القائمة الحالية")
+        }.navigationTitle("القائمة")
             .onDisappear { model.framePreview(false); model.closeCurrentMenu() }
     }
 }

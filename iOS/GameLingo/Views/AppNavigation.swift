@@ -35,6 +35,13 @@ private struct HomeContent: View {
                 Text("شغّل PS5 باليد. تبقى صورة اللعب الأصلية على HDMI؛ يقرأ التطبيق البث الثانوي.")
             }
             if model.loginRequired { PS5LoginSection() }
+            if model.menuSuggestionVisible {
+                Section("قد تكون هذه قائمة") {
+                    Button("قراءة القائمة وترجمتها") { model.translateCurrentMenu(); showingCurrentMenu = true }
+                    Text("اقتراح من منطقة الحوار؛ اضغط لقراءة إطار جديد. لا تُعرض ترجمة قائمة تلقائيًا.")
+                        .font(.footnote).foregroundColor(.secondary)
+                }
+            }
             if model.qualityCaptureActive || model.learningConsent {
                 Section("جمع محلي مفعّل باختيارك") {
                     if model.qualityCaptureActive {
@@ -193,6 +200,7 @@ struct AppSettingsView: View {
         case .devices: ConnectionView()
         case .appearance: AppearanceOverviewView()
         case .translation: TranslationPreferencesView()
+        case .menus: CurrentMenuView()
         case .model: LocalModelView()
         case .advanced: AdvancedSettingsView()
         case .experiments: BackgroundExperimentView()

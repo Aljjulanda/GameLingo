@@ -114,6 +114,67 @@ final class PlayExperienceIntegrationTests: XCTestCase {
         model.route(TVProtocol.envelope("subtitle_show",fields:["id":"late-result","translated":"متأخر"]))
         XCTAssertTrue(model.localSubtitles.entries.isEmpty)
     }
+    @MainActor
+    func testMenuSuggestionRequiresCurrentOptInSessionWithoutRenderingOrInference() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("menu-suggestion-"+UUID().uuidString)
+        try FileManager.default.createDirectory(at:root,withIntermediateDirectories:true)
+        defer { try? FileManager.default.removeItem(at:root) }
+        let model = AppModel(profileRoot:root)
+        defer { model.stop() }
+        for _ in 0..<100 {
+            if !model.gameProfiles.isEmpty { break }
+            try await Task.sleep(nanoseconds:50_000_000)
+        }
+        XCTAssertFalse(model.gameProfiles.isEmpty)
+        XCTAssertFalse(model.gameOptions.suggestMenus == true)
+        model.gameOptions.destination = .phone
+        model.gameOptions.suggestMenus = true
+        let token = model.menuSuggestionToken
+        model.running = true; model.streamConnected = true
+        model.receiveMenuSuggestion(true,token:token,expiresAt:ProcessInfo.processInfo.systemUptime+1)
+        XCTAssertTrue(model.menuSuggestionVisible)
+        model.receiveMenuSuggestion(true,token:token,expiresAt:ProcessInfo.processInfo.systemUptime-1)
+        XCTAssertFalse(model.menuSuggestionVisible,"A delayed UI callback must not revive expired evidence")
+        model.receiveMenuSuggestion(true,token:token,expiresAt:ProcessInfo.processInfo.systemUptime+1)
+        XCTAssertTrue(model.localMenuItems.isEmpty); XCTAssertTrue(model.localSubtitles.entries.isEmpty)
+        XCTAssertFalse(model.currentMenuReadout.active); XCTAssertFalse(model.modelBusy)
+        model.readingActive = true; model.receiveMenuSuggestion(true,token:token,expiresAt:ProcessInfo.processInfo.systemUptime+1)
+        XCTAssertFalse(model.menuSuggestionVisible)
+        model.readingActive = false; model.gameOptions.suggestMenus = false
+        model.receiveMenuSuggestion(true,token:token,expiresAt:ProcessInfo.processInfo.systemUptime+1); XCTAssertFalse(model.menuSuggestionVisible)
+        model.gameOptions.suggestMenus = true
+        let next = model.menuSuggestionToken
+        XCTAssertNotEqual(next,token)
+        model.receiveMenuSuggestion(true,token:token,expiresAt:ProcessInfo.processInfo.systemUptime+1); XCTAssertFalse(model.menuSuggestionVisible)
+        model.remote.onAvailability?(false); model.receiveMenuSuggestion(true,token:next,expiresAt:ProcessInfo.processInfo.systemUptime+1)
+        XCTAssertFalse(model.menuSuggestionVisible)
+        model.streamConnected = true; model.receiveMenuSuggestion(true,token:next,expiresAt:ProcessInfo.processInfo.systemUptime+1)
+        XCTAssertFalse(model.menuSuggestionVisible,"Reconnect must not revive an old-source suggestion")
+        let reconnected = model.menuSuggestionToken
+        model.receiveMenuSuggestion(true,token:reconnected,expiresAt:ProcessInfo.processInfo.systemUptime+1)
+        XCTAssertTrue(model.menuSuggestionVisible)
+        model.stop(); model.receiveMenuSuggestion(true,token:reconnected,expiresAt:ProcessInfo.processInfo.systemUptime+1)
+        XCTAssertFalse(model.menuSuggestionVisible)
+        XCTAssertEqual(model.gameOptions.destination,.phone); XCTAssertTrue(model.gameOptions.suggestMenus == true)
+    }
+    func testMenuSuggestionUsesExistingVisionObservationsWithoutRecording() throws {
+        let pixels = try frame([("Settings",CGPoint(x:140,y:170),.white),("Audio",CGPoint(x:140,y:290),.white),("Back",CGPoint(x:140,y:410),.white)])
+        let ocr = VisionDialogueOCR(softwareImageContext:true); ocr.setBackground(true); ocr.strictRegion = true
+        XCTAssertFalse(ocr.collectMenuEvidence); XCTAssertTrue(ocr.menuEvidenceLines.isEmpty)
+        ocr.collectMenuEvidence = true
+        var suggestion = MenuSuggestionSession()
+        let roi = SourceBox(x:0.05,y:0.1,w:0.9,h:0.8)
+        for time in [10.0,10.5] {
+            _ = try ocr.recognize(pixels,roi:roi)
+            XCTAssertEqual(Set(ocr.menuEvidenceLines.map(\.text)),Set(["Settings","Audio","Back"]))
+            XCTAssertTrue(ocr.lastLines.isEmpty); XCTAssertTrue(ocr.lastSegments.isEmpty)
+            XCTAssertFalse(ocr.captureLines); XCTAssertTrue(ocr.usesLanguageCorrection)
+            // Synthetic timestamps exercise classification, not runtime latency.
+            suggestion.observe(ocr.menuEvidenceLines,frameAt:time,now:time+0.01)
+        }
+        XCTAssertTrue(suggestion.visible)
+        ocr.collectMenuEvidence = false; XCTAssertTrue(ocr.menuEvidenceLines.isEmpty)
+    }
     func testExactMenuFrameProofRejectsChangedPixelsAndFormats() throws {
         func pixels(_ format: OSType, width: Int, height: Int) throws -> CVPixelBuffer {
             var result: CVPixelBuffer?

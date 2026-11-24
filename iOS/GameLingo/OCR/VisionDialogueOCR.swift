@@ -13,6 +13,8 @@ final class VisionDialogueOCR {
     }()
     var qualityTrace = false
     var captureLines = false
+    var collectMenuEvidence = false { didSet { if !collectMenuEvidence { menuEvidenceLines = [] } } }
+    private(set) var menuEvidenceLines: [OCRLine] = []
     var quality = QualitySettings()
     var strictRegion = false
     private let imageContext: CIContext
@@ -129,7 +131,7 @@ final class VisionDialogueOCR {
         for observation in request.results ?? [] {
             guard let candidate = observation.topCandidates(1).first else { continue }
             let b = observation.boundingBox
-            if captureLines || qualityTrace {
+            if captureLines || qualityTrace || collectMenuEvidence {
                 raw.append(OCRLine(text:candidate.string,box:project(b,roi:roi),confidence:Double(candidate.confidence)))
             }
             guard candidate.confidence >= 0.2 else { continue }
@@ -138,6 +140,7 @@ final class VisionDialogueOCR {
             lines.append(contentsOf:visualLines(candidate,box:b,roi:roi,knownNames:knownNames))
         }
         lastLines = captureLines ? Array(raw.prefix(150)) : []
+        menuEvidenceLines = collectMenuEvidence ? Array(raw.prefix(41)) : []
         lastSegments = captureLines ? Array(lines.prefix(150)) : []
         punctuationTrace = qualityTrace ? SubtitlePresentation.punctuation(raw.map(\.text).joined(separator:" ")) : ""
         if quality[.speakerClassification] || quality[.visionNames] { nameConfidence.observe(lines) }

@@ -23,6 +23,7 @@ final class FramePipeline {
     var onMetrics: ((PipelineMetrics) -> Void)?
     var onError: ((String) -> Void)?
     var onCurrentMenu: ((UUID,CurrentMenuReadout) -> Void)?
+    var onMenuSuggestion: ((UUID,Bool,Double) -> Void)?
 #if DEBUG
     // Native synthetic fixtures opt in. No production hook, logger, or capture.
     var onCurrentMenuObservation: (([OCRLine],SourceBox,Double,Double) -> Void)?
@@ -47,6 +48,9 @@ final class FramePipeline {
     private var manualRegion = false
     private struct MenuContext { var id: String; var region: SourceBox; var appearance: MenuAppearance }
     private var currentMenu = CurrentMenuSession()
+    private var menuSuggestion = MenuSuggestionSession()
+    private var menuSuggestionToken = UUID()
+    private var suggestionReported = false
     private var currentMenuLastSample = 0.0
     private var currentMenuAspect = 16.0/9.0
     private var menuFailures = Set<String>()
@@ -68,13 +72,17 @@ final class FramePipeline {
         translator.cancel()
         queue.async { [self] in
             finishCurrentMenu("تغيرت منطقة المصدر؛ أعد طلب القائمة")
+            menuSuggestion.clear(); reportMenuSuggestion()
             roi = value; manualRegion = manual; ocr.strictRegion = manual
             runID = UUID(); pending = nil; tracker.reset(); memory.clear(); stability.clear(); translations = BoundedLRU(capacity:8); signature = FrameSignature()
             publish(TVProtocol.envelope("subtitle_clear"))
         }
     }
-    func configureMenus(_ value: GameOptions) {
+    func configureMenus(_ value: GameOptions, suggestionToken: UUID? = nil) {
         queue.async { [self] in
+            if let suggestionToken { menuSuggestionToken = suggestionToken }
+            menuSuggestion.clear(); reportMenuSuggestion(force:true)
+            ocr.collectMenuEvidence = value.suggestMenus == true
             if menuOptions.menuRegion != value.menuRegion || menuOptions.allowedMenus != value.allowedMenus || menuOptions.menusEnabled != value.menusEnabled {
                 finishCurrentMenu("تغيرت إعدادات القوائم؛ أعد الطلب")
             }
@@ -312,6 +320,8 @@ final class FramePipeline {
         timer?.cancel(); timer = nil; runID = UUID(); pending = nil; pendingCapture = []; pendingSegments = []; ocr = VisionDialogueOCR(softwareImageContext:softwareImageContext); ocr.setBackground(isBackground); ocr.qualityTrace = quality[.punctuationTrace]; ocr.captureLines = capture.active; signature = FrameSignature()
         ocr.quality = quality
         ocr.strictRegion = manualRegion
+        ocr.collectMenuEvidence = menuOptions.suggestMenus == true
+        menuSuggestion.clear(); reportMenuSuggestion(force:true)
         menuEpoch = UUID(); menuIdentity = nil; menuItems = []; menuReadings = []; menuCache = BoundedLRU(capacity:128)
         publish(TVProtocol.envelope("menu_clear"))
         if preservingState { tracker.markInterrupted(); memory.prune(now:ProcessInfo.processInfo.systemUptime) }
@@ -320,6 +330,9 @@ final class FramePipeline {
     }
     private func sample() {
         let now = ProcessInfo.processInfo.systemUptime
+        if reading || currentMenu.active || frameAge >= MenuSuggestionSession.lifetime { menuSuggestion.clear() }
+        else { menuSuggestion.expire(now:now) }
+        reportMenuSuggestion()
         let menuTicket = currentMenu.ticket
         if currentMenu.active, currentMenu.expire(now:now,sourceAge:frameAge), let ticket = menuTicket {
             translator.cancel(); clearMenu(); resetDialogueAfterMenu()
@@ -381,6 +394,10 @@ final class FramePipeline {
             let (_,box) = try autoreleasepool { try ocr.recognize(buffer,roi:roi,knownNames:names+","+storedNames,dictionaryNames:names+","+namesWords) }
             guard isActive() else { return }
             let content = ocr.content
+            if menuOptions.suggestMenus == true && menuIdentity == nil {
+                menuSuggestion.observe(ocr.menuEvidenceLines,frameAt:received,now:ProcessInfo.processInfo.systemUptime)
+            } else { menuSuggestion.clear() }
+            reportMenuSuggestion()
             if learningConsent, namesSnapshot.game != "general", !content.text.isEmpty {
                 let example = ImprovementExample(game:namesSnapshot.game,source:content.text,context:learningContext(source:content.text,speaker:content.speaker),confidence:ocr.confidence)
                 DispatchQueue.main.async { self.onLearningExample?(example) }
@@ -462,6 +479,7 @@ final class FramePipeline {
                 DispatchQueue.main.async { self.onCurrentMenu?(ticket,state) }; return
             }
             finishCurrentMenu()
+            menuSuggestion.clear(); reportMenuSuggestion()
             clearMenu(); resetDialogueAfterMenu()
             currentMenu.request(ticket,now:ProcessInfo.processInfo.systemUptime)
             currentMenuLastSample = 0; menuFailures = []
@@ -471,6 +489,14 @@ final class FramePipeline {
         }
     }
     func closeCurrentMenu() { queue.async { self.finishCurrentMenu() } }
+    private func reportMenuSuggestion(force: Bool = false) {
+        let visible = menuSuggestion.visible
+        guard force || visible != suggestionReported else { return }
+        suggestionReported = visible
+        let token = menuSuggestionToken
+        let expiresAt = menuSuggestion.expiresAt
+        DispatchQueue.main.async { self.onMenuSuggestion?(token,visible,expiresAt) }
+    }
     private func resetDialogueAfterMenu() {
         runID = UUID(); pending = nil; tracker.reset(); memory.clear(); stability.clear(); signature = FrameSignature()
     }

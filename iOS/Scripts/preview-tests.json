@@ -51,7 +51,9 @@
     "GameLingoTests/PlayExperienceIntegrationTests/testMenuConfigurationDoesNotCancelIndependentDialogueInference",
     "GameLingoTests/NavigationPresentationTests/testDailyScreensRenderInRTLWithoutChangingSavedChoices",
     "GameLingoTests/PlayExperienceIntegrationTests/testUnregisteredMenuUsesFreshVisionFramesAndReturnsToDialogue",
-    "GameLingoTests/PlayExperienceIntegrationTests/testExactMenuFrameProofRejectsChangedPixelsAndFormats"
+    "GameLingoTests/PlayExperienceIntegrationTests/testExactMenuFrameProofRejectsChangedPixelsAndFormats",
+    "GameLingoTests/PlayExperienceIntegrationTests/testMenuSuggestionRequiresCurrentOptInSessionWithoutRenderingOrInference",
+    "GameLingoTests/PlayExperienceIntegrationTests/testMenuSuggestionUsesExistingVisionObservationsWithoutRecording"
   ],
   "allowed_skips": [
     "GameLingoTests/NamesIntegrationTests/testNamesFileProtectionWhenRuntimeReportsIt",
@@ -61,7 +63,8 @@
     "GameLingoTests/PlayExperienceIntegrationTests/testActualVisionOCRComparisonCorpusIsExportedWithoutPrivateImages",
     "GameLingoTests/PlayExperienceIntegrationTests/testCurrentMenuOCRKeepsDynamicValuesAndMeasuresDecodedGlyphColor",
     "GameLingoTests/PlayExperienceIntegrationTests/testManualCropReadsWholeSelectedTextAndExcludesOutsideRegion",
-    "GameLingoTests/PlayExperienceIntegrationTests/testUnregisteredMenuUsesFreshVisionFramesAndReturnsToDialogue"
+    "GameLingoTests/PlayExperienceIntegrationTests/testUnregisteredMenuUsesFreshVisionFramesAndReturnsToDialogue",
+    "GameLingoTests/PlayExperienceIntegrationTests/testMenuSuggestionUsesExistingVisionObservationsWithoutRecording"
   ],
   "deferred": [
     "GameLingoTests/AppleIntegrationTests/testVisionStructuredSpeakerAboveAndOnBothSides",
