@@ -4,7 +4,7 @@ enum DisplayDestination: String, Codable, CaseIterable {
     case phone, television, both
     var phoneEnabled: Bool { self != .television }
     var tvEnabled: Bool { self != .phone }
-    var title: String { switch self { case .phone: return "الآيفون فقط"; case .television: return "TV فقط"; case .both: return "كلاهما" } }
+    var title: String { switch self { case .phone: return "الآيفون فقط"; case .television: return "التلفزيون فقط"; case .both: return "كلاهما" } }
 }
 
 struct GameOptions: Codable, Equatable {

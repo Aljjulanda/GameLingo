@@ -27,7 +27,7 @@ struct GameProfilesView: View {
             Section("ترجمة القوائم · مستقلة عن الحوار") {
                 Toggle("تفعيل القوائم المسجلة",isOn:$model.gameOptions.menusEnabled)
                 if model.tvConnected && !model.tvMenus { Text("حدّث GameLingo TV لعرض القوائم بمحاذاة الأصل.").font(.footnote) }
-                NavigationLink("Setup · تسجيل قائمة من إطار اللعبة") { GameFrameEditorView(menuSetup:true) }
+                NavigationLink("تسجيل قائمة من إطار اللعبة") { GameFrameEditorView(menuSetup:true) }
                 Text("سجل كل قائمة صراحةً بثلاثة نصوص ثابتة مميزة ومواقعها. القيم والأعداد تُقرأ من الإطار الحالي. عند ضعف التطابق لا تظهر ترجمة القائمة.").font(.footnote)
                 ForEach(model.gameOptions.allowedMenus) { menu in
                     NavigationLink(menu.title) { MenuAppearanceEditor(menu:menu) }

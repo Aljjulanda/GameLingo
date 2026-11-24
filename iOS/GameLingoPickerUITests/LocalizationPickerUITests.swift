@@ -26,9 +26,9 @@ final class LocalizationPickerUITests: XCTestCase {
         // by the native presentation fixtures, separately from file selection.
         app.launchArguments = ["-AppleLanguages","(en)","-AppleLocale","en_US"]
         app.launch()
-        app.tabBars.buttons["الترجمة"].tap()
+        app.tabBars.buttons["الألعاب"].tap()
         let library = app.buttons["gamePacks.library"]
-        XCTAssertTrue(library.waitForExistence(timeout:15)); library.tap()
+        XCTAssertTrue(library.waitForExistence(timeout:15)); reveal(library); library.tap()
         XCTAssertTrue(app.buttons["gamePacks.import"].waitForExistence(timeout:15))
     }
     override func tearDownWithError() throws {

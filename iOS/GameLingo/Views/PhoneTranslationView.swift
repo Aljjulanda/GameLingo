@@ -35,7 +35,7 @@ struct PhoneTranslationView: View {
                     }
                 }
             }
-            if !model.gameOptions.destination.phoneEnabled { Text("اختر الآيفون فقط أو كليهما من إعدادات الترجمة المرئية.").font(.footnote) }
+            if !model.gameOptions.destination.phoneEnabled { Text("اختر الآيفون فقط أو كليهما من الرئيسية.").font(.footnote) }
         }.navigationTitle("ترجمة الآيفون")
             .onAppear { model.framePreview(showFrame) }.onDisappear { model.framePreview(false) }
     }

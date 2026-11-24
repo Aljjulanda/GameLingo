@@ -5,10 +5,9 @@ struct MainView: View {
     @EnvironmentObject var model: AppModel
     var body: some View {
         TabView {
-            ConnectionView().tabItem { Label("الاتصال",systemImage:"antenna.radiowaves.left.and.right") }
-            TranslationView().tabItem { Label("الترجمة",systemImage:"character.bubble") }
-            SubtitleSettingsView().tabItem { Label("الترجمة المرئية",systemImage:"captions.bubble") }
-            PerformanceView().tabItem { Label("الأداء",systemImage:"gauge") }
+            NavigationStack { HomeView() }.tabItem { Label("الرئيسية",systemImage:"house") }
+            NavigationStack { GamesView() }.tabItem { Label("الألعاب",systemImage:"gamecontroller") }
+            NavigationStack { AppSettingsView() }.tabItem { Label("الإعدادات",systemImage:"gearshape") }
         }
         .tint(.teal)
         .sheet(isPresented:$model.showingPackLibrary) {
@@ -25,40 +24,19 @@ struct MainView: View {
     }
 }
 
+enum DeviceSettingsScope { case all, console, television }
+
 struct ConnectionView: View {
+    var scope = DeviceSettingsScope.all
     @EnvironmentObject var model: AppModel
     @State private var host = ""
     @State private var account = ""
     @State private var pin = ""
-    @State private var loginPIN = ""
     var body: some View {
-        NavigationView {
-            Form {
-                Section("الجلسة") {
-                    Text(model.remoteStatus)
-                    Button { model.running ? model.stop() : model.start() } label: {
-                        Label(model.running ? "إيقاف الترجمة" : "بدء الترجمة",systemImage:model.running ? "stop.fill" : "play.fill")
-                    }
-                        .disabled(!model.running && (!model.modelReady || model.pairing))
-                    Text("التشغيل الافتراضي في المقدمة؛ تجربة الخلفية من تبويب الترجمة. شغّل اللعبة واليد بحسابك المعتاد، واستخدم حسابًا ثانيًا لبث Remote Play.").font(.footnote).foregroundColor(.secondary)
-                    Toggle("تعتيم الشاشة أثناء الجلسة",isOn:$model.settings.dimScreen)
-                    if model.running {
-                        Button("Smart Reading · قراءة النص الظاهر") { model.smartRead() }
-                            .disabled(!model.streamConnected || !model.tvConnected || !model.tvDocuments || model.readingActive)
-                        if model.readingActive {
-                            Text(model.readingStatus)
-                            if !model.readingPages.isEmpty {
-                                HStack {
-                                    Button("السابقة") { model.moveReadingPage(-1) }.disabled(model.readingPage==0)
-                                    Text("\(model.readingPage+1) / \(model.readingPages.count)")
-                                    Button("التالية") { model.moveReadingPage(1) }.disabled(model.readingPage+1>=model.readingPages.count)
-                                }.buttonStyle(.bordered)
-                            }
-                            Button("إغلاق القراءة والعودة للحوار") { model.closeReading() }
-                        }
-                    }
-                }
+        Form {
+                if scope != .television {
                 Section("أجهزة PS5 المحفوظة") {
+                    if model.consoles.isEmpty { Text("لا يوجد PS5 محفوظ. سجّل جهازك مرة واحدة أدناه.").foregroundColor(.secondary) }
                     ForEach(model.consoles) { console in
                         HStack {
                             Button { model.settings.selectedConsoleID = console.id } label: {
@@ -66,7 +44,8 @@ struct ConnectionView: View {
                             }.disabled(model.running)
                             Spacer()
                             Button(role:.destructive) { model.removeConsole(console.id) } label: { Image(systemName:"trash") }
-                        }
+                                .accessibilityLabel("حذف الجهاز \(console.name)").disabled(model.running)
+                        }.buttonStyle(.borderless)
                     }
                 }
                 Section("اكتشاف وتسجيل PS5") {
@@ -78,17 +57,11 @@ struct ConnectionView: View {
                     Button(model.pairing ? "جارٍ التسجيل…" : "تسجيل الجهاز") { model.pair(host:host,account:account,pin:pin); pin = ""; account = "" }.disabled(model.running || model.pairing)
                     Text("رمز الربط: إعدادات PS5 ← النظام ← Remote Play ← ربط جهاز. Account ID هو المعرّف الرقمي للحساب بصيغة Base64؛ لا تُدخل كلمة مرور PSN. إذا لم يظهر الجهاز، أدخل عنوانه يدويًا وشغّله باليد.").font(.footnote).foregroundColor(.secondary)
                 }
-                if model.loginRequired {
-                    Section("رمز تسجيل دخول PS5") {
-                        SecureField("4 أرقام",text:$loginPIN).keyboardType(.numberPad)
-                        Button("إرسال الرمز") {
-                            do { try model.remote.loginPIN(loginPIN); model.loginRequired = false; loginPIN = "" }
-                            catch { model.errorMessage = error.localizedDescription }
-                        }
-                    }
                 }
-                Section("اتصال TCL") {
-                    NavigationLink("مسح QR المعروض على TV") { TVQRPairingView() }
+                if model.loginRequired { PS5LoginSection() }
+                if scope != .console {
+                Section("اتصال التلفزيون") {
+                    NavigationLink("مسح رمز QR على التلفزيون") { TVQRPairingView() }
                     Text(model.tvStatus)
                     Text("تُمنع مهلة القفل أثناء الاستماع. العمل خارج التطبيق يتطلب تفعيل تجربة الخلفية، ويظل خاضعًا لسماح iOS.").font(.footnote).foregroundColor(.secondary)
                     if !model.addresses.isEmpty {
@@ -108,108 +81,8 @@ struct ConnectionView: View {
                         Text("السجل لا يتضمن رمز الاقتران أو رموز المصادقة. قد يتضمن عناوين الشبكة المحلية.").font(.footnote).foregroundColor(.secondary)
                     }
                 }
-            }.navigationTitle("GameLingo")
-        }.navigationViewStyle(.stack)
-    }
-}
-
-struct TranslationView: View {
-    @EnvironmentObject var model: AppModel
-    @State private var importing = false
-    var body: some View {
-        NavigationView {
-            Form {
-                Section("اللغات") { LabeledContent("المصدر",value:"English"); LabeledContent("الهدف",value:"العربية") }
-                Section("حزم الألعاب") {
-                    NavigationLink("ملفات الألعاب والقوائم") { GameProfilesView() }
-                    NavigationLink("مكتبة ترجمات الألعاب") { GamePackLibraryView(library:model.packLibrary) }.accessibilityIdentifier("gamePacks.library")
-                    NavigationLink("عرض الترجمة على الآيفون") { PhoneTranslationView() }
-                    NavigationLink("معاينة اللعبة وتحديد مناطق القراءة") { GameFrameEditorView() }
                 }
-                QualitySettingsSection()
-                Section("تحسين محلي خارج اللعب · اختياري") {
-                    Toggle("أوافق على جمع أمثلة نصية محليًا لهذه الجلسة",isOn:$model.learningConsent)
-                    Text("بالتفعيل تُحفظ نصوص الحوار والسياق ومرجع الحزمة على الآيفون فقط: 200 مثال، 7 أيام، بلا صور أو رفع. لا تدريب مستمر للأوزان. ينفذ العامل دورة من 10 أمثلة بعد إيقاف اللعب، ويعتمد فقط ما يطابق مرجع حزمة حرفيًا مع فحوص OCR والسياق والأعداد والنفي. الامتناع متوقع عند الشك.").font(.footnote)
-                    Text(model.improvementStatus).font(.caption)
-                    Button("تشغيل دورة الآن خارج اللعب") { model.runImprovement() }.disabled(model.running || !model.modelReady || !model.learningConsent)
-                    Button("تصدير بيانات التحسين المحلية") { model.exportImprovement() }
-                    if let file = model.improvementExport { ShareLink(item:file) { Label("مشاركة التصدير",systemImage:"square.and.arrow.up") } }
-                    Button("حذف الخام والاقتراحات",role:.destructive) { model.improvementWorker.deleteCollected(); model.improvementExport = nil }
-                    Button("التراجع عن الذاكرة المعتمدة",role:.destructive) { model.improvementWorker.rollback(); model.improvementExport = nil }
-                    Text("إيقاف الجمع يترك المعتمد يعمل لنفس اللعبة والنص والسياق فقط. لا يُعدل تصحيحك الصريح. زيادة التغطية لا تثبت تحسن جملة جديدة غير مغطاة.").font(.footnote)
-                }
-                Section("تشغيل الجلسة والخلفية") {
-                    Toggle("تجربة الصوت الصامت في الخلفية",isOn:$model.settings.advanced.backgroundAudio)
-                        .onChange(of:model.settings.advanced.backgroundAudio) { _ in model.updateBackgroundExperiment() }
-                    Text(model.sessionStatus)
-                    Text(model.audioStatus).font(.footnote)
-                    Text("اختياري وتجريبي. لا يشغّل صوت PS5 ولا يعرض الفيديو. قد يعلّق iOS التطبيق أو يمنع الاستئناف أثناء القفل. نجاح التجربة يُقاس بوصول جمل جديدة إلى TCL؛ ظهور جلسة صوت لا يثبت ذلك.").font(.footnote).foregroundColor(.secondary)
-                }
-                Section("ذاكرة السياق والمصطلحات") {
-                    Toggle("ذاكرة سياق مؤقتة",isOn:$model.settings.advanced.contextEnabled)
-                    PreciseNumberControl(title:"عدد الجمل السابقة",value:Binding(get:{ Double(model.settings.advanced.contextCapacity) },set:{ model.settings.advanced.contextCapacity = Int($0) }),range:1...20,defaultValue:5,integer:true)
-                    Text("المحرك: Argos المحلي السريع. زيادة الذاكرة لا تضمن تحسن الترجمة؛ تؤثر الذاكرة عند مطابقة قاعدة سياق تضيفها أدناه.").font(.footnote).foregroundColor(.secondary)
-                    TextField("أسماء موثوقة إضافية، مفصولة بفواصل",text:Binding(get:{ model.settings.advanced.speakerNames },set:{ model.settings.advanced.speakerNames = String($0.prefix(2000)) }),axis:.vertical)
-                        .textInputAutocapitalization(.never).autocorrectionDisabled().environment(\.layoutDirection,.leftToRight)
-                    Text("يمكن ترك القائمة فارغة؛ تُكتشف التسميات الواضحة تلقائيًا، وتساعد القائمة مع أسماء خاصة أو غير واضحة.").font(.footnote)
-                    TextEditor(text:Binding(get:{ model.settings.advanced.terminology },set:{ model.settings.advanced.terminology = String($0.prefix(8000)) }))
-                        .frame(minHeight:110).textInputAutocapitalization(.never).autocorrectionDisabled().environment(\.layoutDirection,.leftToRight)
-                    Text("قواعد اختيارية، سطر لكل قاعدة:\nWait! = انتظر!\nriver | Go to the bank. = اذهب إلى ضفة النهر.\nالجزء قبل | شرط وجود كلمة في السياق السابق. تُطابق القاعدة الجملة الحالية كاملة. لا تُحفظ محادثاتك على القرص.").font(.footnote).foregroundColor(.secondary)
-                }
-                Section("النموذج المحلي") {
-                    Text(model.modelStatus)
-                    ModelDownloadProgress(service:model.modelDownload)
-                    if model.modelBusy { ProgressView() }
-                    Button("تنزيل نموذج EN → AR") { model.downloadModel() }.disabled(model.modelBusy || model.running)
-                    if model.modelBusy { Button("إيقاف التنزيل وحفظ تقدم الاستئناف") { model.cancelModelDownload() } }
-                    Text("Argos هو النموذج الوحيد المعتمد حاليًا. إطار المقارنة منفصل؛ لا يُتاح بديل قبل تحقق التوافق والجودة والسرعة على الهاتف.").font(.footnote)
-                    Button("استيراد حزمة .argosmodel") { importing = true }.disabled(model.modelBusy || model.running)
-                    Button("تحميل النموذج المثبت") { model.loadModel() }.disabled(model.modelBusy || model.running)
-                    Button("حذف النموذج",role:.destructive) { model.removeModel() }.disabled(model.modelBusy || model.running)
-                    Text("تُجرى الترجمة على iPhone بعد تثبيت النموذج. لا توجد خدمة ترجمة سحابية أو سجل حوار. الحزمة هي نموذج Windows نفسه؛ راجع نسبته وشروطه قبل إعادة توزيعه.").font(.footnote).foregroundColor(.secondary)
-                }
-                Section("قراءة الحوار") {
-                    Text(model.running ? model.sessionStatus : "OCR متوقف")
-                    Picker("وضع الأداء",selection:$model.settings.mode) { ForEach(PerformanceMode.allCases,id:\.self) { Text($0.title).tag($0) } }
-                    Text("منطقة القراءة كنسبة من الصورة؛ الأصل أعلى اليسار. أوقف الجلسة قبل تعديلها.").font(.footnote)
-                    roiControl("X",keyPath:\.x); roiControl("Y",keyPath:\.y)
-                    roiControl("العرض",keyPath:\.w); roiControl("الارتفاع",keyPath:\.h)
-                    Text(model.settings.roi.isValid ? "منطقة صالحة" : "المنطقة تتجاوز حدود الصورة").foregroundColor(model.settings.roi.isValid ? .secondary : .red)
-                    Button("استعادة منطقة الحوار الافتراضية") { model.settings.roi = .dialogue }.disabled(model.running)
-                }
-                Section("Smart Reading · القراءة عند الطلب") {
-                    Button("قراءة النص الظاهر في اللعبة") { model.smartRead() }
-                        .disabled(!model.running || !model.streamConnected || !model.tvConnected || !model.tvDocuments || model.readingActive)
-                    Text(model.readingStatus)
-                    if model.tvConnected && !model.tvDocuments { Text("تحتاج هذه الميزة تحديث تطبيق التلفزيون.").font(.footnote) }
-                    if model.readingActive {
-                        if model.readingPages.isEmpty {
-                            ProgressView()
-                            if model.metrics.documentTotal>0 { Text("ترجمة الجزء \(model.metrics.documentCompleted) من \(model.metrics.documentTotal)") }
-                        }
-                        else {
-                            Text("الصفحة \(model.readingPage+1) من \(model.readingPages.count)")
-                            HStack {
-                                Button("السابقة") { model.moveReadingPage(-1) }.disabled(model.readingPage == 0)
-                                Spacer()
-                                Button("التالية") { model.moveReadingPage(1) }.disabled(model.readingPage+1 >= model.readingPages.count)
-                            }
-                        }
-                        Button("إغلاق القراءة والعودة للحوار") { model.closeReading() }
-                    }
-                    Text("يتوقف نشر الحوار مؤقتًا وتُقرأ صفحة اللعبة الظاهرة من إطار جديد فقط. لا توجد صورة مجمدة أو أرشيف مستندات. للمستند متعدد صفحات اللعبة، اعرض الصفحة المطلوبة ثم أعد القراءة.").font(.footnote).foregroundColor(.secondary)
-                }
-                Section { NavigationLink("المصادر والتراخيص") { LegalView() } }
-            }.navigationTitle("الترجمة")
-                .fileImporter(isPresented:$importing,allowedContentTypes:[.data],allowsMultipleSelection:false) { result in
-                    switch result { case .success(let urls): if let url = urls.first { model.importModel(url) }; case .failure(let error): model.errorMessage = error.localizedDescription }
-                }
-        }.navigationViewStyle(.stack)
-    }
-    private func roiControl(_ title: String,keyPath: WritableKeyPath<SourceBox,Double>) -> some View {
-        let maximum = keyPath == \SourceBox.x ? 1-model.settings.roi.w : keyPath == \SourceBox.y ? 1-model.settings.roi.h : keyPath == \SourceBox.w ? 1-model.settings.roi.x : 1-model.settings.roi.y
-        let minimum = keyPath == \SourceBox.w || keyPath == \SourceBox.h ? 0.01 : 0.0
-        return PreciseNumberControl(title:title,value:Binding(get:{ model.settings.roi[keyPath:keyPath] },set:{ model.settings.roi[keyPath:keyPath] = $0 }),range:minimum...max(minimum,maximum),step:0.01,defaultValue:SourceBox.dialogue[keyPath:keyPath]).disabled(model.running)
+        }.navigationTitle(scope == .console ? "جهاز PS5" : scope == .television ? "اتصال التلفزيون" : "الأجهزة والاتصال")
     }
 }
 
@@ -219,8 +92,7 @@ struct PerformanceView: View {
         switch model.thermal { case .nominal: return "طبيعية"; case .fair: return "مرتفعة قليلًا"; case .serious: return "مرتفعة"; case .critical: return "حرجة"; @unknown default: return "غير معروفة" }
     }
     var body: some View {
-        NavigationView {
-            Form {
+        Form {
                 Section("القياسات الفعلية") {
                     metric("زمن OCR",model.metrics.ocrMilliseconds,suffix:"ms")
                     metric("زمن الترجمة",model.metrics.translationMilliseconds,suffix:"ms")
@@ -289,8 +161,7 @@ struct PerformanceView: View {
                     metric("زيادة RSS المرصودة أثناء العمل",model.metrics.documentExtraMegabytes,suffix:"MB")
                     Text("قياسات مرصودة للعملية، وليست قياسًا لمعدل استهلاك البطارية أو ضمانًا لالتقاط كل ذروة ذاكرة. لا يُقاس GPU هنا.").font(.footnote).foregroundColor(.secondary)
                 }
-            }.navigationTitle("الأداء")
-        }.navigationViewStyle(.stack)
+        }.navigationTitle("التشخيص والقياسات")
     }
     private func metric(_ name: String,_ value: Double,suffix: String) -> some View { LabeledContent(name,value:String(format:"%.1f %@",value,suffix)) }
 }

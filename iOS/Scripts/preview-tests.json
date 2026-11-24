@@ -48,7 +48,8 @@
     "GameLingoTests/PlayExperienceIntegrationTests/testActualVisionOCRComparisonCorpusIsExportedWithoutPrivateImages",
     "GameLingoTests/PlayExperienceIntegrationTests/testPhoneDestinationSurvivesTVLossAndProfileApplicationCannotReenter",
     "GameLingoTests/PlayExperienceIntegrationTests/testIdleWorkerActuallyInfersAndCannotApproveItsOwnUnreferencedOutput",
-    "GameLingoTests/PlayExperienceIntegrationTests/testMenuConfigurationDoesNotCancelIndependentDialogueInference"
+    "GameLingoTests/PlayExperienceIntegrationTests/testMenuConfigurationDoesNotCancelIndependentDialogueInference",
+    "GameLingoTests/NavigationPresentationTests/testDailyScreensRenderInRTLWithoutChangingSavedChoices"
   ],
   "allowed_skips": [
     "GameLingoTests/NamesIntegrationTests/testNamesFileProtectionWhenRuntimeReportsIt",

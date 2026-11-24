@@ -1,5 +1,7 @@
 # GameLingo for iPhone
 
+Current UI work: [navigation milestone 1 checkpoint](../validation/UI-NAVIGATION-1-RESUME-AR.md). Its source introduces Home / Games / Settings; build and physical acceptance are tracked separately. The last delivered play preview is documented in [PLAY-PREVIEW-1.md](../validation/PLAY-PREVIEW-1.md). The older build records below are historical.
+
 This is a new native iOS target inside the restored GameLingo Windows/Android TV repository. Existing platform code is preserved. The actual iPhone app has compiled, linked and archived unsigned with Xcode 16.4 in GitHub Actions; 16 core tests and 7 Apple integration tests passed. **Physical iPhone/PS5/TV acceptance has not been performed.** Read `../docs/IOS_ARCHITECTURE.md` before changing the protocol and `VALIDATION.md` for the recorded build results. The Arabic delivery report is in [DELIVERY_AR.md](DELIVERY_AR.md).
 
 ## Implemented source
