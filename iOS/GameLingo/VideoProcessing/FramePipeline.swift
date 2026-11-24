@@ -23,6 +23,10 @@ final class FramePipeline {
     var onMetrics: ((PipelineMetrics) -> Void)?
     var onError: ((String) -> Void)?
     var onCurrentMenu: ((UUID,CurrentMenuReadout) -> Void)?
+#if DEBUG
+    // Native synthetic fixtures opt in. No production hook, logger, or capture.
+    var onCurrentMenuObservation: (([OCRLine],SourceBox,Double,Double) -> Void)?
+#endif
     var onReading: ((UUID,Bool,[String],String) -> Void)?
     var onPreview: ((CGImage,[OCRLine]) -> Void)?
     var onLearningExample: ((ImprovementExample) -> Void)?
@@ -503,8 +507,15 @@ final class FramePipeline {
             let width = CVPixelBufferGetWidth(buffer), height = CVPixelBufferGetHeight(buffer)
             // A broad read happens only on explicit acquisition. Subsequent
             // reads crop to the observed menu; no new automatic full-screen OCR.
-            let lines = try autoreleasepool { try ocr.menuLines(buffer,roi:currentMenu.region ?? SourceBox(x:0,y:0,w:1,h:1)) }
+            let scanRegion = currentMenu.region ?? SourceBox(x:0,y:0,w:1,h:1)
+            let lines = try autoreleasepool { try ocr.menuLines(buffer,roi:scanRegion) }
             guard isActive() else { return }
+#if DEBUG
+            if onCurrentMenuObservation != nil {
+                let elapsed = (ProcessInfo.processInfo.systemUptime-now)*1000, arrivalAge = frameAge
+                DispatchQueue.main.async { self.onCurrentMenuObservation?(lines,scanRegion,elapsed,arrivalAge) }
+            }
+#endif
             metrics.recognitions &+= 1; metrics.lastOCRAt = ProcessInfo.processInfo.systemUptime
             metrics.ocrMilliseconds = (ProcessInfo.processInfo.systemUptime-now)*1000
             ocrSamples.record(metrics.ocrMilliseconds); metrics.ocrP95 = ocrSamples.p95

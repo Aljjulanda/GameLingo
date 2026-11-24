@@ -117,7 +117,11 @@ final class PlayExperienceIntegrationTests: XCTestCase {
         let submenuRead = expectation(description:"Changed synthetic submenu replaces old items")
         let dialogueRead = expectation(description:"Fresh dialogue returns after explicit menu close")
         var first = false, second = false, dialogue = false
-        var trace: [[String]] = []
+        var trace: [[String:Any]] = []
+        let diagnosticStarted = ProcessInfo.processInfo.systemUptime
+        func observation(_ line: OCRLine) -> [String:Any] {
+            ["text":line.text,"confidence":line.confidence,"box":["x":line.box.x,"y":line.box.y,"w":line.box.w,"h":line.box.h]]
+        }
         let pipeline = FramePipeline(translator:translator,softwareImageContext:true) { message in
             DispatchQueue.main.async {
                 if message["type"] as? String == "subtitle_show", let source = message["source"] as? String,
@@ -129,12 +133,23 @@ final class PlayExperienceIntegrationTests: XCTestCase {
         }
         defer { pipeline.stop() }
         pipeline.onCurrentMenu = { _,state in
-            trace.append(state.items.map(\.source)); trace = Array(trace.suffix(30))
+            trace.append(["stage":"state","seconds":ProcessInfo.processInfo.systemUptime-diagnosticStarted,
+                "active":state.active,"status":state.status,"sources":state.sources.map(observation),
+                "translated_sources":state.items.map(\.source),"pending":state.pending,"rejected":state.rejectedSources.sorted()])
+            trace = Array(trace.suffix(60))
             let sources = Set(state.items.map(\.source))
             if sources == Set(["Settings","Audio","Back"]), !first { first = true; menuRead.fulfill() }
             if sources == Set(["Graphics","Language","Exit"]), !second { second = true; submenuRead.fulfill() }
             if second { XCTAssertFalse(sources.contains("Audio")) }
         }
+#if DEBUG
+        pipeline.onCurrentMenuObservation = { lines,region,milliseconds,arrivalAge in
+            trace.append(["stage":"ocr","seconds":ProcessInfo.processInfo.systemUptime-diagnosticStarted,
+                "milliseconds":milliseconds,"arrival_age":arrivalAge,
+                "region":["x":region.x,"y":region.y,"w":region.w,"h":region.h],"observations":lines.map(observation)])
+            trace = Array(trace.suffix(60))
+        }
+#endif
         pipeline.start(roi:.dialogue,mode:.balanced); pipeline.setBackground(true)
         pipeline.requestCurrentMenu(ticket:UUID())
         let initial = try frame([("Settings",CGPoint(x:140,y:170),.white),("Audio",CGPoint(x:140,y:290),.white),("Back",CGPoint(x:140,y:410),.white)])
@@ -147,7 +162,8 @@ final class PlayExperienceIntegrationTests: XCTestCase {
         let pixels = try frame([("Follow me to the gate.",CGPoint(x:260,y:530),.white)])
         for _ in 0..<35 { pipeline.offer(pixels); try await Task.sleep(nanoseconds:100_000_000) }
         await fulfillment(of:[dialogueRead],timeout:10)
-        let diagnostic = XCTAttachment(string:"Authored synthetic menu lifecycle; not gameplay.\n"+String(describing:trace))
+        let payload = try JSONSerialization.data(withJSONObject:["source":"Authored synthetic menu lifecycle; not gameplay","trace":trace],options:[.prettyPrinted,.sortedKeys])
+        let diagnostic = XCTAttachment(data:payload,uniformTypeIdentifier:"public.json")
         diagnostic.name = "synthetic-current-menu-lifecycle"; diagnostic.lifetime = .keepAlways; add(diagnostic)
         let stopped = expectation(description:"Menu and dialogue pipeline drained")
         pipeline.stop { stopped.fulfill() }; await fulfillment(of:[stopped],timeout:5)
