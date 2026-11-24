@@ -21,14 +21,9 @@ private struct HomeContent: View {
                       systemImage:model.running ? "waveform.path" : readiness.canStart ? "checkmark.circle" : "circle.dashed")
                     .font(.headline).accessibilityIdentifier("home.readiness")
                 if model.running { Text(model.sessionStatus).font(.subheadline).foregroundColor(.secondary) }
-                Button {
+                TranslationSessionButton(running:model.running,canStart:readiness.canStart) {
                     if model.running { model.stop() } else { model.start() }
-                } label: {
-                    Label(model.running ? "إيقاف الترجمة" : "بدء الترجمة",systemImage:model.running ? "stop.fill" : "play.fill")
-                        .font(.headline).frame(maxWidth:.infinity,minHeight:44)
                 }
-                .buttonStyle(.borderedProminent).tint(model.running ? .red : .teal)
-                .disabled(!model.running && !readiness.canStart)
                 .accessibilityIdentifier("home.session")
                 if !model.running { nextStep }
                 if !model.running && !readiness.canFinishSetup {
@@ -52,9 +47,7 @@ private struct HomeContent: View {
                 }
             }
             Section("مكان عرض الترجمة") {
-                Picker("وجهة العرض",selection:$model.gameOptions.destination) {
-                    ForEach(DisplayDestination.allCases,id:\.self) { Text($0.title).tag($0) }
-                }.accessibilityIdentifier("home.destination")
+                DestinationPicker(selection:$model.gameOptions.destination,identifier:"home.destination")
                 if model.gameOptions.destination.phoneEnabled {
                     NavigationLink { PhoneTranslationView() } label: { Label("فتح شاشة الترجمة على الآيفون",systemImage:"iphone") }
                     Text("تظهر العربية داخل GameLingo؛ لا يلزم اقتران تلفزيون.").font(.footnote).foregroundColor(.secondary)
@@ -285,6 +278,64 @@ struct AppearanceOverviewView: View {
                 Text("تطبيق نمط يعيد قيم المظهر والموضع والتوقيت إلى إعدادات النمط. فتح الصفحة وحده لا يغير مظهرك.").font(.footnote).foregroundColor(.secondary)
             }
             Section { NavigationLink("تخصيص دقيق واستيراد المظهر") { SubtitleSettingsView() } }
-        }.navigationTitle("مظهر الترجمة")
+        }.navigationTitle("المظهر")
+    }
+}
+
+struct TranslationSessionButton: View {
+    var running: Bool
+    var canStart: Bool
+    var action: () -> Void
+    @Environment(\.dynamicTypeSize) private var textSize
+    private var title: String { running ? "إيقاف الترجمة" : "بدء الترجمة" }
+    private var symbol: String { running ? "stop.fill" : "play.fill" }
+    var body: some View {
+        Button(action:action) {
+            Group {
+                if textSize.isAccessibilitySize {
+                    VStack(spacing:8) {
+                        Image(systemName:symbol).accessibilityHidden(true)
+                        Text(title).fixedSize(horizontal:false,vertical:true)
+                    }
+                } else {
+                    Label(title,systemImage:symbol).fixedSize(horizontal:false,vertical:true)
+                }
+            }
+            .font(.headline).multilineTextAlignment(.center)
+            .frame(maxWidth:.infinity,minHeight:44).padding(.vertical,8)
+        }
+        .buttonStyle(.borderedProminent).tint(running ? .red : .teal)
+        .disabled(!running && !canStart).accessibilityLabel(title)
+    }
+}
+
+struct DestinationPicker: View {
+    @Binding var selection: DisplayDestination
+    var identifier: String
+    @Environment(\.dynamicTypeSize) private var textSize
+    var body: some View {
+        if textSize.isAccessibilitySize {
+            // Separate rows keep the full option and selection visible instead
+            // of squeezing the menu value beside a large Arabic field label.
+            ForEach(DisplayDestination.allCases,id:\.self) { destination in
+                Button { selection = destination } label: {
+                    HStack(alignment:.top,spacing:12) {
+                        Image(systemName:selection == destination ? "checkmark.circle.fill" : "circle")
+                            .accessibilityHidden(true)
+                        Text(destination.title).multilineTextAlignment(.leading)
+                            .fixedSize(horizontal:false,vertical:true)
+                        Spacer(minLength:0)
+                    }.frame(minHeight:44).padding(.vertical,4).contentShape(Rectangle())
+                }
+                .buttonStyle(.borderless)
+                .accessibilityValue(selection == destination ? "محدد" : "غير محدد")
+                .accessibilityAddTraits(selection == destination ? .isSelected : [])
+                .accessibilityIdentifier(identifier+"."+destination.rawValue)
+            }
+        } else {
+            Picker("وجهة العرض",selection:$selection) {
+                ForEach(DisplayDestination.allCases,id:\.self) { Text($0.title).tag($0) }
+            }.accessibilityIdentifier(identifier)
+        }
     }
 }

@@ -42,11 +42,13 @@ final class NavigationPresentationTests: XCTestCase {
             ("appearance",AnyView(NavigationStack { AppearanceOverviewView() })),
             ("setup",AnyView(NavigationStack { SetupGuideView() })),
             ("model",AnyView(NavigationStack { LocalModelView() })),
-            ("console",AnyView(NavigationStack { ConnectionView(scope:.console) }))
+            ("console",AnyView(NavigationStack { ConnectionView(scope:.console) })),
+            ("session-actions",AnyView(SessionControlsFixture())),
+            ("output-options",AnyView(DestinationOptionsFixture()))
         ]
         for large in [false,true] {
             for (name,page) in pages {
-                let content = page.environmentObject(model).environment(\.layoutDirection,.rightToLeft)
+                let content = page.environmentObject(model).environment(\.layoutDirection,.rightToLeft).tint(.teal)
                     .environment(\.dynamicTypeSize,large ? .accessibility3 : .large)
                     .environment(\.colorScheme,large ? .dark : .light)
                 let host = UIHostingController(rootView:content)
@@ -103,6 +105,25 @@ final class NavigationPresentationTests: XCTestCase {
                 minimum = min(minimum,brightness); maximum = max(maximum,brightness)
             }
             return maximum-minimum
+        }
+    }
+}
+
+/// Isolated controls with authored state, not an active PS5 session. This keeps
+/// Start and Stop visible for the large-text review without starting a session.
+private struct SessionControlsFixture: View {
+    var body: some View {
+        Form {
+            Section("بدء") { TranslationSessionButton(running:false,canStart:true,action:{}) }
+            Section("إيقاف") { TranslationSessionButton(running:true,canStart:false,action:{}) }
+        }
+    }
+}
+
+private struct DestinationOptionsFixture: View {
+    var body: some View {
+        Form {
+            Section("وجهة العرض") { DestinationPicker(selection:.constant(.television),identifier:"fixture.destination") }
         }
     }
 }

@@ -21,9 +21,7 @@ private struct SetupGuideContent: View {
     var body: some View {
         Form {
             Section("1. أين تريد عرض العربية؟") {
-                Picker("وجهة العرض",selection:$model.gameOptions.destination) {
-                    ForEach(DisplayDestination.allCases,id:\.self) { Text($0.title).tag($0) }
-                }.accessibilityIdentifier("setup.destination")
+                DestinationPicker(selection:$model.gameOptions.destination,identifier:"setup.destination")
                 Text(model.gameOptions.destination == .phone ? "الآيفون مستقل عن اقتران التلفزيون. تحتاج مصدر صورة PS5 في كل الحالات." : "اختر الآيفون فقط إذا أردت البدء دون تلفزيون.")
                     .font(.footnote).foregroundColor(.secondary)
             }
@@ -51,13 +49,15 @@ private struct SetupGuideContent: View {
                 }
             }
             Section {
-                Button("إنهاء الإعداد") { finish() }
-                    .frame(maxWidth:.infinity,minHeight:44).buttonStyle(.borderedProminent)
+                Button(action:finish) {
+                    Text("إنهاء الإعداد").multilineTextAlignment(.center).fixedSize(horizontal:false,vertical:true)
+                        .frame(maxWidth:.infinity,minHeight:44).padding(.vertical,8)
+                }.buttonStyle(.borderedProminent)
                     .disabled(!readiness.canFinishSetup).accessibilityIdentifier("setup.finish")
                 if !readiness.canStart { Text(readiness.title).font(.footnote).foregroundColor(.secondary) }
                 Text("ابدأ الترجمة من الرئيسية بعد الإعداد. لا تحتاج إنشاء ملف لعبة.").font(.footnote).foregroundColor(.secondary)
             }
-        }.navigationTitle("إعداد خطوة بخطوة")
+        }.navigationTitle("الإعداد")
     }
     private func status(_ title: String,complete: Bool) -> some View {
         Label(title,systemImage:complete ? "checkmark.circle.fill" : "circle")

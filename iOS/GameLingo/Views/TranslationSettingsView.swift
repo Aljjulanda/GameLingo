@@ -29,7 +29,7 @@ struct LocalModelView: View {
                     Text("Argos EN–AR هو النموذج المعتمد. تُفحص الحزمة قبل تثبيتها. راجع المصادر والتراخيص قبل إعادة توزيعها.").font(.footnote).foregroundColor(.secondary)
                 }
             }
-        }.navigationTitle("النموذج المحلي")
+        }.navigationTitle("النموذج")
             .fileImporter(isPresented:$importing,allowedContentTypes:[.data],allowsMultipleSelection:false) { result in
                 switch result { case .success(let urls): if let url = urls.first { model.importModel(url) }; case .failure(let error): model.errorMessage = error.localizedDescription }
             }
