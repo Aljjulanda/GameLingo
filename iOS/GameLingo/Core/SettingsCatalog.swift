@@ -49,6 +49,10 @@ enum SettingsPage: String, CaseIterable, Identifiable {
     }
     private static func normalized(_ value: String) -> String {
         value.folding(options:[.diacriticInsensitive,.caseInsensitive],locale:Locale(identifier:"ar"))
+            // Foundation's diacritic folding retains Arabic vowel marks on
+            // some runtimes. Remove combining marks explicitly for search.
+            .components(separatedBy:CharacterSet.nonBaseCharacters).joined()
+            .replacingOccurrences(of:"ـ",with:"")
             .replacingOccurrences(of:"أ",with:"ا").replacingOccurrences(of:"إ",with:"ا").replacingOccurrences(of:"آ",with:"ا")
     }
 }

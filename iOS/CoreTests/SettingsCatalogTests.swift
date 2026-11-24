@@ -3,12 +3,13 @@ import XCTest
 
 final class SettingsCatalogTests: XCTestCase {
     func testArabicSpellingVariantsAndDiacriticsFindDevices() {
-        for query in ["آيفون", "ايفون", "إقتران", "شَبَكَة", "QR", "ps5"] {
+        for query in ["آيفون", "ايفون", "إقتران", "شَبَكَة", "شَـبَـكَة", "إِقْتِرَان", "QR", "ps5"] {
             XCTAssertTrue(SettingsPage.devices.matches(query),query)
         }
     }
     func testSearchFindsEffectsAndSeparatesExperimentsFromNormalSettings() {
         XCTAssertTrue(SettingsPage.appearance.matches("ظل خط"))
+        XCTAssertTrue(SettingsPage.model.matches("نَمُوذَج مَحَلِّي"))
         XCTAssertTrue(SettingsPage.experiments.matches("صوت خلفية"))
         XCTAssertFalse(SettingsPage.translation.matches("صوت خلفية"))
         XCTAssertFalse(SettingsPage.appearance.matches("ظل نموذج"),"All search words must match the same destination")
