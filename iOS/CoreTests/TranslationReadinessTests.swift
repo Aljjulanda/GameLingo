@@ -8,12 +8,14 @@ final class TranslationReadinessTests: XCTestCase {
     func testPhoneNeedsNoTVPairing() {
         let state = ready(.phone)
         XCTAssertTrue(state.canStart)
+        XCTAssertTrue(state.canFinishSetup)
         XCTAssertFalse(state.waitingForTV)
     }
     func testBothCanStartWithLocalOutputWhileTVIsMissing() {
         var state = ready(.both)
         XCTAssertTrue(state.canStart)
         XCTAssertTrue(state.waitingForTV)
+        XCTAssertTrue(state.canFinishSetup)
         state.tvConnected = true
         XCTAssertFalse(state.waitingForTV)
         XCTAssertEqual(state.nextStep,.ready)
@@ -22,7 +24,15 @@ final class TranslationReadinessTests: XCTestCase {
         let state = ready(.television)
         XCTAssertTrue(state.canStart)
         XCTAssertTrue(state.waitingForTV)
+        XCTAssertFalse(state.canFinishSetup)
         XCTAssertTrue(state.title.contains("غير متصل"))
+    }
+    func testTVSetupFinishesOnlyAfterSelectedOutputConnects() {
+        var state = ready(.television)
+        state.tvConnected = true
+        XCTAssertTrue(state.canFinishSetup)
+        state.modelReady = false
+        XCTAssertFalse(state.canFinishSetup)
     }
     func testSetupExplainsActualBlockingStepAndRecovers() {
         var state = ready(.phone)

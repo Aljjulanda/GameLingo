@@ -10,6 +10,7 @@ final class SettingsCatalogTests: XCTestCase {
     func testSearchFindsEffectsAndSeparatesExperimentsFromNormalSettings() {
         XCTAssertTrue(SettingsPage.appearance.matches("ظل خط"))
         XCTAssertTrue(SettingsPage.model.matches("نَمُوذَج مَحَلِّي"))
+        XCTAssertTrue(SettingsPage.help.matches("إعداد أول"))
         XCTAssertTrue(SettingsPage.experiments.matches("صوت خلفية"))
         XCTAssertFalse(SettingsPage.translation.matches("صوت خلفية"))
         XCTAssertFalse(SettingsPage.appearance.matches("ظل نموذج"),"All search words must match the same destination")

@@ -31,6 +31,10 @@ private struct HomeContent: View {
                 .disabled(!model.running && !readiness.canStart)
                 .accessibilityIdentifier("home.session")
                 if !model.running { nextStep }
+                if !model.running && !readiness.canFinishSetup {
+                    NavigationLink("الإعداد خطوة بخطوة") { SetupGuideView() }
+                        .accessibilityIdentifier("home.setup")
+                }
             } header: { Text("الترجمة اليومية") } footer: {
                 Text("شغّل PS5 باليد. تبقى صورة اللعب الأصلية على HDMI؛ يقرأ التطبيق البث الثانوي.")
             }
@@ -243,6 +247,7 @@ struct HelpView: View {
     var body: some View {
         Form {
             Section("ابدأ من الرئيسية") {
+                NavigationLink("فتح دليل الإعداد العملي") { SetupGuideView() }
                 Text("اختر مكان عرض العربية، وجهّز النموذج المحلي، ثم اختر PS5 أو سجّله مرة واحدة بحساب البث الثاني. شغّل الجهاز باليد واضغط بدء الترجمة.")
                 Text("للآيفون فقط: لا تحتاج اقتران تلفزيون. للتلفزيون: افتح إعداد الاتصال وامسح رمز QR أو استخدم العنوان والرمز يدويًا.")
             }

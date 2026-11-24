@@ -6,17 +6,28 @@ struct LocalModelView: View {
     @State private var importing = false
     var body: some View {
         Form {
-            Section("النموذج المحلي") {
+            Section("الإنجليزية إلى العربية · دون إنترنت") {
+                if model.modelReady { Label("النموذج مثبت وجاهز",systemImage:"checkmark.circle.fill") }
                 Text(model.modelStatus)
                 ModelDownloadProgress(service:model.modelDownload)
                 if model.modelBusy { ProgressView() }
-                Button("تنزيل نموذج EN → AR") { model.downloadModel() }.disabled(model.modelBusy || model.running)
-                if model.modelBusy { Button("إيقاف التنزيل وحفظ تقدم الاستئناف") { model.cancelModelDownload() } }
-                Text("Argos هو النموذج الوحيد المعتمد حاليًا. إطار المقارنة منفصل؛ لا يُتاح بديل قبل تحقق التوافق والجودة والسرعة على الهاتف.").font(.footnote)
-                Button("استيراد حزمة .argosmodel") { importing = true }.disabled(model.modelBusy || model.running)
-                Button("تحميل النموذج المثبت") { model.loadModel() }.disabled(model.modelBusy || model.running)
-                Button("حذف النموذج",role:.destructive) { model.removeModel() }.disabled(model.modelBusy || model.running)
-                Text("تُجرى الترجمة على iPhone بعد تثبيت النموذج. لا توجد خدمة ترجمة سحابية أو سجل حوار. الحزمة هي نموذج Windows نفسه؛ راجع نسبته وشروطه قبل إعادة توزيعه.").font(.footnote).foregroundColor(.secondary)
+                if !model.modelReady {
+                    Button("تنزيل النموذج أو استئناف تنزيله") { model.downloadModel() }
+                        .disabled(model.modelBusy || model.running)
+                }
+                if model.modelBusy { Button("إيقاف التنزيل أو التثبيت") { model.cancelModelDownload() } }
+                Text("تنزيل مرة واحدة، نحو 88.5 م.ب. بعد التثبيت تُجرى الترجمة على الآيفون دون خدمة سحابية أو اشتراك.").font(.footnote).foregroundColor(.secondary)
+            }
+            Section {
+                DisclosureGroup("استيراد وإدارة النموذج") {
+                    Button("استيراد حزمة .argosmodel") { importing = true }.disabled(model.modelBusy || model.running)
+                    Button("تحميل النموذج المثبت") { model.loadModel() }.disabled(model.modelBusy || model.running)
+                    if model.modelReady {
+                        Button("إعادة تنزيل النموذج") { model.downloadModel() }.disabled(model.modelBusy || model.running)
+                    }
+                    Button("حذف النموذج",role:.destructive) { model.removeModel() }.disabled(model.modelBusy || model.running)
+                    Text("Argos EN–AR هو النموذج المعتمد. تُفحص الحزمة قبل تثبيتها. راجع المصادر والتراخيص قبل إعادة توزيعها.").font(.footnote).foregroundColor(.secondary)
+                }
             }
         }.navigationTitle("النموذج المحلي")
             .fileImporter(isPresented:$importing,allowedContentTypes:[.data],allowsMultipleSelection:false) { result in

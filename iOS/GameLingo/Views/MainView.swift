@@ -49,13 +49,8 @@ struct ConnectionView: View {
                     }
                 }
                 Section("اكتشاف وتسجيل PS5") {
-                    Button("البحث في الشبكة") { model.discovered = []; model.remote.discover() }.disabled(model.running || model.pairing)
-                    ForEach(model.discovered) { item in Button("\(item.name) · \(item.host)") { host = item.host } }
-                    TextField("عنوان PS5 المحلي",text:$host).keyboardType(.decimalPad).environment(\.layoutDirection,.leftToRight)
-                    TextField("PSN Account ID · Base64",text:$account).textInputAutocapitalization(.never).autocorrectionDisabled().environment(\.layoutDirection,.leftToRight)
-                    SecureField("رمز ربط PS5 من 8 أرقام",text:$pin).keyboardType(.numberPad)
-                    Button(model.pairing ? "جارٍ التسجيل…" : "تسجيل الجهاز") { model.pair(host:host,account:account,pin:pin); pin = ""; account = "" }.disabled(model.running || model.pairing)
-                    Text("رمز الربط: إعدادات PS5 ← النظام ← Remote Play ← ربط جهاز. Account ID هو المعرّف الرقمي للحساب بصيغة Base64؛ لا تُدخل كلمة مرور PSN. إذا لم يظهر الجهاز، أدخل عنوانه يدويًا وشغّله باليد.").font(.footnote).foregroundColor(.secondary)
+                    if model.consoles.isEmpty { registrationControls }
+                    else { DisclosureGroup("تسجيل PS5 آخر") { registrationControls } }
                 }
                 }
                 if model.loginRequired { PS5LoginSection() }
@@ -83,6 +78,15 @@ struct ConnectionView: View {
                 }
                 }
         }.navigationTitle(scope == .console ? "جهاز PS5" : scope == .television ? "اتصال التلفزيون" : "الأجهزة والاتصال")
+    }
+    @ViewBuilder private var registrationControls: some View {
+        Button("البحث في الشبكة") { model.discovered = []; model.remote.discover() }.disabled(model.running || model.pairing)
+        ForEach(model.discovered) { item in Button("\(item.name) · \(item.host)") { host = item.host } }
+        TextField("عنوان PS5 المحلي",text:$host).keyboardType(.decimalPad).environment(\.layoutDirection,.leftToRight)
+        TextField("PSN Account ID · Base64",text:$account).textInputAutocapitalization(.never).autocorrectionDisabled().environment(\.layoutDirection,.leftToRight)
+        SecureField("رمز ربط PS5 من 8 أرقام",text:$pin).keyboardType(.numberPad)
+        Button(model.pairing ? "جارٍ التسجيل…" : "تسجيل الجهاز") { model.pair(host:host,account:account,pin:pin); pin = ""; account = "" }.disabled(model.running || model.pairing)
+        Text("رمز الربط: إعدادات PS5 ← النظام ← Remote Play ← ربط جهاز. Account ID هو المعرّف الرقمي للحساب بصيغة Base64؛ لا تُدخل كلمة مرور PSN. إذا لم يظهر الجهاز، أدخل عنوانه يدويًا وشغّله باليد.").font(.footnote).foregroundColor(.secondary)
     }
 }
 

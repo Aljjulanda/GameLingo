@@ -3,6 +3,8 @@
 الفرع `codex/ui-navigation-1`، الأساس `4c6b6dec8dc9b90316d8080a4ab9ffc388371a23`.
 آخر تسليم سابق موثق: iPhone 0.4.0 (10) وTV 0.7.0-preview.1؛ راجع PLAY-PREVIEW-1.md. هذه التعديلات ليست ضمن ذلك التسليم ولا ريليزًا جديدًا.
 
+تحديث بعد طلب المتابعة: نجح البناء الثاني، لكن الصور الثماني سوداء ولا تصلح لقبول الشكل. راجع [النتيجة المتحققة](UI-NAVIGATION-1-RESULTS-AR.md) و[نقطة استئناف المرحلة الثانية](UI-SETUP-2-RESUME-AR.md) قبل أي عمل تالٍ.
+
 ## تشخيص البناء الأول وإصلاحه
 
 فشل [التشغيل 45356471058](https://github.com/Aljjulanda/GameLingo/actions/runs/45356471058) عند المصدر `21e803a389371b9e2276986422be3e1e46d8d430` في اختبار Core `SettingsCatalogTests/testArabicSpellingVariantsAndDiacriticsFindDevices`، تحديدًا الاستعلام «شَبَكَة». فُحص سجل المهمة `138315434242`: تجمعت ملفات Core والاختبارات، لكن Foundation لم يزل الحركات العربية بواسطة diacriticInsensitive. لم تبدأ الأرشفة أو اختبارات Apple ولم يُنتج IPA؛ لا يُحسب التشغيل قبولًا جزئيًا.

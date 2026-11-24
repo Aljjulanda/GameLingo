@@ -39,7 +39,7 @@ enum SettingsPage: String, CaseIterable, Identifiable {
         case .experiments: return "خلفية قفل صوت صامت تجريبي"
         case .improvement: return "جمع أمثلة موافقة تصدير حذف تعلم تراجع"
         case .diagnostics: return "سرعة بطارية حرارة ذاكرة قياس تأخير سجل تسجيل اختبار"
-        case .help: return "تعليمات مساعدة مصادر خصوصية تراخيص"
+        case .help: return "تعليمات مساعدة مصادر خصوصية تراخيص إعداد أول استخدام خطوات"
         }
     }
     func matches(_ query: String) -> Bool {

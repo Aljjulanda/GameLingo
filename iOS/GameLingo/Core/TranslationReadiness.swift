@@ -22,6 +22,9 @@ struct TranslationReadiness {
     // Starting the existing session also starts the TV listener when needed.
     // TV connectivity must never block phone output or PS5 connection setup.
     var canStart: Bool { nextStep == .ready }
+    /// Finishing setup promises a usable selected output. Both can finish on
+    /// the phone while the optional TV connection is completed later.
+    var canFinishSetup: Bool { canStart && (destination != .television || tvConnected) }
     var waitingForTV: Bool { destination.tvEnabled && !tvConnected }
     var title: String {
         switch nextStep {
