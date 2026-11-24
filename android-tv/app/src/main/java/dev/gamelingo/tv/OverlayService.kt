@@ -12,7 +12,12 @@ import android.view.*
 import android.widget.TextView
 
 class OverlayService : Service() {
-    companion object { var active = false; private set }
+    companion object {
+        var active = false; private set
+        var connected = false; private set
+        var connecting = false; private set
+        var previewing = false; private set
+    }
     private lateinit var wm: WindowManager
     private var view: SubtitleCanvas? = null
     private val handler = Handler(Looper.getMainLooper())
@@ -21,7 +26,12 @@ class OverlayService : Service() {
     private var receiver: Receiver? = null
     private var live = false
     private val prefs by lazy { getSharedPreferences("overlay", MODE_PRIVATE) }
-    private fun status(message: String) { prefs.edit().putString("status",message).apply() }
+    private fun status(message: String) {
+        connected = active && live && receiver?.authenticated == true
+        connecting = active && live && receiver?.connecting == true
+        previewing = active && !live
+        prefs.edit().putString("status",message).apply()
+    }
     private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
 
     override fun onCreate() {
@@ -83,7 +93,9 @@ class OverlayService : Service() {
                         view?.visibility = View.VISIBLE
                         view?.message(message)
                         if(message!=null) Log.i("GameLingo","Applied " + message.optString("type") + " sequence " + message.optLong("seq"))
-                    }, ::status).also { it.start(intent.getStringExtra("host") ?: "", intent.getStringExtra("code") ?: "") }
+                    }, ::status)
+                    receiver?.start(intent.getStringExtra("host") ?: "", intent.getStringExtra("code") ?: "")
+                    status(prefs.getString("status", "جارٍ الاتصال بالمصدر") ?: "جارٍ الاتصال بالمصدر")
                 }
                 else -> {
                     receiver?.stop(); receiver = null; live = false; handler.removeCallbacks(hide)
@@ -99,6 +111,7 @@ class OverlayService : Service() {
         receiver?.stop(); receiver = null
         handler.removeCallbacksAndMessages(null)
         view?.let { if (it.isAttachedToWindow) wm.removeViewImmediate(it) }; view = null; active = false
+        status("استقبال الترجمة متوقف")
         Log.i("GameLingo", "Overlay service stopped")
         super.onDestroy()
     }

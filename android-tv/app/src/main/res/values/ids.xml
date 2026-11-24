@@ -1,0 +1,11 @@
+<resources>
+    <item name="tv_nav_home" type="id" />
+    <item name="tv_nav_connection" type="id" />
+    <item name="tv_nav_appearance" type="id" />
+    <item name="tv_nav_help" type="id" />
+    <item name="tv_primary" type="id" />
+    <item name="tv_status" type="id" />
+    <item name="tv_detail" type="id" />
+    <item name="tv_saved_source" type="id" />
+    <item name="tv_position" type="id" />
+</resources>

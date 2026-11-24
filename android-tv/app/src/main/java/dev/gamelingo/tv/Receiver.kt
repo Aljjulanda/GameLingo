@@ -65,6 +65,8 @@ class Receiver(context: Context, private val render: (JSONObject?) -> Unit, priv
     private var epoch = 0
     private var attempts = 0
     private var session = ""
+    val authenticated: Boolean get() = session.isNotEmpty()
+    val connecting: Boolean get() = wantedConnection && session.isEmpty()
     private var sequence = 0L
     private var serverTime = 0L
     private var syncTime = 0L
