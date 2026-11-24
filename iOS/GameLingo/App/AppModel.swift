@@ -53,6 +53,20 @@ final class AppModel: ObservableObject {
     @Published var readingPages: [String] = []
     @Published var readingPage = 0
     @Published var readingStatus = "القراءة مغلقة"
+    @Published var currentMenuReadout = CurrentMenuReadout()
+    private var currentMenuTicket: UUID?
+    func translateCurrentMenu() {
+        guard running, modelReady, streamConnected, !readingActive else {
+            errorMessage = "ابدأ بث PS5 وأغلق قراءة المستند قبل طلب القائمة"; return
+        }
+        let ticket = UUID(); currentMenuTicket = ticket
+        currentMenuReadout = CurrentMenuReadout(active:true,status:"بانتظار إطار جديد للقائمة…")
+        pipeline.requestCurrentMenu(ticket:ticket)
+    }
+    func closeCurrentMenu() {
+        currentMenuTicket = nil; currentMenuReadout = CurrentMenuReadout()
+        pipeline.closeCurrentMenu()
+    }
     @Published var cpuPercent = 0.0
     @Published var residentMegabytes = 0.0
     @Published var batteryUsed: Double?
@@ -95,7 +109,7 @@ final class AppModel: ObservableObject {
                 if previewActive { preview(false); preview(true) }
                 if running && gameOptions.destination.tvEnabled && !tvListening && !hubStarting { connectTV() }
             }
-            if oldValue.menusEnabled != gameOptions.menusEnabled || oldValue.allowedMenus != gameOptions.allowedMenus || oldValue.menuRegion != gameOptions.menuRegion {
+            if oldValue.menusEnabled != gameOptions.menusEnabled || oldValue.allowedMenus != gameOptions.allowedMenus || oldValue.menuRegion != gameOptions.menuRegion || oldValue.currentMenuAppearance != gameOptions.currentMenuAppearance {
                 pipeline.configureMenus(gameOptions)
             }
             saveCurrentProfile()
@@ -146,7 +160,7 @@ final class AppModel: ObservableObject {
     func route(_ message: [String:Any]) {
         let type = message["type"] as? String ?? ""
         guard running || ["subtitle_clear","document_hide","menu_clear"].contains(type) else { return }
-        if gameOptions.destination.tvEnabled { hub.publish(message) }
+        if gameOptions.destination.tvEnabled && (type != "menu_snapshot" || tvMenus) { hub.publish(message) }
         if gameOptions.destination.phoneEnabled {
             localSubtitles.apply(message,settings:settings.display,now:ProcessInfo.processInfo.systemUptime)
             if type == "menu_clear" { localMenuItems = []; localMenuUntil = 0 }
@@ -402,7 +416,7 @@ final class AppModel: ObservableObject {
         hub.onListenerFailure = { [weak self] in self?.hubStarting = false; self?.scheduleRecovery() }
         let processor = self.pipeline
         hub.onDisconnected = { [weak self] in
-            DispatchQueue.main.async { self?.tvConnected = false; self?.tvDocuments = false; self?.tvSpeakers = false; self?.regionTicket = nil; self?.regionGame = nil }
+            DispatchQueue.main.async { self?.tvConnected = false; self?.tvDocuments = false; self?.tvSpeakers = false; self?.tvMenus = false; self?.regionTicket = nil; self?.regionGame = nil }
         }
         hub.onConnected = { [weak self] in self?.tvConnected = true }
         hub.onCapabilities = { [weak self] in
@@ -415,6 +429,10 @@ final class AppModel: ObservableObject {
             if self.displayedIDs.count >= 128 { self.displayedIDs.removeAll() }
             self.displayedIDs.insert(id)
             if !self.policy.foreground { self.backgroundDeliveries &+= 1 }
+        }
+        pipeline.onCurrentMenu = { [weak self] ticket,state in
+            guard let self, self.currentMenuTicket == ticket else { return }
+            self.currentMenuReadout = state
         }
         pipeline.onReading = { [weak self] ticket,active,pages,status in
             guard let self, self.readingTicket == ticket else { return }
@@ -527,7 +545,7 @@ final class AppModel: ObservableObject {
         regionTicket = nil; regionGame = nil; hub.publish(TVProtocol.envelope("roi_edit_end"))
         correctionsLibrary.clearRecent()
         recordSession("session.stop",reason+"; automatic recovery disabled")
-        closeReading()
+        closeCurrentMenu(); closeReading()
         policy.stop(); recoveryTask?.cancel(); recoveryTask = nil; endExecutionGrace(); audio.stop()
         SessionIntentStore.save(false); UIDevice.current.isBatteryMonitoringEnabled = false
         pipelineActive = false; sessionStatus = reason

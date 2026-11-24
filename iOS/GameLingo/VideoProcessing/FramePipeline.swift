@@ -22,6 +22,7 @@ struct PipelineMetrics {
 final class FramePipeline {
     var onMetrics: ((PipelineMetrics) -> Void)?
     var onError: ((String) -> Void)?
+    var onCurrentMenu: ((UUID,CurrentMenuReadout) -> Void)?
     var onReading: ((UUID,Bool,[String],String) -> Void)?
     var onPreview: ((CGImage,[OCRLine]) -> Void)?
     var onLearningExample: ((ImprovementExample) -> Void)?
@@ -39,6 +40,11 @@ final class FramePipeline {
     private var setupRegion = GameOptions().menuRegion
     private var previewEnabled = false
     private var manualRegion = false
+    private struct MenuContext { var id: String; var region: SourceBox; var appearance: MenuAppearance }
+    private var currentMenu = CurrentMenuSession()
+    private var currentMenuLastSample = 0.0
+    private var currentMenuAspect = 16.0/9.0
+    private var menuFailures = Set<String>()
     private var menuOptions = GameOptions()
     private var menuItems: [MenuOverlayItem] = []
     private var menuReadings: [OCRLine] = []
@@ -55,6 +61,7 @@ final class FramePipeline {
         guard value.isValid else { return }
         translator.cancel()
         queue.async { [self] in
+            finishCurrentMenu("تغيرت منطقة المصدر؛ أعد طلب القائمة")
             roi = value; manualRegion = manual; ocr.strictRegion = manual
             runID = UUID(); pending = nil; tracker.reset(); memory.clear(); stability.clear(); translations = BoundedLRU(capacity:8); signature = FrameSignature()
             publish(TVProtocol.envelope("subtitle_clear"))
@@ -62,7 +69,10 @@ final class FramePipeline {
     }
     func configureMenus(_ value: GameOptions) {
         queue.async { [self] in
-            menuOptions = value; menuEpoch = UUID(); menuIdentity = nil; menuItems = []; menuReadings = []; menuCache = BoundedLRU(capacity:128)
+            if menuOptions.menuRegion != value.menuRegion || menuOptions.allowedMenus != value.allowedMenus || menuOptions.menusEnabled != value.menusEnabled {
+                finishCurrentMenu("تغيرت إعدادات القوائم؛ أعد الطلب")
+            }
+            menuOptions = value; menuFailures = []; menuEpoch = UUID(); menuIdentity = nil; menuItems = []; menuReadings = []; menuCache = BoundedLRU(capacity:128)
             publish(TVProtocol.envelope("menu_clear"))
         }
     }
@@ -82,7 +92,8 @@ final class FramePipeline {
     private var mode = PerformanceMode.balanced
     private var thermal = 0, lowPower = false
     private var timer: DispatchSourceTimer?
-    private var ocr = VisionDialogueOCR()
+    private var ocr: VisionDialogueOCR
+    private let softwareImageContext: Bool
     private var signature = FrameSignature()
     private var tracker = DialogueTracker()
     private var advanced = AdvancedSettings()
@@ -211,7 +222,10 @@ final class FramePipeline {
     private var metrics = PipelineMetrics()
     private var translationSamples = LatencySamples(), ocrSamples = LatencySamples()
     private var lastContextPrune = 0.0
-    init(translator: OfflineTranslator, publish: @escaping ([String:Any]) -> Void) { self.translator = translator; self.publish = publish }
+    init(translator: OfflineTranslator, softwareImageContext: Bool = false, publish: @escaping ([String:Any]) -> Void) {
+        self.translator = translator; self.publish = publish; self.softwareImageContext = softwareImageContext
+        self.ocr = VisionDialogueOCR(softwareImageContext:softwareImageContext)
+    }
 
     /// Decode callback retains one buffer; it never allocates one OCR task per received frame.
     func offer(_ buffer: CVPixelBuffer) {
@@ -249,7 +263,7 @@ final class FramePipeline {
     }
     func configurePackNames(_ names: String) { queue.async { self.packSpeakerNames = String(names.prefix(2000)) } }
     func interrupt() { translator.cancel(); queue.async { [self] in
-        finishReading()
+        finishReading(); finishCurrentMenu("انقطع المصدر؛ أعد طلب القائمة بعد عودة البث")
 #if GAMELINGO_TYPEWRITER_RESEARCH
         heldPublication = nil; typewriter = TypewriterPublication(); typewriterScope = nil
 #endif
@@ -285,11 +299,11 @@ final class FramePipeline {
         queue.async { [self] in reset(preservingState:true); publish(TVProtocol.envelope("subtitle_clear")) }
     }
     private func reset(preservingState: Bool = false) {
-        finishReading()
+        finishReading(); finishCurrentMenu("توقفت الجلسة أو تغير المصدر")
 #if GAMELINGO_TYPEWRITER_RESEARCH
         heldPublication = nil; typewriter = TypewriterPublication(); typewriterScope = nil
 #endif
-        timer?.cancel(); timer = nil; runID = UUID(); pending = nil; pendingCapture = []; pendingSegments = []; ocr = VisionDialogueOCR(); ocr.setBackground(isBackground); ocr.qualityTrace = quality[.punctuationTrace]; ocr.captureLines = capture.active; signature = FrameSignature()
+        timer?.cancel(); timer = nil; runID = UUID(); pending = nil; pendingCapture = []; pendingSegments = []; ocr = VisionDialogueOCR(softwareImageContext:softwareImageContext); ocr.setBackground(isBackground); ocr.qualityTrace = quality[.punctuationTrace]; ocr.captureLines = capture.active; signature = FrameSignature()
         ocr.quality = quality
         ocr.strictRegion = manualRegion
         menuEpoch = UUID(); menuIdentity = nil; menuItems = []; menuReadings = []; menuCache = BoundedLRU(capacity:128)
@@ -300,6 +314,11 @@ final class FramePipeline {
     }
     private func sample() {
         let now = ProcessInfo.processInfo.systemUptime
+        let menuTicket = currentMenu.ticket
+        if currentMenu.expire(now:now), let ticket = menuTicket {
+            translator.cancel(); clearMenu(); resetDialogueAfterMenu()
+            reportCurrentMenu(ticket:ticket)
+        }
         if now-lastContextPrune >= 5 { memory.prune(now:now); lastContextPrune = now }
         let rate = mode.samplingRate(thermal:thermal,lowPower:lowPower)
         metrics.samplingRate = rate
@@ -317,6 +336,10 @@ final class FramePipeline {
             setupRequested = false
             let image = CIImage(cvPixelBuffer:buffer)
             if let cg = previewContext.createCGImage(image,from:image.extent) { DispatchQueue.main.async { self.onPreview?(cg,lines) } }
+        }
+        if currentMenu.active && !reading {
+            processCurrentMenu(buffer,now:now)
+            if currentMenu.active { return }
         }
         if menuOptions.menusEnabled && !reading { processMenu(buffer,now:now) }
         else if !menuItems.isEmpty { clearMenu() }
@@ -425,6 +448,83 @@ final class FramePipeline {
             if now-lastMetrics >= 1 { lastMetrics = now; let value = metrics; DispatchQueue.main.async { self.onMetrics?(value) } }
         } catch { DispatchQueue.main.async { self.onError?(error.localizedDescription) } }
     }
+    func requestCurrentMenu(ticket: UUID) {
+        translator.cancel()
+        queue.async { [self] in
+            guard isActive(), !reading else {
+                let state = CurrentMenuReadout(status:"البث غير جاهز للقائمة أو قراءة المستند مفتوحة؛ أعد الطلب بعد تجهيز الجلسة")
+                DispatchQueue.main.async { self.onCurrentMenu?(ticket,state) }; return
+            }
+            finishCurrentMenu()
+            clearMenu(); resetDialogueAfterMenu()
+            currentMenu.request(ticket,now:ProcessInfo.processInfo.systemUptime)
+            currentMenuLastSample = 0; menuFailures = []
+            slotLock.lock(); latest = nil; slotLock.unlock()
+            publish(TVProtocol.envelope("subtitle_clear"))
+            reportCurrentMenu(ticket:ticket)
+        }
+    }
+    func closeCurrentMenu() { queue.async { self.finishCurrentMenu() } }
+    private func resetDialogueAfterMenu() {
+        runID = UUID(); pending = nil; tracker.reset(); memory.clear(); stability.clear(); signature = FrameSignature()
+    }
+    private func finishCurrentMenu(_ message: String = "أُغلقت القائمة؛ عاد مسار الحوار") {
+        guard let ticket = currentMenu.ticket else { return }
+        translator.cancel()
+        slotLock.lock(); latest = nil; slotLock.unlock()
+        currentMenu.close(message); clearMenu(); resetDialogueAfterMenu(); reportCurrentMenu(ticket:ticket)
+    }
+    private func currentMenuContext() -> MenuContext? {
+        guard let ticket = currentMenu.ticket else { return nil }
+        return MenuContext(id:"current-"+ticket.uuidString,region:currentMenu.region ?? SourceBox(x:0,y:0,w:1,h:1),appearance:menuOptions.currentMenuAppearance ?? MenuAppearance())
+    }
+    private func currentMenuTranslations(_ context: MenuContext) -> [MenuOverlayItem] {
+        guard currentMenu.stable else { return [] }
+        return currentMenu.rows.enumerated().compactMap { index,line in
+            guard let text = menuCache.get(context.id+"|"+line.text) else { return nil }
+            return MenuOverlayItem(id:context.id+"-\(index)",source:line.text,translated:SubtitlePresentation.clean(text),box:line.box,color:nil)
+        }
+    }
+    private func reportCurrentMenu(ticket: UUID) {
+        var state = CurrentMenuReadout(active:currentMenu.active,status:currentMenu.status)
+        state.sources = currentMenu.rows
+        if let context = currentMenuContext() {
+            state.items = currentMenuTranslations(context)
+            state.pending = currentMenu.rows.filter { menuCache.get(context.id+"|"+$0.text) == nil && !menuFailures.contains(context.id+"|"+$0.text) }.count
+            state.withheld = currentMenu.rows.count-state.pending-menuItems.count
+            state.rejectedSources = Set(currentMenu.rows.filter { menuFailures.contains(context.id+"|"+$0.text) }.map(\.text))
+        }
+        DispatchQueue.main.async { self.onCurrentMenu?(ticket,state) }
+    }
+    private func processCurrentMenu(_ buffer: CVPixelBuffer, now: Double) {
+        guard now-currentMenuLastSample >= 0.5, let ticket = currentMenu.ticket else { return }
+        currentMenuLastSample = now
+        do {
+            let width = CVPixelBufferGetWidth(buffer), height = CVPixelBufferGetHeight(buffer)
+            // A broad read happens only on explicit acquisition. Subsequent
+            // reads crop to the observed menu; no new automatic full-screen OCR.
+            let lines = try autoreleasepool { try ocr.menuLines(buffer,roi:currentMenu.region ?? SourceBox(x:0,y:0,w:1,h:1)) }
+            guard isActive() else { return }
+            metrics.recognitions &+= 1; metrics.lastOCRAt = ProcessInfo.processInfo.systemUptime
+            metrics.ocrMilliseconds = (ProcessInfo.processInfo.systemUptime-now)*1000
+            ocrSamples.record(metrics.ocrMilliseconds); metrics.ocrP95 = ocrSamples.p95
+            metrics.actualOCRRate = Double(metrics.recognitions)/max(0.001,ProcessInfo.processInfo.systemUptime-startedAt)
+            if now-lastMetrics >= 1 { lastMetrics = now; let value = metrics; DispatchQueue.main.async { self.onMetrics?(value) } }
+            let previous = currentMenu.generation
+            currentMenu.observe(lines,width:width,height:height,now:now)
+            guard currentMenu.active, let context = currentMenuContext() else {
+                translator.cancel(); clearMenu(); resetDialogueAfterMenu(); reportCurrentMenu(ticket:ticket); return
+            }
+            if currentMenu.generation != previous { menuEpoch = UUID() }
+            menuIdentity = context.id; menuReadings = currentMenu.stable ? currentMenu.rows : []; menuLastSeen = now
+            currentMenuAspect = Double(width)/Double(max(1,height))
+            menuItems = CurrentMenuLayout.overlay(currentMenuTranslations(context),appearance:context.appearance,aspect:currentMenuAspect,sourceBoxes:currentMenu.rows.map(\.box))
+            if context.appearance.matchColor {
+                for index in menuItems.indices { menuItems[index].color = GlyphColorSampler.sample(buffer,box:menuItems[index].box,context:previewContext) }
+            }
+            publishMenu(context,now:now); reportCurrentMenu(ticket:ticket); submitMenu(context)
+        } catch { finishCurrentMenu("تعذرت قراءة القائمة؛ تحقق من وضوح النص وأعد الطلب") }
+    }
     private func clearMenu() {
         menuEpoch = UUID(); menuIdentity = nil; menuItems = []; menuReadings = []
         publish(TVProtocol.envelope("menu_clear"))
@@ -441,20 +541,33 @@ final class FramePipeline {
                 guard let translated = menuCache.get(menu.id+"|"+line.text), translated.count <= 240 else { return nil }
                 return MenuOverlayItem(id:menu.id+"-\(index)",source:line.text,translated:SubtitlePresentation.clean(translated),box:line.box,color:menu.appearance.matchColor ? GlyphColorSampler.sample(buffer,box:line.box,context:previewContext) : nil)
             }
-            publishMenu(menu,now:now)
-            submitMenu(menu)
+            let context = MenuContext(id:menu.id,region:menu.region,appearance:menu.appearance)
+            publishMenu(context,now:now)
+            submitMenu(context)
         } catch { if menuIdentity != nil { clearMenu() } }
     }
-    private func publishMenu(_ menu: AllowedMenu, now: Double) {
+    private func publishMenu(_ menu: MenuContext, now: Double) {
         let encoder = JSONEncoder()
+        if currentMenu.active {
+            // Reserve room for the existing sequence/authentication envelope.
+            // Anything withheld here remains in the complete phone readout.
+            while !menuItems.isEmpty {
+                if let data = try? encoder.encode(menuItems), let items = try? JSONSerialization.jsonObject(with:data),
+                   let styleData = try? encoder.encode(menu.appearance), let style = try? JSONSerialization.jsonObject(with:styleData),
+                   let wire = try? TVProtocol.encode(TVProtocol.envelope("menu_snapshot",fields:["menu_id":menu.id,"items":items,"appearance":style,"lease_ms":1800])), wire.count <= 14_000 { break }
+                menuItems.removeLast()
+            }
+        }
         guard let data = try? encoder.encode(menuItems), let items = try? JSONSerialization.jsonObject(with:data),
               let styleData = try? encoder.encode(menu.appearance), let appearance = try? JSONSerialization.jsonObject(with:styleData) else { return }
         publish(TVProtocol.envelope("menu_snapshot",fields:["menu_id":menu.id,"items":items,"appearance":appearance,"lease_ms":1800]))
         menuLastPublished = now
     }
-    private func submitMenu(_ menu: AllowedMenu) {
+    private func submitMenu(_ menu: MenuContext) {
         guard !menuWorking, isActive(), menuIdentity == menu.id,
-              let line = menuReadings.first(where:{ menuCache.get(menu.id+"|"+$0.text) == nil }) else { return }
+              let line = menuReadings.first(where:{ menuCache.get(menu.id+"|"+$0.text) == nil && !menuFailures.contains(menu.id+"|"+$0.text) }) else { return }
+        let currentTicket = currentMenu.ticket, currentGeneration = currentMenu.generation
+        if currentTicket != nil && !currentMenu.stable { return }
         menuWorking = true; let epoch = menuEpoch, run = runID, key = menu.id+"|"+line.text
         translator.translate(line.text,category:"menu") { [weak self] result,_ in
             guard let self else { return }
@@ -462,7 +575,12 @@ final class FramePipeline {
                 self.menuWorking = false
                 guard self.isActive(), self.menuEpoch == epoch, self.runID == run, self.menuIdentity == menu.id,
                       ProcessInfo.processInfo.systemUptime-self.menuLastSeen < 1.5 else { return }
-                if case .success(let text) = result, !text.isEmpty { self.menuCache.put(text,for:key) }
+                if let ticket = currentTicket {
+                    guard self.currentMenu.accepts(ticket:ticket,generation:currentGeneration,source:line.text,now:ProcessInfo.processInfo.systemUptime) else { return }
+                    if case .success(let text) = result, MenuTranslationGuard.safe(text,source:line.text,names:self.namesByKey) {
+                        self.menuCache.put(text,for:key)
+                    } else { self.menuFailures.insert(key) }
+                } else if case .success(let text) = result, !text.isEmpty { self.menuCache.put(text,for:key) }
                 // Current frame geometry and values are used by the next read;
                 // an old completion can never add an item absent from that read.
                 if case .success = result { self.submitMenu(menu) }
@@ -574,6 +692,7 @@ final class FramePipeline {
     func requestReading(ticket: UUID) {
         translator.cancel()
         queue.async { [self] in
+            finishCurrentMenu("انتقلت إلى قراءة النص")
             runID = UUID(); pending = nil; tracker.markInterrupted(); reading = true; captureRequested = true; readingTicket = ticket
 #if GAMELINGO_TYPEWRITER_RESEARCH
             heldPublication = nil; typewriter = TypewriterPublication(); typewriterScope = nil

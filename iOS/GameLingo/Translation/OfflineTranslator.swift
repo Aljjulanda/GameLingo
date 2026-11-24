@@ -109,6 +109,9 @@ final class OfflineTranslator {
                 } else if let localized = lookup.text {
                     packs?.recordAttempt(lookup.origin,game:lookup.game,pack:lookup.pack)
                     result = .success(decision(localized,lookup.origin))
+                } else if category == "menu", let term = MenuTerminology.translation(normalized) {
+                    packs?.recordAttempt(.command,game:lookup.game,pack:lookup.pack)
+                    result = .success(decision(term,.command))
                 } else if let cached = cache.get(key) {
                     let origin = DialogueCommands.cachedOrigin(normalized)
                     packs?.recordAttempt(origin,fallback:origin == .argosCache ? fallback : nil,game:lookup.game,pack:lookup.pack)

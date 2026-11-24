@@ -49,7 +49,8 @@
     "GameLingoTests/PlayExperienceIntegrationTests/testPhoneDestinationSurvivesTVLossAndProfileApplicationCannotReenter",
     "GameLingoTests/PlayExperienceIntegrationTests/testIdleWorkerActuallyInfersAndCannotApproveItsOwnUnreferencedOutput",
     "GameLingoTests/PlayExperienceIntegrationTests/testMenuConfigurationDoesNotCancelIndependentDialogueInference",
-    "GameLingoTests/NavigationPresentationTests/testDailyScreensRenderInRTLWithoutChangingSavedChoices"
+    "GameLingoTests/NavigationPresentationTests/testDailyScreensRenderInRTLWithoutChangingSavedChoices",
+    "GameLingoTests/PlayExperienceIntegrationTests/testUnregisteredMenuUsesFreshVisionFramesAndReturnsToDialogue"
   ],
   "allowed_skips": [
     "GameLingoTests/NamesIntegrationTests/testNamesFileProtectionWhenRuntimeReportsIt",
@@ -58,7 +59,8 @@
   "isolated": [
     "GameLingoTests/PlayExperienceIntegrationTests/testActualVisionOCRComparisonCorpusIsExportedWithoutPrivateImages",
     "GameLingoTests/PlayExperienceIntegrationTests/testCurrentMenuOCRKeepsDynamicValuesAndMeasuresDecodedGlyphColor",
-    "GameLingoTests/PlayExperienceIntegrationTests/testManualCropReadsWholeSelectedTextAndExcludesOutsideRegion"
+    "GameLingoTests/PlayExperienceIntegrationTests/testManualCropReadsWholeSelectedTextAndExcludesOutsideRegion",
+    "GameLingoTests/PlayExperienceIntegrationTests/testUnregisteredMenuUsesFreshVisionFramesAndReturnsToDialogue"
   ],
   "deferred": [
     "GameLingoTests/AppleIntegrationTests/testVisionStructuredSpeakerAboveAndOnBothSides",

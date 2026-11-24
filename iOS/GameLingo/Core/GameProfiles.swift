@@ -19,7 +19,8 @@ struct GameOptions: Codable, Equatable {
     var quality = QualitySettings()
     var menusEnabled = false
     var allowedMenus: [AllowedMenu] = []
-    var valid: Bool { dialogueRegion.isValid && menuRegion.isValid && modelID == "argos-en_ar-1.0" && allowedMenus.count <= 32 && allowedMenus.allSatisfy(\.valid) }
+    var currentMenuAppearance: MenuAppearance?
+    var valid: Bool { dialogueRegion.isValid && menuRegion.isValid && modelID == "argos-en_ar-1.0" && allowedMenus.count <= 32 && allowedMenus.allSatisfy(\.valid) && (currentMenuAppearance?.valid ?? true) }
 }
 
 struct GameProfile: Codable, Identifiable {

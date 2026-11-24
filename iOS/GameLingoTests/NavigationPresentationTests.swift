@@ -43,6 +43,7 @@ final class NavigationPresentationTests: XCTestCase {
             ("setup",AnyView(NavigationStack { SetupGuideView() })),
             ("model",AnyView(NavigationStack { LocalModelView() })),
             ("console",AnyView(NavigationStack { ConnectionView(scope:.console) })),
+            ("current-menu",AnyView(NavigationStack { CurrentMenuView() })),
             ("session-actions",AnyView(SessionControlsFixture())),
             ("output-options",AnyView(DestinationOptionsFixture()))
         ]

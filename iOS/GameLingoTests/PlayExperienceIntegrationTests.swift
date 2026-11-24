@@ -106,6 +106,52 @@ final class PlayExperienceIntegrationTests: XCTestCase {
         model.route(TVProtocol.envelope("subtitle_show",fields:["id":"late-result","translated":"متأخر"]))
         XCTAssertTrue(model.localSubtitles.entries.isEmpty)
     }
+    @MainActor
+    func testUnregisteredMenuUsesFreshVisionFramesAndReturnsToDialogue() async throws {
+        let folder = try XCTUnwrap(Bundle(for:Self.self).url(forResource:"en_ar",withExtension:nil))
+        let translator = OfflineTranslator(folder:folder)
+        let loaded = expectation(description:"Actual local model reused")
+        translator.load { result in if case .failure(let error) = result { XCTFail(error.localizedDescription) }; loaded.fulfill() }
+        await fulfillment(of:[loaded],timeout:20)
+        let menuRead = expectation(description:"Unregistered synthetic menu translated")
+        let submenuRead = expectation(description:"Changed synthetic submenu replaces old items")
+        let dialogueRead = expectation(description:"Fresh dialogue returns after explicit menu close")
+        var first = false, second = false, dialogue = false
+        var trace: [[String]] = []
+        let pipeline = FramePipeline(translator:translator,softwareImageContext:true) { message in
+            DispatchQueue.main.async {
+                if message["type"] as? String == "subtitle_show", let source = message["source"] as? String,
+                   ["Follow me to the gate.","Follow me to the gate"].contains(source),
+                   let text = message["translated"] as? String, text.unicodeScalars.contains(where:{(0x0600...0x06ff).contains($0.value)}), !dialogue {
+                    dialogue = true; dialogueRead.fulfill()
+                }
+            }
+        }
+        defer { pipeline.stop() }
+        pipeline.onCurrentMenu = { _,state in
+            trace.append(state.items.map(\.source)); trace = Array(trace.suffix(30))
+            let sources = Set(state.items.map(\.source))
+            if sources == Set(["Settings","Audio","Back"]), !first { first = true; menuRead.fulfill() }
+            if sources == Set(["Graphics","Language","Exit"]), !second { second = true; submenuRead.fulfill() }
+            if second { XCTAssertFalse(sources.contains("Audio")) }
+        }
+        pipeline.start(roi:.dialogue,mode:.balanced); pipeline.setBackground(true)
+        pipeline.requestCurrentMenu(ticket:UUID())
+        let initial = try frame([("Settings",CGPoint(x:140,y:170),.white),("Audio",CGPoint(x:140,y:290),.white),("Back",CGPoint(x:140,y:410),.white)])
+        for _ in 0..<35 { pipeline.offer(initial); try await Task.sleep(nanoseconds:100_000_000) }
+        await fulfillment(of:[menuRead],timeout:10)
+        let changed = try frame([("Graphics",CGPoint(x:140,y:170),.white),("Language",CGPoint(x:140,y:290),.white),("Exit",CGPoint(x:140,y:410),.white)])
+        for _ in 0..<35 { pipeline.offer(changed); try await Task.sleep(nanoseconds:100_000_000) }
+        await fulfillment(of:[submenuRead],timeout:10)
+        pipeline.closeCurrentMenu()
+        let pixels = try frame([("Follow me to the gate.",CGPoint(x:260,y:530),.white)])
+        for _ in 0..<35 { pipeline.offer(pixels); try await Task.sleep(nanoseconds:100_000_000) }
+        await fulfillment(of:[dialogueRead],timeout:10)
+        let diagnostic = XCTAttachment(string:"Authored synthetic menu lifecycle; not gameplay.\n"+String(describing:trace))
+        diagnostic.name = "synthetic-current-menu-lifecycle"; diagnostic.lifetime = .keepAlways; add(diagnostic)
+        let stopped = expectation(description:"Menu and dialogue pipeline drained")
+        pipeline.stop { stopped.fulfill() }; await fulfillment(of:[stopped],timeout:5)
+    }
     private func frame(_ text: [(String,CGPoint,UIColor)]) throws -> CVPixelBuffer {
         let image = UIGraphicsImageRenderer(size:CGSize(width:1280,height:720)).image { context in
             UIColor.black.setFill(); context.fill(CGRect(x:0,y:0,width:1280,height:720))

@@ -8,6 +8,7 @@ struct HomeView: View {
 private struct HomeContent: View {
     @ObservedObject var model: AppModel
     @ObservedObject var library: GamePackLibrary
+    @State private var showingCurrentMenu = false
     private var readiness: TranslationReadiness {
         TranslationReadiness(modelReady:model.modelReady,
             hasConsole:model.consoles.contains { $0.id == model.settings.selectedConsoleID },
@@ -76,6 +77,10 @@ private struct HomeContent: View {
             }
             Section("اختصارات") {
                 NavigationLink { AppearanceOverviewView() } label: { Label("مظهر الترجمة",systemImage:"textformat.size") }
+                Button {
+                    model.translateCurrentMenu(); showingCurrentMenu = true
+                } label: { Label("ترجمة القائمة الحالية",systemImage:"list.bullet.rectangle").fixedSize(horizontal:false,vertical:true) }
+                    .disabled(!model.running || !model.modelReady || !model.streamConnected || model.readingActive)
                 CurrentReadingSection()
             }
             Section {
@@ -83,6 +88,7 @@ private struct HomeContent: View {
                 Text("تعمل الترجمة العامة دون إضافة لعبة. ملفات الألعاب تخصيص اختياري.").font(.footnote).foregroundColor(.secondary)
             }
         }.navigationTitle("الرئيسية")
+            .sheet(isPresented:$showingCurrentMenu) { NavigationStack { CurrentMenuView() } }
     }
     @ViewBuilder private var nextStep: some View {
         switch readiness.nextStep {
@@ -151,7 +157,8 @@ struct GamesView: View {
             Section("مناطق القراءة والقوائم") {
                 NavigationLink("تحديد منطقة الحوار على الصورة") { GameFrameEditorView() }
                 NavigationLink("تسجيل قالب قائمة اختياري") { GameFrameEditorView(menuSetup:true) }
-                Text("الترجمة التلقائية للقوائم في هذه المرحلة تحتاج قائمة مسجلة ومفعّلة في ملف اللعبة. دعم القوائم غير المسجلة لم يُضف بعد.").font(.footnote).foregroundColor(.secondary)
+                NavigationLink("القائمة الحالية دون قالب") { CurrentMenuView() }
+                Text("من الرئيسية اطلب ترجمة القائمة الظاهرة دون تسجيلها. القوالب اختيارية للتعرف التلقائي على قوائم معروفة.").font(.footnote).foregroundColor(.secondary)
             }
             Section("الترجمات والأسماء") {
                 NavigationLink("مكتبة ترجمات الألعاب") { GamePackLibraryView(library:model.packLibrary) }.accessibilityIdentifier("gamePacks.library")
@@ -302,6 +309,7 @@ struct TranslationSessionButton: View {
                 }
             }
             .font(.headline).multilineTextAlignment(.center)
+            .foregroundColor(.white)
             .frame(maxWidth:.infinity,minHeight:44).padding(.vertical,8)
         }
         .buttonStyle(.borderedProminent).tint(running ? .red : .teal)
