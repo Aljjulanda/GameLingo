@@ -50,7 +50,8 @@
     "GameLingoTests/PlayExperienceIntegrationTests/testIdleWorkerActuallyInfersAndCannotApproveItsOwnUnreferencedOutput",
     "GameLingoTests/PlayExperienceIntegrationTests/testMenuConfigurationDoesNotCancelIndependentDialogueInference",
     "GameLingoTests/NavigationPresentationTests/testDailyScreensRenderInRTLWithoutChangingSavedChoices",
-    "GameLingoTests/PlayExperienceIntegrationTests/testUnregisteredMenuUsesFreshVisionFramesAndReturnsToDialogue"
+    "GameLingoTests/PlayExperienceIntegrationTests/testUnregisteredMenuUsesFreshVisionFramesAndReturnsToDialogue",
+    "GameLingoTests/PlayExperienceIntegrationTests/testExactMenuFrameProofRejectsChangedPixelsAndFormats"
   ],
   "allowed_skips": [
     "GameLingoTests/NamesIntegrationTests/testNamesFileProtectionWhenRuntimeReportsIt",

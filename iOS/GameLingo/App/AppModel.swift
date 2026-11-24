@@ -165,7 +165,7 @@ final class AppModel: ObservableObject {
         let type = message["type"] as? String ?? ""
         guard running || ["subtitle_clear","document_hide","menu_clear"].contains(type) else { return }
         if type == "menu_snapshot", let id = message["menu_id"] as? String, id.hasPrefix("current-") {
-            guard let ticket = currentMenuTicket, id == "current-"+ticket.uuidString else { return }
+            guard streamConnected, let ticket = currentMenuTicket, id == "current-"+ticket.uuidString else { return }
         }
         if gameOptions.destination.tvEnabled && (type != "menu_snapshot" || tvMenus) { hub.publish(message) }
         if gameOptions.destination.phoneEnabled {

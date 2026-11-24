@@ -26,6 +26,7 @@ final class FramePipeline {
 #if DEBUG
     // Native synthetic fixtures opt in. No production hook, logger, or capture.
     var onCurrentMenuObservation: (([OCRLine],SourceBox,Double,Double) -> Void)?
+    var onCurrentMenuFrameProof: ((Double,Bool,Double) -> Void)?
 #endif
     var onReading: ((UUID,Bool,[String],String) -> Void)?
     var onPreview: ((CGImage,[OCRLine]) -> Void)?
@@ -49,6 +50,7 @@ final class FramePipeline {
     private var currentMenuLastSample = 0.0
     private var currentMenuAspect = 16.0/9.0
     private var menuFailures = Set<String>()
+    private var currentMenuColors: [String:String] = [:]
     private var menuOptions = GameOptions()
     private var menuItems: [MenuOverlayItem] = []
     private var menuReadings: [OCRLine] = []
@@ -486,7 +488,8 @@ final class FramePipeline {
         guard currentMenu.stable else { return [] }
         return currentMenu.rows.enumerated().compactMap { index,line in
             guard let text = menuCache.get(context.id+"|"+line.text) else { return nil }
-            return MenuOverlayItem(id:context.id+"-\(index)",source:line.text,translated:SubtitlePresentation.clean(text),box:line.box,color:nil)
+            let id = context.id+"-\(index)"
+            return MenuOverlayItem(id:id,source:line.text,translated:SubtitlePresentation.clean(text),box:line.box,color:currentMenuColors[id])
         }
     }
     private func reportCurrentMenu(ticket: UUID) {
@@ -503,6 +506,7 @@ final class FramePipeline {
     private func processCurrentMenu(_ buffer: CVPixelBuffer, received: Double, now: Double) {
         guard now-currentMenuLastSample >= 0.5, let ticket = currentMenu.ticket else { return }
         currentMenuLastSample = now
+        defer { currentMenuLastSample = ProcessInfo.processInfo.systemUptime }
         if currentMenu.region == nil { currentMenu.beginFrame(); reportCurrentMenu(ticket:ticket) }
         do {
             let width = CVPixelBufferGetWidth(buffer), height = CVPixelBufferGetHeight(buffer)
@@ -526,30 +530,58 @@ final class FramePipeline {
             guard frameAge < CurrentMenuSession.maximumObservationAge else {
                 finishCurrentMenu("توقفت إطارات المصدر أثناء القراءة؛ تحقق من البث وأعد الطلب"); return
             }
+            var verifiedArrival = received
             if finished-received >= CurrentMenuSession.maximumObservationAge {
-                currentMenu.prepareFreshFrame(lines,width:width,height:height)
-                menuEpoch = UUID(); menuIdentity = nil; menuReadings = []; menuItems = []
-                publish(TVProtocol.envelope("menu_clear")); reportCurrentMenu(ticket:ticket)
-                return
+                slotLock.lock(); let newest = latest; slotLock.unlock()
+                var exact = false
+                if let (candidate,arrival,_) = newest, arrival > received,
+                   finished-arrival < CurrentMenuSession.maximumObservationAge,
+                   ExactMenuFrameProof.matches(buffer,candidate),
+                   ProcessInfo.processInfo.systemUptime-arrival < CurrentMenuSession.maximumObservationAge {
+                    verifiedArrival = arrival; exact = true
+                }
+#if DEBUG
+                if onCurrentMenuFrameProof != nil {
+                    let age = ProcessInfo.processInfo.systemUptime-verifiedArrival, proven = exact
+                    DispatchQueue.main.async { self.onCurrentMenuFrameProof?(finished-received,proven,age) }
+                }
+#endif
+                if !exact {
+                    currentMenu.prepareFreshFrame(lines,width:width,height:height)
+                    menuEpoch = UUID(); menuIdentity = nil; menuReadings = []; menuItems = []; currentMenuColors = [:]
+                    publish(TVProtocol.envelope("menu_clear")); reportCurrentMenu(ticket:ticket)
+                    return
+                }
             }
             let previous = currentMenu.generation
-            currentMenu.observe(lines,width:width,height:height,now:received)
+            // One real OCR read, rebound only to proven identical fresh pixels.
+            currentMenu.observe(lines,width:width,height:height,now:verifiedArrival)
             guard currentMenu.active, let context = currentMenuContext() else {
                 translator.cancel(); clearMenu(); resetDialogueAfterMenu(); reportCurrentMenu(ticket:ticket); return
             }
             if currentMenu.generation != previous { menuEpoch = UUID() }
-            menuIdentity = context.id; menuReadings = currentMenu.stable ? currentMenu.rows : []; menuLastSeen = received
+            menuIdentity = context.id; menuReadings = currentMenu.stable ? currentMenu.rows : []; menuLastSeen = verifiedArrival
             currentMenuAspect = Double(width)/Double(max(1,height))
-            menuItems = CurrentMenuLayout.overlay(currentMenuTranslations(context),appearance:context.appearance,aspect:currentMenuAspect,sourceBoxes:currentMenu.rows.map(\.box))
+            currentMenuColors = [:]
             if context.appearance.matchColor {
-                for index in menuItems.indices { menuItems[index].color = GlyphColorSampler.sample(buffer,box:menuItems[index].box,context:previewContext) }
+                for (index,row) in currentMenu.rows.enumerated() {
+                    currentMenuColors[context.id+"-\(index)"] = GlyphColorSampler.sample(buffer,box:row.box,context:previewContext)
+                }
             }
-            publishMenu(context,now:now); reportCurrentMenu(ticket:ticket); submitMenu(context)
+            refreshCurrentMenuOutput(context,now:ProcessInfo.processInfo.systemUptime)
+            submitMenu(context)
         } catch { finishCurrentMenu("تعذرت قراءة القائمة؛ تحقق من وضوح النص وأعد الطلب") }
     }
     private func clearMenu() {
         menuEpoch = UUID(); menuIdentity = nil; menuItems = []; menuReadings = []
+        currentMenuColors = [:]
         publish(TVProtocol.envelope("menu_clear"))
+    }
+    private func refreshCurrentMenuOutput(_ context: MenuContext, now: Double) {
+        guard let ticket = currentMenu.ticket, menuIdentity == context.id else { return }
+        menuItems = now-currentMenu.lastSeen < CurrentMenuSession.maximumObservationAge
+            ? CurrentMenuLayout.overlay(currentMenuTranslations(context),appearance:context.appearance,aspect:currentMenuAspect,sourceBoxes:currentMenu.rows.map(\.box)) : []
+        publishMenu(context,now:now); reportCurrentMenu(ticket:ticket)
     }
     private func processMenu(_ buffer: CVPixelBuffer, now: Double) {
         do {
@@ -602,6 +634,7 @@ final class FramePipeline {
                     if case .success(let text) = result, MenuTranslationGuard.safe(text,source:line.text,names:self.namesByKey) {
                         self.menuCache.put(text,for:key)
                     } else { self.menuFailures.insert(key) }
+                    self.refreshCurrentMenuOutput(menu,now:ProcessInfo.processInfo.systemUptime)
                 } else if case .success(let text) = result, !text.isEmpty { self.menuCache.put(text,for:key) }
                 // Current frame geometry and values are used by the next read;
                 // an old completion can never add an item absent from that read.

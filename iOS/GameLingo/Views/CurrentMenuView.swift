@@ -23,7 +23,7 @@ struct CurrentMenuView: View {
                 }
                 Text("قراءة عند الطلب للعناصر الواضحة، بلا قالب أو ملف لعبة خاص. قد يفوت OCR نصًا غير واضح؛ أعد الطلب عند الانتقال خارج المنطقة المقروءة. افتح قائمة اللعبة قبل الطلب وأغلق هذه القراءة عند الرجوع للعب.").font(.footnote).foregroundColor(.secondary)
             }
-            Section("العناصر الظاهرة") {
+            Section("عناصر آخر قراءة") {
                 if model.currentMenuReadout.sources.isEmpty { Text("ستظهر هنا عناصر الإطار الجديد وترجمتها.").foregroundColor(.secondary) }
                 ForEach(Array(model.currentMenuReadout.sources.enumerated()),id:\.offset) { _,line in
                     VStack(alignment:.leading,spacing:8) {

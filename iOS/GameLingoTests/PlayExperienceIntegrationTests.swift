@@ -99,18 +99,67 @@ final class PlayExperienceIntegrationTests: XCTestCase {
         XCTAssertEqual(model.localSubtitles.entries.first?.text,"لا تغادر بدونها.")
         model.route(TVProtocol.envelope("subtitle_update",fields:["id":"one-result","translated":"لا تغادر بدونها! "]))
         XCTAssertEqual(model.localSubtitles.entries.count,1)
+        model.streamConnected = true
         model.closeCurrentMenu()
         let lateItems = [MenuOverlayItem(id:"late-menu-item",source:"Audio",translated:"الصوت",box:SourceBox(x:0.1,y:0.2,w:0.2,h:0.04),color:nil)]
         let itemJSON = try JSONSerialization.jsonObject(with:JSONEncoder().encode(lateItems))
         let styleJSON = try JSONSerialization.jsonObject(with:JSONEncoder().encode(MenuAppearance()))
         model.route(TVProtocol.envelope("menu_snapshot",fields:["menu_id":"current-"+UUID().uuidString,"items":itemJSON,"appearance":styleJSON,"lease_ms":1800]))
         XCTAssertTrue(model.localMenuItems.isEmpty,"A queued manual-menu snapshot must not return after Close while dialogue is still running")
+        model.streamConnected = false
         model.preview(true); model.stop()
         XCTAssertTrue(model.localSubtitles.preview)
         XCTAssertTrue(model.localSubtitles.entries.isEmpty)
         model.preview(false)
         model.route(TVProtocol.envelope("subtitle_show",fields:["id":"late-result","translated":"متأخر"]))
         XCTAssertTrue(model.localSubtitles.entries.isEmpty)
+    }
+    func testExactMenuFrameProofRejectsChangedPixelsAndFormats() throws {
+        func pixels(_ format: OSType, width: Int, height: Int) throws -> CVPixelBuffer {
+            var result: CVPixelBuffer?
+            XCTAssertEqual(CVPixelBufferCreate(kCFAllocatorDefault,width,height,format,
+                [kCVPixelBufferBytesPerRowAlignmentKey:64] as CFDictionary,&result),kCVReturnSuccess)
+            let buffer = try XCTUnwrap(result)
+            CVPixelBufferLockBaseAddress(buffer,[]); defer { CVPixelBufferUnlockBaseAddress(buffer,[]) }
+            if CVPixelBufferIsPlanar(buffer) {
+                for plane in 0..<CVPixelBufferGetPlaneCount(buffer) {
+                    let bytes = try XCTUnwrap(CVPixelBufferGetBaseAddressOfPlane(buffer,plane)).assumingMemoryBound(to:UInt8.self)
+                    let stride = CVPixelBufferGetBytesPerRowOfPlane(buffer,plane)
+                    for row in 0..<CVPixelBufferGetHeightOfPlane(buffer,plane) {
+                        for column in 0..<stride { bytes[row*stride+column] = UInt8(plane == 0 ? 77 : 128) }
+                    }
+                }
+            } else {
+                let bytes = try XCTUnwrap(CVPixelBufferGetBaseAddress(buffer)).assumingMemoryBound(to:UInt8.self)
+                for index in 0..<(CVPixelBufferGetBytesPerRow(buffer)*height) { bytes[index] = 77 }
+            }
+            return buffer
+        }
+        let bgra = try pixels(kCVPixelFormatType_32BGRA,width:5,height:3)
+        let same = try pixels(kCVPixelFormatType_32BGRA,width:5,height:3)
+        XCTAssertTrue(ExactMenuFrameProof.matches(bgra,same))
+        CVPixelBufferLockBaseAddress(same,[])
+        let bytes = try XCTUnwrap(CVPixelBufferGetBaseAddress(same)).assumingMemoryBound(to:UInt8.self)
+        XCTAssertGreaterThan(CVPixelBufferGetBytesPerRow(same),20)
+        bytes[20] = 9 // Padding is not a visible pixel.
+        CVPixelBufferUnlockBaseAddress(same,[])
+        XCTAssertTrue(ExactMenuFrameProof.matches(bgra,same))
+        CVPixelBufferLockBaseAddress(same,[])
+        let activePixel = try XCTUnwrap(CVPixelBufferGetBaseAddress(same)).assumingMemoryBound(to:UInt8.self)
+        activePixel[0] = 9
+        CVPixelBufferUnlockBaseAddress(same,[])
+        XCTAssertFalse(ExactMenuFrameProof.matches(bgra,same),"Even one changed visible byte must invalidate the proof")
+        let yuv = try pixels(kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange,width:16,height:8)
+        let chromaChanged = try pixels(kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange,width:16,height:8)
+        XCTAssertTrue(ExactMenuFrameProof.matches(yuv,chromaChanged))
+        CVPixelBufferLockBaseAddress(chromaChanged,[])
+        let uv = try XCTUnwrap(CVPixelBufferGetBaseAddressOfPlane(chromaChanged,1)).assumingMemoryBound(to:UInt8.self)
+        uv[0] = 127
+        CVPixelBufferUnlockBaseAddress(chromaChanged,[])
+        XCTAssertFalse(ExactMenuFrameProof.matches(yuv,chromaChanged),"Color-only changes cannot be accepted from luma alone")
+        let sameShapeBGRA = try pixels(kCVPixelFormatType_32BGRA,width:16,height:8)
+        XCTAssertFalse(ExactMenuFrameProof.matches(sameShapeBGRA,yuv))
+        XCTAssertFalse(ExactMenuFrameProof.matches(bgra,sameShapeBGRA))
     }
     @MainActor
     func testUnregisteredMenuUsesFreshVisionFramesAndReturnsToDialogue() async throws {
@@ -156,6 +205,18 @@ final class PlayExperienceIntegrationTests: XCTestCase {
             if trace.count > 60 { trace.remove(at:8) }
         }
 #endif
+#if DEBUG
+        pipeline.onCurrentMenuFrameProof = { inputAge,exact,currentAge in
+            trace.append(["stage":"pixel-proof","seconds":ProcessInfo.processInfo.systemUptime-diagnosticStarted,
+                "input_age":inputAge,"exact":exact,"verified_age":currentAge])
+            if trace.count > 60 { trace.remove(at:8) }
+        }
+#endif
+        pipeline.onMetrics = { metrics in
+            trace.append(["stage":"metrics","seconds":ProcessInfo.processInfo.systemUptime-diagnosticStarted,
+                "ocr_ms":metrics.ocrMilliseconds,"frames":metrics.frames,"recognitions":metrics.recognitions,"queue":metrics.queueDepth])
+            if trace.count > 60 { trace.remove(at:8) }
+        }
         // A live menu remains on screen while OCR initializes. The previous
         // 3.5-second feed accidentally disconnected during the measured 13.56s
         // cold software Vision read. Runtime freshness stays at 1.5 seconds.
