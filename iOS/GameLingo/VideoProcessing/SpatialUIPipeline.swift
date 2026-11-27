@@ -112,7 +112,7 @@ final class SpatialUIPipeline {
     }
     private func translateNext() {
         guard active, !working, let screen, let row = rows.first(where:{ row in
-            !screen.elements.contains(where:{$0.normalized == SpatialRecognition.key(row.text)}) && failures.get(version+row.text) == nil
+            !screen.elements.contains(where:{$0.normalized == SpatialRecognition.key(row.text)}) && failures.get(self.version+row.text) == nil
         }) else { return }
         let id = epoch, game = game, version = version
         working = true
