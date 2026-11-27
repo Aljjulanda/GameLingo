@@ -1,0 +1,70 @@
+{
+  "version": "0.5.0",
+  "ios_build": 12,
+  "tv_version_code": 14,
+  "source_commit": "3835c64a7f27bf2a427ed96b106641685831b88b",
+  "branch": "codex/gamelingo-0.5.0",
+  "ios_run": {
+    "id": 46045666063,
+    "conclusion": "success",
+    "ipa_artifact_id": 15222854764,
+    "validation_artifact_id": 15223950193
+  },
+  "television": {
+    "run_id": 46045665886,
+    "job_id": 140664178783,
+    "conclusion": "success",
+    "ci_artifact_id": 15223335013,
+    "local_original_certificate_sha256": "48cf8a45a37f4e5c338f98fa7d5135c7cdbaf59d50b39b8bf591a79622a28e38",
+    "payload_identical_after_resigning": true,
+    "gradle_test_report": {
+      "tests": 56,
+      "failures": 0,
+      "ignored": 0
+    }
+  },
+  "tests": {
+    "core_passed": 219,
+    "native_executed": 73,
+    "native_passed": 67,
+    "native_skipped": 6,
+    "picker_ui_passed": 2,
+    "control_integration_passed": 2
+  },
+  "intent_metadata": {
+    "Payload/GameLingo.app/Metadata.appintents/extract.actionsdata": {
+      "openAppWhenRun": false,
+      "systemProtocols": [
+        "com.apple.link.systemProtocol.SetValue",
+        "com.apple.link.systemProtocol.ForegroundContinuable"
+      ],
+      "mangledTypeNameV2": "9GameLingo20SetTranslationIntentV"
+    },
+    "Payload/GameLingo.app/PlugIns/GameLingoControls.appex/Metadata.appintents/extract.actionsdata": {
+      "openAppWhenRun": false,
+      "systemProtocols": [
+        "com.apple.link.systemProtocol.ForegroundContinuable",
+        "com.apple.link.systemProtocol.SetValue"
+      ],
+      "mangledTypeNameV2": "17GameLingoControls20SetTranslationIntentV"
+    }
+  },
+  "physical_device_testing": "not performed",
+  "background_start": "Implemented without automatic foreground request; finite OS background time, real Control Center cold-start/force-quit/sustained behavior unverified",
+  "nonfatal_build_diagnostics": [
+    "SSU training tool reported Unable to parse extract.actionsdata / No AppShortcuts found. Bundled metadata JSON and intent descriptors validated, native intent tests passed; system Control Center routing still requires signed device acceptance."
+  ],
+  "full_upgrade_specification": "incomplete; original preview limitations still apply",
+  "packages": [
+    {
+      "path": "build/0.5.0-preview.2/GameLingo-0.5.0-build12-unsigned.ipa",
+      "bytes": 3518392,
+      "sha256": "cda884fc5ea0445364af20001a6aa5e80abf92786fff9ad974f882a49097d08e"
+    },
+    {
+      "path": "build/0.5.0-preview.2/GameLingo-TV-0.5.0-build14.apk",
+      "bytes": 1758950,
+      "sha256": "43028f0662e0f8307b0e43253863e39fdb3f2cba99dc5d57650e40494464ef6a"
+    }
+  ]
+}
