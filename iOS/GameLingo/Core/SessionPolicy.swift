@@ -9,10 +9,11 @@ struct SessionPolicy {
     var experimentalAudio = false
     var audioActive = false
     var interrupted = false
-    var canExecute: Bool { foreground || (experimentalAudio && audioActive && !interrupted) }
+    var executionGrace = false
+    var canExecute: Bool { foreground || executionGrace || (experimentalAudio && audioActive && !interrupted) }
     var canRecover: Bool { wanted && network && canExecute }
     mutating func start() { wanted = true; epoch &+= 1 }
-    mutating func stop() { wanted = false; epoch &+= 1 }
+    mutating func stop() { wanted = false; executionGrace = false; epoch &+= 1 }
     func accepts(_ scheduledEpoch: UInt64) -> Bool { wanted && epoch == scheduledEpoch }
     static func retryDelay(_ attempt: Int, jitter: Double = 0) -> Double {
         let delays: [Double] = [2,4,8,15,30]

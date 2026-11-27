@@ -6,6 +6,9 @@ struct SessionControlSnapshot: Codable {
     var phase: Phase
     var updated: Date
     func isActive(now: Date = Date()) -> Bool { phase == .active && (0...12).contains(now.timeIntervalSince(updated)) }
+    // Pending/recovering sessions must also be switchable OFF. Enabled does
+    // not claim that the PS5 has connected or translated frames are arriving.
+    func isEnabled(now: Date = Date()) -> Bool { phase != .stopped && (0...12).contains(now.timeIntervalSince(updated)) }
 }
 enum SessionControlStore {
     static let group = "group.dev.gamelingo.ios"
@@ -18,15 +21,5 @@ enum SessionControlStore {
     static func save(_ phase: SessionControlSnapshot.Phase) {
         let d = defaults
         d.set(try? JSONEncoder().encode(SessionControlSnapshot(phase:phase,updated:Date())),forKey:"session.actual.v1"); d.synchronize()
-    }
-    static func request(_ start: Bool) {
-        let d = defaults; d.set(["start":start,"at":Date().timeIntervalSince1970] as [String:Any],forKey:"session.request.v1"); d.synchronize()
-    }
-    static func consumeRequest(now: Date = Date()) -> Bool? {
-        let d = defaults; d.synchronize()
-        guard let value = d.dictionary(forKey:"session.request.v1") else { return nil }
-        d.removeObject(forKey:"session.request.v1"); d.synchronize()
-        guard let at = value["at"] as? Double, (0...30).contains(now.timeIntervalSince1970-at) else { return nil }
-        return value["start"] as? Bool
     }
 }

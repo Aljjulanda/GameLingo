@@ -6,6 +6,7 @@ import WidgetKit
 
 @MainActor
 final class AppModel: ObservableObject {
+    static let shared = AppModel()
     @Published var settings = AppSettings.load() {
         didSet {
             do { try settings.save() } catch { errorMessage = error.localizedDescription }
@@ -284,18 +285,32 @@ final class AppModel: ObservableObject {
     private var memoryCheckpoints: [String:UInt64] = [:]
     private var peakResident: UInt64 = 0
     private var startAfterModelLoad = false
-    private var controlObserver: NSObjectProtocol?
     private var pressureObserver: NSObjectProtocol?
     @Published private(set) var spatialMetrics = SpatialMetrics()
     private func syncControl() {
-        let phase: SessionControlSnapshot.Phase = !policy.wanted ? .stopped : !pipelineActive ? .suspended : streamConnected ? .active : .recovering
+        let phase: SessionControlSnapshot.Phase = startAfterModelLoad ? .starting : !policy.wanted ? .stopped : !pipelineActive ? .suspended : streamConnected ? .active : .recovering
         let changed = SessionControlStore.snapshot().phase != phase
         SessionControlStore.save(phase)
         if changed, #available(iOS 18.0, *) { ControlCenter.shared.reloadControls(ofKind:SessionControlStore.kind) }
     }
-    private func consumeControlRequest() {
-        guard let enabled = SessionControlStore.consumeRequest() else { return }
-        if enabled { if !running { start() } } else { stop(reason:"أُوقفت من مركز التحكم") }
+    func setTranslationFromControl(_ enabled: Bool) throws {
+        if !enabled { stop(reason:"أُوقفت من مركز التحكم"); return }
+        policy.foreground = UIApplication.shared.applicationState != .background
+        pipeline.setBackground(!policy.foreground)
+        // Restored intent alone does not activate the native console lifecycle.
+        // An explicit control press can start a fresh connection without wake.
+        if running && !pipelineActive { stop(reason:"إعادة بدء الجلسة من مركز التحكم") }
+        errorMessage = nil
+        if running {
+            if !policy.canExecute { beginExecutionGrace() }
+            recoverSession()
+        } else { start() }
+        guard running || startAfterModelLoad else {
+            throw TranslationControlError(message:errorMessage ?? "تعذر بدء الترجمة. تحقق من إعدادات PS5 ونموذج الترجمة داخل التطبيق.")
+        }
+        guard policy.canExecute else {
+            throw TranslationControlError(message:"لم يسمح iOS بالتنفيذ في الخلفية. افتح GameLingo لبدء الجلسة.")
+        }
     }
     private var initialBattery: Float = -1
     private var sessionLog = SessionDiagnostics()
@@ -304,7 +319,7 @@ final class AppModel: ObservableObject {
     var performanceSnapshot: String {
         func age(_ at: Double?) -> String { at.map { NumericInput.format(max(0,ProcessInfo.processInfo.systemUptime-$0))+" s" } ?? "not observed" }
         let values = [
-            "GameLingo 0.5.0 (11)", "Measurement started: \(sessionStarted.formatted())", sessionStatus, audioStatus,
+            "GameLingo 0.5.0 (12)", "Measurement started: \(sessionStarted.formatted())", sessionStatus, audioStatus,
             "CPU: \(NumericInput.format(cpuPercent))% (100%=one core)", "RSS: \(NumericInput.format(residentMegabytes)) MB", "Thermal: \(thermal.rawValue)",
             "Translation p95: \(NumericInput.format(metrics.translationP95)) ms", "OCR p95: \(NumericInput.format(metrics.ocrP95)) ms",
             "PS5 native connected: \(streamConnected); encoded age: \(remoteMetrics.encodedFrameAge.map(NumericInput.format) ?? "none"); decoded age: \(remoteMetrics.decodedFrameAge.map(NumericInput.format) ?? "none")",
@@ -342,9 +357,6 @@ final class AppModel: ObservableObject {
         memoryCheckpoints["app.initialized"] = ResourceMonitor.residentBytes()
         translator.onResource = { [weak self] stage,bytes in self?.memoryCheckpoints[stage] = bytes }
         pipeline.onSpatialMetrics = { [weak self] in self?.spatialMetrics = $0 }
-        controlObserver = NotificationCenter.default.addObserver(forName:Notification.Name("GameLingoControlRequest"),object:nil,queue:.main) { [weak self] _ in
-            Task { @MainActor in self?.consumeControlRequest() }
-        }
         pressureObserver = NotificationCenter.default.addObserver(forName:UIApplication.didReceiveMemoryWarningNotification,object:nil,queue:.main) { [weak self] _ in
             Task { @MainActor in
                 guard let self else { return }
@@ -545,7 +557,7 @@ final class AppModel: ObservableObject {
         if !addresses.contains(settings.localIP), let first = addresses.first { settings.localIP = first }
     }
     func sampleSystem() {
-        consumeControlRequest(); syncControl()
+        syncControl()
         localSubtitles.expire(now:ProcessInfo.processInfo.systemUptime)
         packLibrary.refreshMetrics()
         let now = ProcessInfo.processInfo.systemUptime
@@ -589,10 +601,19 @@ final class AppModel: ObservableObject {
         catch { errorMessage = error.localizedDescription }
     }
     func start() {
-        if !modelReady && translator.installed && !modelBusy { startAfterModelLoad = true; loadModel(); return }
+        guard !running else { return }
         guard !packLibrary.busy else { errorMessage = "انتظر اكتمال استيراد التعريب أو ألغِه قبل بدء الجلسة"; return }
-        guard !running, modelReady, !pairing, let console = consoles.first(where:{ $0.id == settings.selectedConsoleID }) else { errorMessage = "اختر PS5 مسجلًا وجهّز نموذج الترجمة أولًا"; return }
+        guard !pairing, let console = consoles.first(where:{ $0.id == settings.selectedConsoleID }) else { errorMessage = "اختر PS5 مسجلًا أولًا"; return }
         guard settings.roi.isValid else { errorMessage = "اضبط منطقة الحوار داخل حدود صورة البث أولًا"; return }
+        if !modelReady {
+            guard translator.installed else { errorMessage = "ثبّت نموذج الترجمة داخل التطبيق أولًا"; return }
+            // Cold launches already load the model in init. Queue the user's
+            // start while that load is in progress instead of discarding it.
+            startAfterModelLoad = true
+            if !modelBusy { loadModel() }
+            if !policy.foreground { beginExecutionGrace() }
+            syncControl(); return
+        }
         do {
             improvementWorker.cancel(); translator.cancel()
             learningConsent = true
@@ -612,11 +633,15 @@ final class AppModel: ObservableObject {
             if policy.experimentalAudio { audio.start() }
             try remote.connect(console)
             pipeline.start(roi:settings.roi,mode:settings.mode); pipelineActive = true; running = true
+            if !policy.foreground {
+                pipeline.setBackground(true)
+                if !policy.canExecute { beginExecutionGrace() }
+            }
             syncControl()
             if gameOptions.destination.tvEnabled && !tvListening && !hubStarting { connectTV() }
-            UIApplication.shared.isIdleTimerDisabled = true
+            UIApplication.shared.isIdleTimerDisabled = policy.foreground
             applyDim()
-        } catch { policy.stop(); SessionIntentStore.save(false); audio.stop(); errorMessage = error.localizedDescription }
+        } catch { policy.stop(); endExecutionGrace(); SessionIntentStore.save(false); audio.stop(); errorMessage = error.localizedDescription; syncControl() }
     }
     func stop(reason: String = "أوقفها المستخدم") {
         startAfterModelLoad = false; modelRequest = UUID(); modelBusy = false
@@ -665,7 +690,6 @@ final class AppModel: ObservableObject {
         else { hub.stop(); pairingCode = ""; tvStatus = "أُوقف الاتصال عند مغادرة التطبيق" }
     }
     func foreground() {
-        consumeControlRequest()
         policy.foreground = true; endExecutionGrace()
         if policy.wanted { recordSession("lifecycle.foreground","Execution opportunity; preserve healthy sessions") }
         UIApplication.shared.isIdleTimerDisabled = tvListening || running
@@ -679,24 +703,27 @@ final class AppModel: ObservableObject {
         else { audio.stop() }
     }
     private func beginExecutionGrace() {
-        guard policy.wanted, executionTask == .invalid else { return }
+        guard policy.wanted || startAfterModelLoad, executionTask == .invalid else { return }
         sessionStatus = "مهلة خلفية محدودة؛ بانتظار السماح بالتنفيذ"
         executionTask = UIApplication.shared.beginBackgroundTask(withName:"GameLingo recovery") { [weak self] in
             Task { @MainActor [weak self] in self?.suspendForExecution() }
         }
         guard executionTask != .invalid else { suspendForExecution(); return }
+        policy.executionGrace = true
         executionDeadline = Task { [weak self] in
             try? await Task.sleep(nanoseconds:20_000_000_000)
             guard !Task.isCancelled else { return }; self?.suspendForExecution()
         }
     }
     private func endExecutionGrace() {
+        policy.executionGrace = false
         executionDeadline?.cancel(); executionDeadline = nil
         if executionTask != .invalid { UIApplication.shared.endBackgroundTask(executionTask); executionTask = .invalid }
     }
     private func suspendForExecution() {
         endExecutionGrace()
         guard !policy.canExecute else { return }
+        if startAfterModelLoad { startAfterModelLoad = false }
         recordSession("execution.unavailable","Finite execution grace expired; awaiting execution opportunity")
         remote.suspend(); pipeline.pause(); pipelineActive = false; hub.stop(); hubStarting = false
         streamConnected = false; syncControl()
@@ -749,7 +776,7 @@ final class AppModel: ObservableObject {
             case .success:
                 self.modelReady = true; self.modelStatus = "English → Arabic جاهز دون إنترنت"; self.recoverSession()
                 if self.startAfterModelLoad { self.startAfterModelLoad = false; self.start() }
-            case .failure(let error): self.startAfterModelLoad = false; self.modelStatus = "النموذج غير جاهز"; self.errorMessage = error.localizedDescription
+            case .failure(let error): self.startAfterModelLoad = false; self.endExecutionGrace(); self.syncControl(); self.modelStatus = "النموذج غير جاهز"; self.errorMessage = error.localizedDescription
             }
         }
     }

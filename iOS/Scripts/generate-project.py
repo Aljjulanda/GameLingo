@@ -40,8 +40,8 @@ def main():
     sources = [build(p, 'app') for p in source_paths]
     control_paths = ['GameLingoControls/GameLingoControls.swift', 'GameLingo/Controls/TranslationControlIntent.swift', 'GameLingo/Core/SessionControlState.swift']
     controls = [build(p, 'controls') for p in control_paths]
-    resource_paths = ['GameLingo/Core/Resources/tv-display-schema.json', 'GameLingo/Resources/PrivacyInfo.xcprivacy', 'GameLingo/Resources/ThirdPartyNotices.txt']
-    resources = [build(p, 'resource') for p in resource_paths]
+    resource_paths = ['GameLingo/Core/Resources/tv-display-schema.json', 'GameLingo/Resources/PrivacyInfo.xcprivacy', 'GameLingo/Resources/ThirdPartyNotices.txt', 'GameLingo/Resources/Assets.xcassets']
+    resources = [build(p, 'resource', 'folder.assetcatalog' if p.endswith('.xcassets') else None) for p in resource_paths]
     test_paths = sorted(str(p.relative_to(ROOT)).replace('\\', '/') for p in (ROOT / 'GameLingoTests').glob('*.swift'))
     tests = [build(p, 'test') for p in test_paths]
     ui_paths = sorted(str(p.relative_to(ROOT)).replace('\\', '/') for p in (ROOT / 'GameLingoPickerUITests').glob('*.swift'))
@@ -79,6 +79,7 @@ def main():
     obj('app:extensions', f'isa = PBXCopyFilesBuildPhase; buildActionMask = 2147483647; dstPath = ""; dstSubfolderSpec = 13; files = ({uid("build:embedcontrols")},); name = "Embed App Extensions"; runOnlyForDeploymentPostprocessing = 0;')
     base = {'IPHONEOS_DEPLOYMENT_TARGET': '16.0', 'SWIFT_VERSION': '5.0', 'CLANG_ENABLE_MODULES': 'YES', 'CLANG_ENABLE_OBJC_ARC': 'YES', 'CLANG_CXX_LANGUAGE_STANDARD': 'c++17', 'SDKROOT': 'iphoneos', 'TARGETED_DEVICE_FAMILY': '1', 'SUPPORTED_PLATFORMS': 'iphoneos iphonesimulator', 'SUPPORTS_MACCATALYST': 'NO', 'ENABLE_USER_SCRIPT_SANDBOXING': 'NO'}
     app = {'PRODUCT_NAME': 'GameLingo', 'PRODUCT_BUNDLE_IDENTIFIER': 'dev.gamelingo.ios', 'INFOPLIST_FILE': 'GameLingo/Resources/Info.plist', 'SWIFT_OBJC_BRIDGING_HEADER': 'Native/GameLingo-Bridging-Header.h', 'HEADER_SEARCH_PATHS': '$(inherited) $(SRCROOT)/Native $(SRCROOT)/.build/include', 'LIBRARY_SEARCH_PATHS': '$(inherited) $(SRCROOT)/.build/lib/$(PLATFORM_NAME)', 'OTHER_LDFLAGS': '$(inherited) -lGameLingoNative -lc++ -lz -liconv -lsqlite3 -framework Accelerate -framework Security -framework SystemConfiguration -framework CFNetwork', 'CODE_SIGN_ENTITLEMENTS': 'GameLingo/Resources/GameLingo.entitlements', 'CODE_SIGN_STYLE': 'Automatic', 'GENERATE_INFOPLIST_FILE': 'NO', 'LD_RUNPATH_SEARCH_PATHS': '$(inherited) @executable_path/Frameworks', 'SWIFT_EMIT_LOC_STRINGS': 'YES', 'ENABLE_BITCODE': 'NO'}
+    app.update({'ASSETCATALOG_COMPILER_APPICON_NAME': 'AppIcon'})
     test = {'PRODUCT_NAME': 'GameLingoTests', 'PRODUCT_BUNDLE_IDENTIFIER': 'dev.gamelingo.ios.tests', 'GENERATE_INFOPLIST_FILE': 'YES', 'TEST_HOST': '$(BUILT_PRODUCTS_DIR)/GameLingo.app/GameLingo', 'BUNDLE_LOADER': '$(TEST_HOST)', 'LD_RUNPATH_SEARCH_PATHS': '$(inherited) @executable_path/Frameworks @loader_path/Frameworks'}
     ui = {'PRODUCT_NAME': 'GameLingoPickerUITests', 'PRODUCT_BUNDLE_IDENTIFIER': 'dev.gamelingo.ios.pickerUITests', 'GENERATE_INFOPLIST_FILE': 'YES', 'TEST_TARGET_NAME': 'GameLingo', 'CODE_SIGN_STYLE': 'Automatic', 'LD_RUNPATH_SEARCH_PATHS': '$(inherited) @executable_path/Frameworks @loader_path/Frameworks'}
     control = {'PRODUCT_NAME':'GameLingoControls', 'PRODUCT_BUNDLE_IDENTIFIER':'dev.gamelingo.ios.controls', 'IPHONEOS_DEPLOYMENT_TARGET':'18.0', 'INFOPLIST_FILE':'GameLingoControls/Info.plist', 'CODE_SIGN_ENTITLEMENTS':'GameLingoControls/GameLingoControls.entitlements', 'CODE_SIGN_STYLE':'Automatic', 'APPLICATION_EXTENSION_API_ONLY':'YES', 'SKIP_INSTALL':'YES', 'GENERATE_INFOPLIST_FILE':'NO', 'LD_RUNPATH_SEARCH_PATHS':'$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks'}
@@ -87,6 +88,8 @@ def main():
             settings = specific.copy()
             if scope == 'project':
                 settings.update({'SWIFT_OPTIMIZATION_LEVEL': '-Onone' if configuration == 'Debug' else '-O', 'DEBUG_INFORMATION_FORMAT': 'dwarf-with-dsym', 'ENABLE_TESTABILITY': 'YES' if configuration == 'Debug' else 'NO', 'GCC_PREPROCESSOR_DEFINITIONS': '$(inherited) DEBUG=1' if configuration == 'Debug' else '$(inherited)', 'SWIFT_ACTIVE_COMPILATION_CONDITIONS': 'DEBUG' if configuration == 'Debug' else ''})
+            if scope == 'app':
+                settings['SWIFT_ACTIVE_COMPILATION_CONDITIONS'] = '$(inherited) GAMELINGO_APP'
             body = ' '.join(f'{key} = {quoted(value)};' for key, value in settings.items())
             obj(f'config:{scope}:{configuration}', f'isa = XCBuildConfiguration; buildSettings = {{ {body} }}; name = {configuration};')
         obj(f'configlist:{scope}', f'isa = XCConfigurationList; buildConfigurations = ({uid(f"config:{scope}:Debug")}, {uid(f"config:{scope}:Release")},); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release;')
