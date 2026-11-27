@@ -34,7 +34,7 @@ final class FramePipeline {
     var onLearningExample: ((ImprovementExample) -> Void)?
     var onSpatialMetrics: ((SpatialMetrics) -> Void)?
     private lazy var spatial: SpatialUIPipeline = {
-        let worker = SpatialUIPipeline(translator:translator,publish:publish)
+        let worker = SpatialUIPipeline(translator:translator,softwareImageContext:softwareImageContext,publish:publish)
         worker.onMetrics = { [weak self] value in self?.onSpatialMetrics?(value) }
         worker.onRegions = { [weak self] regions in self?.queue.async { self?.spatialRegions = regions } }
         return worker
@@ -308,7 +308,6 @@ final class FramePipeline {
         tracker.markInterrupted()
     } }
     func stop(completion: (() -> Void)? = nil) {
-        queue.async { self.spatial.stop() }
         queue.async { self.capture.stop(); self.ocr.captureLines = false; self.reportCapture() }
         translator.cancel()
         slotLock.lock(); active = false; latest = nil; slotLock.unlock()
@@ -317,7 +316,10 @@ final class FramePipeline {
         // callers retain the same asynchronous Stop behavior.
         queue.async { [self] in
             slotLock.lock(); active = false; latest = nil; slotLock.unlock()
-            reset(); publish(TVProtocol.envelope("subtitle_clear")); completion?()
+            reset(); publish(TVProtocol.envelope("subtitle_clear"))
+            // Drain both OCR owners before fixtures or callers replace their
+            // source. The callback previously retired only dialogue Vision.
+            spatial.stop(completion:completion)
         }
     }
     func pause() {

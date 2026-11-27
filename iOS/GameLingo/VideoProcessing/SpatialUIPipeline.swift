@@ -13,7 +13,7 @@ final class SpatialUIPipeline {
     private var dialogue = SourceBox.dialogue
     private let translator: OfflineTranslator
     private let publish: ([String:Any]) -> Void
-    private let ocr = VisionDialogueOCR()
+    private let ocr: VisionDialogueOCR
     private var store: SpatialMemoryStore?
     private var rows: [OCRLine] = []
     private var screen: SpatialScreen?
@@ -24,7 +24,10 @@ final class SpatialUIPipeline {
     private var metrics = SpatialMetrics()
     var onMetrics: ((SpatialMetrics) -> Void)?
     var onRegions: (([SourceBox]) -> Void)?
-    init(translator: OfflineTranslator, publish: @escaping ([String:Any]) -> Void) { self.translator = translator; self.publish = publish }
+    init(translator: OfflineTranslator, softwareImageContext: Bool = false, publish: @escaping ([String:Any]) -> Void) {
+        self.translator = translator; self.publish = publish
+        self.ocr = VisionDialogueOCR(softwareImageContext:softwareImageContext)
+    }
     func configure(game: String, version: String, dialogue: SourceBox) {
         queue.async {
             guard self.game != game || self.version != version || self.dialogue != dialogue else { return }
@@ -47,11 +50,12 @@ final class SpatialUIPipeline {
             }
         }
     }
-    func stop() {
+    func stop(completion: (() -> Void)? = nil) {
         lock.lock(); accepting = false; lock.unlock()
         queue.async {
             self.epoch = UUID(); self.rows = []; self.screen = nil; self.store?.releaseMemory(); self.store = nil
             self.publish(TVProtocol.envelope("menu_clear")); self.onRegions?([])
+            completion?()
         }
     }
     func memoryPressure() { queue.async { self.store?.releaseMemory(); self.failures = BoundedLRU(capacity:64) } }

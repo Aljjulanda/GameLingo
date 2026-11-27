@@ -180,7 +180,7 @@ final class AppleIntegrationTests: XCTestCase {
                     guard message["type"] as? String == "subtitle_show" else { return }
                     XCTAssertEqual(message["translated"] as? String,enabled ? "حان وقت الرحيل." : "علينا المغادرة الآن.")
                     XCTAssertEqual(message["cue"] as? String,"(ضحك)")
-                    XCTAssertEqual(message["provenance"] as? String,enabled ? "userCorrection" : "rule")
+                    XCTAssertNil(message["provenance"],"Translation sources remain internal, including explicit corrections")
                     shown.fulfill()
                 }
                 var q = QualitySettings(); q[.corrections] = enabled; q[.stageCues] = true; q[.provenanceMarker] = true
@@ -192,7 +192,38 @@ final class AppleIntegrationTests: XCTestCase {
             }
         }
     }
+    func testProductionIgnoresResearchTypewriterFlag() throws {
+#if GAMELINGO_TYPEWRITER_RESEARCH
+        throw XCTSkip("Production behavior is tested without the research compiler flag")
+#else
+        let pixels = try visionFixture { _ in
+            let text = "Please wait here" as NSString, font = UIFont.systemFont(ofSize:31)
+            let width = text.size(withAttributes:[.font:font]).width
+            text.draw(at:CGPoint(x:(1280-width)/2,y:530),withAttributes:[.font:font,.foregroundColor:UIColor.white])
+        }
+        let translator = OfflineTranslator(folder:FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString))
+        let shown = expectation(description:"Production publishes a stable first OCR read without research holding")
+        let pipeline = FramePipeline(translator:translator) { message in
+            guard message["type"] as? String == "subtitle_show" else { return }
+            XCTAssertEqual(message["translated"] as? String,"انتظر هنا")
+            XCTAssertNil(message["provenance"])
+            shown.fulfill()
+        }
+        defer { stopAndDrain(pipeline) }
+        var quality = QualitySettings(); quality[.typewriter] = true
+        quality.settleSeconds = 3; quality.rememberTypewriter(game:"synthetic-typewriter")
+        pipeline.configureQuality(quality)
+        pipeline.configureNames(nil,snapshot:GameNamesSnapshot(game:"synthetic-typewriter"))
+        var advanced = AdvancedSettings(); advanced.terminology = "Please wait here=انتظر هنا"
+        pipeline.configureAdvanced(advanced); pipeline.start(roi:.dialogue,mode:.balanced)
+        DispatchQueue.global().asyncAfter(deadline:.now()+0.5) { pipeline.offer(pixels) }
+        wait(for:[shown],timeout:45)
+#endif
+    }
     func testTypewriterUsesTwoActualOCRReadsAndFlagOffPublishesFirstRead() throws {
+#if !GAMELINGO_TYPEWRITER_RESEARCH
+        throw XCTSkip("Research-only: production deliberately excludes typewriter holding; tested separately by testProductionIgnoresResearchTypewriterFlag")
+#endif
         let pixels = try visionFixture { _ in
             let text = "Please wait here" as NSString, font = UIFont.systemFont(ofSize:31)
             let width = text.size(withAttributes:[.font:font]).width
@@ -239,6 +270,9 @@ final class AppleIntegrationTests: XCTestCase {
         }
     }
     func testTypewriterInterruptedShortLineKeepsBothReadyTranslationsInOrder() throws {
+#if !GAMELINGO_TYPEWRITER_RESEARCH
+        throw XCTSkip("Requires the GAMELINGO_TYPEWRITER_RESEARCH build configuration")
+#endif
         func image(_ value: String) throws -> CVPixelBuffer {
             try visionFixture { _ in
                 let text = value as NSString, font = UIFont.systemFont(ofSize:31)
@@ -272,6 +306,9 @@ final class AppleIntegrationTests: XCTestCase {
         XCTAssertEqual(actual,["Please wait here","Run!"])
     }
     func testTypewriterStopDiscardsHeldResultBeforeRestart() throws {
+#if !GAMELINGO_TYPEWRITER_RESEARCH
+        throw XCTSkip("Requires the GAMELINGO_TYPEWRITER_RESEARCH build configuration")
+#endif
         func image(_ value: String) throws -> CVPixelBuffer {
             try visionFixture { _ in
                 let text = value as NSString, font = UIFont.systemFont(ofSize:31)
@@ -301,6 +338,9 @@ final class AppleIntegrationTests: XCTestCase {
         wait(for:[restarted],timeout:15); wait(for:[old],timeout:0.4); stopAndDrain(pipeline)
     }
     func testTypewriterHeldResultUsesNewExplicitCorrectionBeforePublication() throws {
+#if !GAMELINGO_TYPEWRITER_RESEARCH
+        throw XCTSkip("Requires the GAMELINGO_TYPEWRITER_RESEARCH build configuration")
+#endif
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at:root) }
         let store = try GameCorrectionsStore(root:root,game:"synthetic-typewriter")
@@ -319,7 +359,7 @@ final class AppleIntegrationTests: XCTestCase {
         let pipeline = FramePipeline(translator:translator) { message in
             guard message["type"] as? String == "subtitle_show" else { return }
             XCTAssertEqual(message["translated"] as? String,"ابق هنا")
-            XCTAssertEqual(message["provenance"] as? String,"userCorrection")
+            XCTAssertNil(message["provenance"])
             shown.fulfill()
         }
         pipeline.onMetrics = { metrics in if metrics.recognitions == 1 { firstRead.fulfill() } }
