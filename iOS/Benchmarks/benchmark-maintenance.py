@@ -31,7 +31,7 @@ with tempfile.TemporaryDirectory(prefix='gamelingo-core-benchmark-') as temp:
     for variant in ['baseline_0.2.0','development_0.2.1']:
         folder=work/variant;folder.mkdir()
         sources=[]
-        names=COMMON if variant.startswith('baseline') else COMMON+['SubtitlePresentation.swift','QualitySettings.swift','SpeakerEvidence.swift','OCRDialogue.swift']
+        names=COMMON if variant.startswith('baseline') else COMMON+['SubtitlePresentation.swift','QualitySettings.swift','SpeakerEvidence.swift','DialogueNoise.swift','OCRDialogue.swift']
         for name in names:
             if variant.startswith('baseline'):
                 data=subprocess.check_output(['git','show',f'stable/real-device-0.2.0:iOS/GameLingo/Core/{name}'])
