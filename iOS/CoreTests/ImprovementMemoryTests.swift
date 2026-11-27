@@ -2,7 +2,7 @@ import XCTest
 @testable import LingoCore
 
 final class ImprovementMemoryTests: XCTestCase {
-    func example() -> ImprovementExample { ImprovementExample(game:"game-a",source:"Do not take 11 coins.",context:"Arthur|We must leave.",confidence:0.95,observations:2,trustedTarget:"لا تأخذ 11 قطعة نقدية.",authority:"pack-exact:fixture") }
+    func example() -> ImprovementExample { ImprovementExample(game:"game-a",source:"Do not take 11 coins.",context:"Arthur|We must leave.",confidence:0.95,observations:2,trustedTarget:"لا تأخذ 11 قطعة نقدية.",authority:"pack-exact:fixture",evidence:LearningEvidence(ocr:0.95,dialogue:0.95,speaker:0.95,translation:0.99,speakerName:"Arthur")) }
     func testSelfAgreementOCRNoiseNumbersNegationAndConflictsCannotPass() {
         let example = example()
         XCTAssertNil(ImprovementGate.rejection(example,candidate:example.trustedTarget!,existing:[]))

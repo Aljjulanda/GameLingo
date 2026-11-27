@@ -10,7 +10,7 @@ private struct HomeContent: View {
     @ObservedObject var library: GamePackLibrary
     @State private var showingCurrentMenu = false
     private var readiness: TranslationReadiness {
-        TranslationReadiness(modelReady:model.modelReady,
+        TranslationReadiness(modelReady:model.modelAvailable,
             hasConsole:model.consoles.contains { $0.id == model.settings.selectedConsoleID },
             validRegion:model.settings.roi.isValid,importing:library.busy,pairing:model.pairing,
             destination:model.gameOptions.destination,tvConnected:model.tvConnected)
@@ -38,18 +38,18 @@ private struct HomeContent: View {
             if model.menuSuggestionVisible {
                 Section("قد تكون هذه قائمة") {
                     Button("قراءة القائمة وترجمتها") { model.translateCurrentMenu(); showingCurrentMenu = true }
-                    Text("اقتراح من منطقة الحوار؛ اضغط لقراءة إطار جديد. لا تُعرض ترجمة قائمة تلقائيًا.")
+                    Text("اقتراح من منطقة الحوار؛ اضغط لقراءة إطار جديد. تُترجم القوائم المدعومة تلقائيًا.")
                         .font(.footnote).foregroundColor(.secondary)
                 }
             }
             if model.qualityCaptureActive || model.learningConsent {
-                Section("جمع محلي مفعّل باختيارك") {
+                Section("التعلم المحلي التلقائي") {
                     if model.qualityCaptureActive {
                         Label("تسجيل نصوص الاختبار جارٍ",systemImage:"record.circle").foregroundColor(.red)
                         Button("إيقاف التسجيل المحلي") { model.qualityCapture() }
                     }
                     if model.learningConsent {
-                        Text("جمع أمثلة التحسين لهذه الجلسة مفعّل.")
+                        Text("التعلم يعمل تلقائيًا لهذه الجلسة.")
                         Button("إيقاف جمع أمثلة التحسين") { model.learningConsent = false }
                     }
                 }

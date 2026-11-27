@@ -3,6 +3,21 @@ import CoreVideo
 
 /// A tiny edge mask from the decoder's existing luma plane; no rendered image or full-frame copy.
 struct FrameSignature {
+    /// 64-bit relative luma dHash; samples existing planes without a screenshot.
+    static func perceptualHash(_ buffer: CVPixelBuffer) -> String {
+        guard CVPixelBufferIsPlanar(buffer), CVPixelBufferGetPlaneCount(buffer) > 0 else { return "" }
+        CVPixelBufferLockBaseAddress(buffer,.readOnly); defer{CVPixelBufferUnlockBaseAddress(buffer,.readOnly)}
+        guard let base = CVPixelBufferGetBaseAddressOfPlane(buffer,0) else { return "" }
+        let w = CVPixelBufferGetWidthOfPlane(buffer,0), h = CVPixelBufferGetHeightOfPlane(buffer,0), stride = CVPixelBufferGetBytesPerRowOfPlane(buffer,0)
+        guard w > 9, h > 8 else { return "" }
+        let bytes = base.assumingMemoryBound(to:UInt8.self)
+        var value: UInt64 = 0
+        for y in 0..<8 { for x in 0..<8 {
+            let row = (y*h/8)*stride
+            value = (value << 1) | (bytes[row+x*w/9] > bytes[row+(x+1)*w/9] ? 1 : 0)
+        } }
+        return String(value,radix:16)
+    }
     private var previous: [UInt8]?
     private var verified: TimeInterval = 0
     mutating func shouldRecognize(_ buffer: CVPixelBuffer, roi: SourceBox, now: TimeInterval, hasText: Bool) -> Bool {

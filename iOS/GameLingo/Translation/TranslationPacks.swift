@@ -191,9 +191,14 @@ final class TranslationPackStore {
                     metrics.matches += 1
                     if result.kind == .exact { metrics.exact += 1 }
                     else if result.kind == .punctuationless { metrics.punctuationless += 1 }
+                    else if result.kind == .ocrTolerant { metrics.ocrTolerant += 1 }
+                    else if result.kind == .fuzzy { metrics.approximate += 1 }
                     else { metrics.normalized += 1 }
                     outcome.text = text; outcome.origin = result.kind == .exact ? .packExact : result.kind == .punctuationless ? .packPunctuationless : .packNormalized
+                    if result.kind == .ocrTolerant { outcome.origin = .packOCR }
+                    if result.kind == .fuzzy { outcome.origin = .packFuzzy }
                 } else {
+                    metrics.misses += 1
                     metrics.fallbacks += 1; if result.kind == .ambiguous { metrics.ambiguous += 1 }
                     outcome.fallback = TranslationFallback(rawValue:result.kind.rawValue) ?? .unsupported
                 }

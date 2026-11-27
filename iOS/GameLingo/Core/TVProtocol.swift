@@ -38,8 +38,7 @@ enum TVProtocol {
     }
     static func qualityFields(_ message: [String:Any], settings: QualitySettings, origin: TranslationOrigin, basis: TranslationOrigin? = nil) -> [String:Any] {
         var message = message
-        if settings[.provenanceMarker] { message["provenance"] = origin.rawValue }
-        if settings[.provenanceMarker], let basis { message["provenance_basis"] = basis.rawValue }
+        // Provenance belongs in local diagnostics; legacy TV receivers render it as a badge.
         if settings[.punctuationTrace] { message["quality_trace"] = true }
         if settings[.arabicParagraphDirection] { message["arabic_paragraph_direction"] = true }
         return message

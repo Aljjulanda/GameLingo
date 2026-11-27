@@ -19,6 +19,21 @@ final class OfflineTranslator {
     private var names = GameNamesSnapshot(game:"general")
     private var quality = QualitySettings()
     private var lastPackKey = ""
+    var onResource: ((String,UInt64) -> Void)?
+    private func memoryCheckpoint(_ stage: String) {
+        let bytes = ResourceMonitor.residentBytes()
+        DispatchQueue.main.async { self.onResource?(stage,bytes) }
+    }
+    func releaseResources() {
+        cancel()
+        queue.async { [self] in
+            memoryCheckpoint("argos.before_release")
+            lock.lock(); engine = nil; lock.unlock()
+            cache = BoundedLRU(capacity:256)
+            memoryCheckpoint("argos.after_release")
+        }
+    }
+    func memoryPressure() { queue.async { self.cache = BoundedLRU(capacity:256) } }
     func configureQuality(_ value: QualitySettings) {
         queue.async { [self] in
             if quality.outputKey != value.outputKey { cache = BoundedLRU(capacity:256) }
@@ -55,10 +70,12 @@ final class OfflineTranslator {
                 lock.lock(); let alreadyLoaded = engine != nil; lock.unlock()
                 if alreadyLoaded { DispatchQueue.main.async { completion(.success(Void())) }; return }
                 var error: NSError?
+                memoryCheckpoint("argos.before_load")
                 guard let loaded = GLTranslation(modelPath:folder.path,error:&error) else { throw error ?? LingoError.invalid("تعذر تهيئة النموذج") as NSError }
                 lock.lock()
                 guard cancellationGeneration == generation else { lock.unlock(); throw CancellationError() }
                 engine = loaded; lock.unlock()
+                memoryCheckpoint("argos.after_load")
                 DispatchQueue.main.async { completion(.success(Void())) }
             } catch { DispatchQueue.main.async { completion(.failure(error)) } }
         }

@@ -18,6 +18,10 @@ private final class RegistrationContext {
     let completion: (Int,Data?,Data?,String) -> Void
     init(_ completion: @escaping (Int,Data?,Data?,String) -> Void) { self.completion = completion }
 }
+private final class PresenceContext {
+    let observe: (String,Int32) -> Void
+    init(_ observe: @escaping (String,Int32) -> Void) { self.observe = observe }
+}
 
 /// Native start/stop/join never runs on the main thread. Each session owns its callback context until join.
 final class RemotePlayService {
@@ -37,6 +41,11 @@ final class RemotePlayService {
     private var startedAt = 0.0
     private var accounting = RecoveryAccounting()
     private var recoveryPolicy = StreamRecoveryPolicy()
+    private var lifecycle = ConsoleLifecycle()
+    private var presence: OpaquePointer?
+    private var presenceContext: PresenceContext?
+    private var presenceEpoch = 0
+    var onPermanentStop: ((ConsoleDisconnect) -> Void)?
     private var networkAvailable = true
     func networkChanged(_ available: Bool) { control.async { self.networkAvailable = available } }
     var onState: ((String) -> Void)?
@@ -60,7 +69,8 @@ final class RemotePlayService {
     /// Preserve healthy/starting sessions; restart only after confirmed frame starvation.
     func recover(_ console: ConsoleCredentials, stalled: Bool = false) {
         control.async { [self] in
-            guard networkAvailable else { return }
+            guard networkAvailable, lifecycle.wanted else { return }
+            if presence == nil { monitorConsole() }
             let now = ProcessInfo.processInfo.systemUptime
             var confirmed = false
             if stalled, let health = context?.decoder.healthSnapshot() {
@@ -70,13 +80,42 @@ final class RemotePlayService {
                 confirmed = recoveryPolicy.replacementNeeded(encodedAge:encoded,decodedAge:decoded,sessionAge:now-startedAt,now:now)
             } else { recoveryPolicy.resetObservation() }
             guard accounting.reserveRecovery(hasSession:session != nil,stalled:confirmed,age:now-startedAt,now:now) else { return }
+            lifecycle.disconnect(confirmed ? .decoder : .suspension,now:now)
             if session != nil {
                 telemetry("video.starvation","Encoded and decoded video silent >20s on repeated observations; replacing serially without wake")
                 DispatchQueue.main.async { self.onInterruption?() }
             }
             telemetry("reconnect.attempt",stalled ? "frame starvation" : "session unavailable; execution/network trigger")
-            wanted = console; retries = 0; sessionEpoch += 1; start(console,epoch:sessionEpoch)
+            closeSession(); retries = 0; sessionEpoch += 1
+            scheduleRetry(epoch:sessionEpoch,reason:"بانتظار تأكيد توفر PS5")
         }
+    }
+
+    private func monitorConsole() {
+        presenceEpoch += 1
+        GLDiscoveryDestroy(presence); presence = nil
+        let epoch = presenceEpoch
+        let context = PresenceContext { [weak self] address,state in
+            self?.control.async { [weak self] in
+                guard let self, self.presenceEpoch == epoch, self.lifecycle.wanted, self.wanted?.host == address else { return }
+                self.lifecycle.discovered(ready:state == 1,standby:state == 2,now:ProcessInfo.processInfo.systemUptime)
+                if !self.lifecycle.wanted { self.permanentStop(.rest) }
+            }
+        }
+        presenceContext = context
+        var error: Int32 = 0
+        presence = GLDiscoveryCreate({ host,_,state,user in
+            guard let host, let user else { return }
+            Unmanaged<PresenceContext>.fromOpaque(user).takeUnretainedValue().observe(String(cString:host),state)
+        },Unmanaged.passUnretained(context).toOpaque(),&error)
+        if error != 0 { telemetry("console.discovery_unavailable","Recovery requires READY; no wake permission") }
+    }
+    private func permanentStop(_ cause: ConsoleDisconnect) {
+        lifecycle.disconnect(cause,now:ProcessInfo.processInfo.systemUptime)
+        wanted = nil; sessionEpoch += 1; retries = 0; accounting.stop()
+        GLDiscoveryDestroy(presence); presence = nil; presenceContext = nil; presenceEpoch += 1
+        closeSession(); telemetry("console.requires_activation",String(describing:cause))
+        DispatchQueue.main.async { self.onPermanentStop?(cause) }
     }
 
     func discover() {
@@ -135,7 +174,7 @@ final class RemotePlayService {
     }
     func connect(_ console: ConsoleCredentials) throws {
         try console.validate()
-        control.async { [self] in accounting.initial(now:ProcessInfo.processInfo.systemUptime); wanted = console; retries = 0; sessionEpoch += 1; start(console,epoch:sessionEpoch) }
+        control.async { [self] in lifecycle.activate(); accounting.initial(now:ProcessInfo.processInfo.systemUptime); wanted = console; retries = 0; sessionEpoch += 1; monitorConsole(); start(console,epoch:sessionEpoch) }
     }
     private func state(_ text: String) { DispatchQueue.main.async { self.onState?(text) } }
     private func start(_ console: ConsoleCredentials, epoch: Int) {
@@ -147,6 +186,7 @@ final class RemotePlayService {
                 guard self.sessionEpoch == epoch, self.wanted != nil, self.session != nil else { return }
                 switch event {
                 case 1:
+                    self.lifecycle.connected()
                     let wasReplacement = self.accounting.metrics.attempts > self.accounting.metrics.successes + self.accounting.metrics.failures
                     guard self.accounting.established(now:ProcessInfo.processInfo.systemUptime) else { return }
                     self.telemetry(wasReplacement ? "reconnect.success" : "ps5.connected","Native connected event confirmed")
@@ -156,12 +196,15 @@ final class RemotePlayService {
                     self.accounting.loginRequired(); self.telemetry("ps5.login_required","User login PIN required")
                     DispatchQueue.main.async { self.onLoginPIN?() }; self.state("PS5 يطلب رمز تسجيل الدخول")
                 case 2:
+                    let cause = ConsoleDisconnect(rawValue:reason) ?? .unknown
+                    self.lifecycle.disconnect(cause,now:ProcessInfo.processInfo.systemUptime)
                     let uptime = self.accounting.snapshot(now:ProcessInfo.processInfo.systemUptime).uptime
                     let failures = self.accounting.metrics.failures
                     self.accounting.ended()
                     self.telemetry(self.accounting.metrics.failures > failures ? "reconnect.failure" : "ps5.disconnected","Native reason=\(reason); uptime=\(Int(uptime))s")
                     self.closeSession()
                     DispatchQueue.main.async { self.onInterruption?() }
+                    if cause.terminal { self.permanentStop(cause); return }
                     self.scheduleRetry(epoch:epoch,reason:"انقطع البث (\(reason))")
                 default: break
                 }
@@ -190,6 +233,7 @@ final class RemotePlayService {
             error = GLSessionStart(session)
         }
         if error != 0 || session == nil {
+            lifecycle.disconnect(.network,now:ProcessInfo.processInfo.systemUptime)
             accounting.ended(); telemetry("ps5.start_failed","Native start error=\(error)")
             closeSession(); scheduleRetry(epoch:epoch,reason:"تعذر بدء البث (\(error))")
         } else { telemetry("ps5.start","Native start accepted; waiting for connected event") }
@@ -208,6 +252,9 @@ final class RemotePlayService {
             guard let self, self.sessionEpoch == epoch, let wanted = self.wanted else { return }
             // A missing network does not spend attempts or create a second timer.
             guard self.networkAvailable else { self.awaitRetry(epoch:epoch,delay:5); return }
+            let now = ProcessInfo.processInfo.systemUptime
+            if self.lifecycle.expireUnknown(now:now,network:true) { self.permanentStop(.unknown); return }
+            guard self.lifecycle.canRetry(now:now,network:true) else { self.awaitRetry(epoch:epoch,delay:2); return }
             guard self.accounting.beginRetry(now:ProcessInfo.processInfo.systemUptime) else { return }
             self.sessionEpoch += 1
             self.telemetry("reconnect.attempt","Serial native retry; connection only, no wake")
@@ -227,11 +274,21 @@ final class RemotePlayService {
     func stop() {
         control.async { [self] in
             wanted = nil; sessionEpoch += 1; pairingEpoch += 1; discoveryEpoch += 1
+            lifecycle.stop(); GLDiscoveryDestroy(presence); presence = nil; presenceContext = nil; presenceEpoch += 1
             accounting.stop(); telemetry("ps5.stop","Session stopped; pending native retries invalidated")
             GLDiscoveryDestroy(discovery); discovery = nil
             GLRegistrationDestroy(registration); registration = nil
             registrationContext = nil
             closeSession(); state("البث متوقف")
+        }
+    }
+    func suspend() {
+        control.async { [self] in
+            guard lifecycle.wanted else { return }
+            lifecycle.disconnect(.suspension,now:ProcessInfo.processInfo.systemUptime)
+            sessionEpoch += 1; accounting.stop()
+            GLDiscoveryDestroy(presence); presence = nil; presenceContext = nil; presenceEpoch += 1
+            closeSession(); telemetry("execution.suspended","Retained intent; foreground recovery needs fresh READY")
         }
     }
 }

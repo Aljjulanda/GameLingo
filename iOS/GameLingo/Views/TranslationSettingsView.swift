@@ -40,11 +40,9 @@ struct LocalImprovementView: View {
     @EnvironmentObject var model: AppModel
     var body: some View {
         Form {
-            Section("تحسين محلي خارج اللعب · اختياري") {
-                Toggle("أوافق على جمع أمثلة نصية محليًا لهذه الجلسة",isOn:$model.learningConsent)
-                Text("بالتفعيل تُحفظ نصوص الحوار والسياق ومرجع الحزمة على الآيفون فقط: 200 مثال، 7 أيام، بلا صور أو رفع. لا تدريب مستمر للأوزان. ينفذ العامل دورة من 10 أمثلة بعد إيقاف اللعب، ويعتمد فقط ما يطابق مرجع حزمة حرفيًا مع فحوص OCR والسياق والأعداد والنفي. الامتناع متوقع عند الشك.").font(.footnote)
+            Section("التعلم المحلي التلقائي") {
+                Text("يبدأ تلقائيًا مع اللعب. تُحفظ أمثلة الحوار الواضحة محليًا بحد 200 مثال و7 أيام؛ يعتمد التحسين على تكرار OCR ومرجع حزمة مستقل. لا صور أو رفع أو تدريب لأوزان النموذج.").font(.footnote)
                 Text(model.improvementStatus).font(.caption)
-                Button("تشغيل دورة الآن خارج اللعب") { model.runImprovement() }.disabled(model.running || !model.modelReady || !model.learningConsent)
                 Button("تصدير بيانات التحسين المحلية") { model.exportImprovement() }
                 if let file = model.improvementExport { ShareLink(item:file) { Label("مشاركة التصدير",systemImage:"square.and.arrow.up") } }
                 Button("حذف الخام والاقتراحات",role:.destructive) { model.improvementWorker.deleteCollected(); model.improvementExport = nil }

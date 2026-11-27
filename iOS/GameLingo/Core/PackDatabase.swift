@@ -58,7 +58,7 @@ enum PackLookupKey {
 }
 
 struct PackMatch {
-    enum Kind: String { case exact, normalized, punctuationless, missing, ambiguous, unsupported, unavailable }
+    enum Kind: String { case exact, normalized, punctuationless, ocrTolerant, fuzzy, missing, ambiguous, unsupported, unavailable }
     var text: String?
     var kind: Kind
 }
@@ -228,7 +228,30 @@ final class PackDatabase {
             let punctuationKey = PackQualityPolicy.punctuationless(source)
             if !punctuationKey.isEmpty { result = try query(profile == 0 ? punctuationless! : qualityStatements[2],key:punctuationKey,category:category,kind:.punctuationless,profile:profile) }
         }
+        if result.kind == .missing { result = try indexedCandidates(source,category:category,profile:profile) }
         cache.put(result,for:key); return result
+    }
+    private func indexedCandidates(_ source: String, category: String, profile: Int) throws -> PackMatch {
+        let key = PackLookupKey.normalized(source)
+        guard key.count >= 18, source.count <= 512, DialogueText.exactWords(source).count >= 4 else { return PackMatch(text:nil,kind:.missing) }
+        // Prefix ranges use the existing normalized indexes. Never scan the pack
+        // or build a second in-RAM corpus. A full candidate window is ambiguous.
+        let prefix = String(key.prefix(4)), upper = prefix+"\u{10ffff}"
+        let sql = profile == 0
+            ? "SELECT source,target,usable FROM entries WHERE normalized>=?1 AND normalized<?2 AND category IN (?3,'general') LIMIT 33"
+            : "SELECT r.source,r.target,r.usable FROM entries r WHERE r.normalized>=?1 AND r.normalized<?2 AND r.category IN (?3,'general') AND NOT EXISTS(SELECT 1 FROM quality_variants q WHERE q.entry_id=r.rowid AND q.profile=?4) UNION ALL SELECT q.source,q.target,q.usable FROM quality_variants q JOIN entries r ON r.rowid=q.entry_id WHERE q.normalized>=?1 AND q.normalized<?2 AND q.profile=?4 AND r.category IN (?3,'general') LIMIT 33"
+        let s = try prepare(sql); defer{sqlite3_finalize(s)}
+        try bind(prefix,s,1); try bind(upper,s,2); try bind(category,s,3)
+        if profile != 0 { sqlite3_bind_int(s,4,Int32(profile)) }
+        var values: [PackFuzzyMatching.Candidate] = [], count = 0, code = sqlite3_step(s)
+        while code == SQLITE_ROW {
+            count += 1
+            if sqlite3_column_int(s,2) == 1 { values.append(.init(source:try string(s,0),target:try string(s,1))) }
+            code = sqlite3_step(s)
+        }
+        guard code == SQLITE_DONE else { throw PackFailure.damaged }
+        if count >= 33 { return PackMatch(text:nil,kind:.ambiguous) }
+        return PackFuzzyMatching.choose(source:source,candidates:values)
     }
     /// Shared bounded stream for the writer and derived-content validation.
     func forEachRawRow(check: @escaping () throws -> Void = {}, _ body: (Int64,PackRawRow,String?) throws -> Void) throws {

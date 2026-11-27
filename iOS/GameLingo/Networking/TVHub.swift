@@ -302,7 +302,7 @@ final class TVHub {
         }
         authenticated = true
         lastPong = ProcessInfo.processInfo.systemUptime
-        let capabilities = (message["features"] as? [String] ?? []).prefix(8).filter { ["document_v1","speaker_v1","display_ack","menu_v1","roi_edit_v1","persistent_preview_v1"].contains($0) }
+        let capabilities = (message["features"] as? [String] ?? []).prefix(8).filter { ["document_v1","speaker_v1","display_ack","menu_v1","spatial_v1","roi_edit_v1","persistent_preview_v1"].contains($0) }
         DispatchQueue.main.async { self.onCapabilities?(capabilities) }
         stage = "connected"
         diagnostic("auth.ok", "اكتملت المصادقة؛ التلفزيون متصل")

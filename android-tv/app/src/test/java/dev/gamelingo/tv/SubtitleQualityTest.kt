@@ -18,13 +18,13 @@ class SubtitleQualityTest {
         assertFalse(QualityRenderPolicy.normalAlignment("left",true))
         assertTrue(QualityRenderPolicy.normalAlignment("left",false))
     }
-    @Test fun badgesOnlyDescribePackOrExplicitCorrectionIncludingReuseBasis() {
+    @Test fun sourceMetadataNeverAddsVisibleLabels() {
         for(origin in listOf("packExact","packNormalized","packPunctuationless")) {
-            assertEquals("حزمة",SubtitleQuality(provenance=origin).badge)
-            assertEquals("حزمة",SubtitleQuality(provenance="reuse",basis=origin).badge)
+            assertEquals("",SubtitleQuality(provenance=origin).badge)
+            assertEquals("",SubtitleQuality(provenance="reuse",basis=origin).badge)
         }
-        assertEquals("تصحيح",SubtitleQuality(provenance="userCorrection").badge)
-        assertEquals("تصحيح",SubtitleQuality(provenance="reuse",basis="userCorrection").badge)
+        assertEquals("",SubtitleQuality(provenance="userCorrection").badge)
+        assertEquals("",SubtitleQuality(provenance="reuse",basis="userCorrection").badge)
         for(origin in listOf("","rule","argosInference","argosCache","command","apple","arbitrary")) assertEquals("",SubtitleQuality(provenance=origin).badge)
         assertEquals("",SubtitleQuality(provenance="reuse",basis="argosInference").badge)
         assertFalse(SubtitleQuality().decorated)

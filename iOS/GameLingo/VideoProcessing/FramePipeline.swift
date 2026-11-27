@@ -32,6 +32,16 @@ final class FramePipeline {
     var onReading: ((UUID,Bool,[String],String) -> Void)?
     var onPreview: ((CGImage,[OCRLine]) -> Void)?
     var onLearningExample: ((ImprovementExample) -> Void)?
+    var onSpatialMetrics: ((SpatialMetrics) -> Void)?
+    private lazy var spatial: SpatialUIPipeline = {
+        let worker = SpatialUIPipeline(translator:translator,publish:publish)
+        worker.onMetrics = { [weak self] value in self?.onSpatialMetrics?(value) }
+        worker.onRegions = { [weak self] regions in self?.queue.async { self?.spatialRegions = regions } }
+        return worker
+    }()
+    private var spatialRegions: [SourceBox] = []
+    func configureSpatial(game: String, version: String) { queue.async { self.spatial.configure(game:game,version:version,dialogue:self.roi) } }
+    func memoryPressure() { queue.async { self.spatial.memoryPressure(); self.previewContext.clearCaches(); self.translations = BoundedLRU(capacity:8); self.menuCache = BoundedLRU(capacity:128) } }
     private var learningConsent = false
     private var improvedMemory = ImprovedMemorySnapshot()
     func configureLearning(_ enabled: Bool) { queue.async { self.learningConsent = enabled } }
@@ -259,6 +269,7 @@ final class FramePipeline {
             if !preservingState { translationSamples = LatencySamples(); ocrSamples = LatencySamples() }
             if !preservingState || startedAt == 0 { startedAt = ProcessInfo.processInfo.systemUptime }
             slotLock.lock(); active = true; metricsDropped = 0; slotLock.unlock()
+            spatial.start()
             let timer = DispatchSource.makeTimerSource(queue:queue)
             timer.schedule(deadline:.now(),repeating:.milliseconds(50),leeway:.milliseconds(10))
             timer.setEventHandler { [weak self] in self?.sample() }; self.timer = timer; timer.resume()
@@ -277,6 +288,7 @@ final class FramePipeline {
     }
     func configurePackNames(_ names: String) { queue.async { self.packSpeakerNames = String(names.prefix(2000)) } }
     func interrupt() { translator.cancel(); queue.async { [self] in
+        spatial.invalidate()
         finishReading(); finishCurrentMenu("انقطع المصدر؛ أعد طلب القائمة بعد عودة البث")
 #if GAMELINGO_TYPEWRITER_RESEARCH
         heldPublication = nil; typewriter = TypewriterPublication(); typewriterScope = nil
@@ -296,6 +308,7 @@ final class FramePipeline {
         tracker.markInterrupted()
     } }
     func stop(completion: (() -> Void)? = nil) {
+        queue.async { self.spatial.stop() }
         queue.async { self.capture.stop(); self.ocr.captureLines = false; self.reportCapture() }
         translator.cancel()
         slotLock.lock(); active = false; latest = nil; slotLock.unlock()
@@ -308,6 +321,7 @@ final class FramePipeline {
         }
     }
     func pause() {
+        queue.async { self.spatial.stop() }
         translator.cancel()
         slotLock.lock(); active = false; latest = nil; slotLock.unlock()
         queue.async { [self] in reset(preservingState:true); publish(TVProtocol.envelope("subtitle_clear")) }
@@ -349,6 +363,7 @@ final class FramePipeline {
         guard now-received < 1 else { return }
         lastSample = now; metrics.frames &+= 1; metrics.dropped = dropped
         metrics.lastFrameAt = received
+        if !reading && !currentMenu.active && !menuOptions.menusEnabled { spatial.offer(buffer,now:now) }
         if previewEnabled || previewRequested {
             previewRequested = false
             let lines = setupRequested ? (try? ocr.menuLines(buffer,roi:setupRegion)) ?? [] : []
@@ -398,8 +413,9 @@ final class FramePipeline {
                 menuSuggestion.observe(ocr.menuEvidenceLines,frameAt:received,now:ProcessInfo.processInfo.systemUptime)
             } else { menuSuggestion.clear() }
             reportMenuSuggestion()
-            if learningConsent, namesSnapshot.game != "general", !content.text.isEmpty {
-                let example = ImprovementExample(game:namesSnapshot.game,source:content.text,context:learningContext(source:content.text,speaker:content.speaker),confidence:ocr.confidence)
+            if learningConsent, namesSnapshot.game != "general", !content.text.isEmpty,
+               let evidence = LearningSafety.confidence(source:content.text,speaker:content.speaker,speakerConfidence:content.speakerConfidence ?? 0,ocr:ocr.confidence,ui:spatialRegions.contains(where:{$0.contains(box) || box.contains($0)})) {
+                let example = ImprovementExample(game:namesSnapshot.game,source:content.text,context:learningContext(source:content.text,speaker:content.speaker),confidence:ocr.confidence,evidence:evidence)
                 DispatchQueue.main.async { self.onLearningExample?(example) }
             }
             if capture.active {
@@ -688,8 +704,8 @@ final class FramePipeline {
             Terminology.resolve(engineInput,rules:advanced.terminology,context:memory.entries.filter { $0.id != job.id })
         }
         let learningKey = learningContext(source:job.text,speaker:job.speaker)
-        if override == nil, translator.packs?.publication("",origin:.rule).pack == nil,
-           let learned = improvedMemory.lookup(game:namesSnapshot.game,source:engineInput,context:learningKey) { override = TranslationDecision(text:learned,origin:.rule,game:namesSnapshot.game) }
+        if override == nil,
+           let learned = improvedMemory.lookup(game:namesSnapshot.game,source:engineInput,context:learningKey) { override = TranslationDecision(text:learned,origin:.learningMemory,game:namesSnapshot.game) }
         let punctuationTrace = metrics.punctuationTrace
         let captureLines = pendingCapture, captureSegments = pendingSegments
         let selection = override != nil && (quality[.measurement] || quality[.provenanceMarker] || capture.active) ? translator.packs?.publication(job.id,origin:override?.origin ?? .rule) : nil
@@ -741,8 +757,10 @@ final class FramePipeline {
                             }
                             self.publish(message)
                             self.metrics.lastTranslationAt = ProcessInfo.processInfo.systemUptime
-                            if self.learningConsent, decision.origin == .packExact, let pack = decision.pack {
-                                let example = ImprovementExample(game:self.namesSnapshot.game,source:engineInput,context:learningKey,confidence:job.confidence,trustedTarget:text,authority:"pack-exact:"+pack)
+                            if self.learningConsent, decision.origin == .packExact, let pack = decision.pack,
+                               var evidence = LearningSafety.confidence(source:engineInput,speaker:job.speaker,speakerConfidence:job.speaker == nil ? 0 : 0.9,ocr:job.confidence,ui:self.spatialRegions.contains(where:{$0.contains(job.box) || job.box.contains($0)})) {
+                                evidence.translation = 0.99
+                                let example = ImprovementExample(game:self.namesSnapshot.game,source:engineInput,context:learningKey,confidence:job.confidence,trustedTarget:text,authority:"pack-exact:"+pack,evidence:evidence)
                                 DispatchQueue.main.async { self.onLearningExample?(example) }
                             }
                             if self.quality[.corrections] {

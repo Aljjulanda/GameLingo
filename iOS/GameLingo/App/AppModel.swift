@@ -2,6 +2,7 @@ import SwiftUI
 import Network
 import Darwin
 import os
+import WidgetKit
 
 @MainActor
 final class AppModel: ObservableObject {
@@ -47,6 +48,7 @@ final class AppModel: ObservableObject {
     @Published var tvDocuments = false
     @Published var tvSpeakers = false
     @Published var tvMenus = false
+    @Published var tvSpatial = false
     @Published var tvRegionEditing = false
     @Published var tvPersistentPreview = false
     @Published var readingActive = false
@@ -91,6 +93,7 @@ final class AppModel: ObservableObject {
     @Published var errorMessage: String?
     @Published var showingPackLibrary = false
     @Published var running = false
+    var modelAvailable: Bool { modelReady || (translator.installed && !modelBusy) }
     @Published var modelReady = false
     @Published var modelBusy = false
     let modelDownload = ModelDownloadService()
@@ -178,7 +181,7 @@ final class AppModel: ObservableObject {
         if type == "menu_snapshot", let id = message["menu_id"] as? String, id.hasPrefix("current-") {
             guard streamConnected, let ticket = currentMenuTicket, id == "current-"+ticket.uuidString else { return }
         }
-        if gameOptions.destination.tvEnabled && (type != "menu_snapshot" || tvMenus) { hub.publish(message) }
+        if gameOptions.destination.tvEnabled && (type != "menu_snapshot" || (message["spatial"] as? Bool == true ? tvSpatial : tvMenus)) { hub.publish(message) }
         if gameOptions.destination.phoneEnabled {
             localSubtitles.apply(message,settings:settings.display,now:ProcessInfo.processInfo.systemUptime)
             if type == "menu_clear" { localMenuItems = []; localMenuUntil = 0 }
@@ -271,6 +274,22 @@ final class AppModel: ObservableObject {
     private var readingTicket: UUID?
     private var displayedIDs = Set<String>()
     private var resources = ResourceMonitor()
+    private var memoryCheckpoints: [String:UInt64] = [:]
+    private var peakResident: UInt64 = 0
+    private var startAfterModelLoad = false
+    private var controlObserver: NSObjectProtocol?
+    private var pressureObserver: NSObjectProtocol?
+    @Published private(set) var spatialMetrics = SpatialMetrics()
+    private func syncControl() {
+        let phase: SessionControlSnapshot.Phase = !policy.wanted ? .stopped : !pipelineActive ? .suspended : streamConnected ? .active : .recovering
+        let changed = SessionControlStore.snapshot().phase != phase
+        SessionControlStore.save(phase)
+        if changed, #available(iOS 18.0, *) { ControlCenter.shared.reloadControls(ofKind:SessionControlStore.kind) }
+    }
+    private func consumeControlRequest() {
+        guard let enabled = SessionControlStore.consumeRequest() else { return }
+        if enabled { if !running { start() } } else { stop(reason:"أُوقفت من مركز التحكم") }
+    }
     private var initialBattery: Float = -1
     private var sessionLog = SessionDiagnostics()
     private var lastSystemSample = 0.0
@@ -278,7 +297,7 @@ final class AppModel: ObservableObject {
     var performanceSnapshot: String {
         func age(_ at: Double?) -> String { at.map { NumericInput.format(max(0,ProcessInfo.processInfo.systemUptime-$0))+" s" } ?? "not observed" }
         let values = [
-            "GameLingo 0.4.0 (10)", "Measurement started: \(sessionStarted.formatted())", sessionStatus, audioStatus,
+            "GameLingo 0.5.0 (11)", "Measurement started: \(sessionStarted.formatted())", sessionStatus, audioStatus,
             "CPU: \(NumericInput.format(cpuPercent))% (100%=one core)", "RSS: \(NumericInput.format(residentMegabytes)) MB", "Thermal: \(thermal.rawValue)",
             "Translation p95: \(NumericInput.format(metrics.translationP95)) ms", "OCR p95: \(NumericInput.format(metrics.ocrP95)) ms",
             "PS5 native connected: \(streamConnected); encoded age: \(remoteMetrics.encodedFrameAge.map(NumericInput.format) ?? "none"); decoded age: \(remoteMetrics.decodedFrameAge.map(NumericInput.format) ?? "none")",
@@ -294,7 +313,10 @@ final class AppModel: ObservableObject {
             "Battery percentage change: \(batteryUsed.map(NumericInput.format) ?? "unavailable")",
             "Smart Reading: \(NumericInput.format(metrics.documentMilliseconds)) ms, sampled extra RSS \(NumericInput.format(metrics.documentExtraMegabytes)) MB",
             "Punctuation stages (logical order, no dialogue): \(metrics.punctuationTrace)",
-            "TV actual-render signature: \(tvRenderSignature)"
+            "TV actual-render signature: \(tvRenderSignature)", spatialMetrics.summary,
+            "Peak sampled RSS MB: \(Double(peakResident)/1048576)",
+            "RSS checkpoints (whole-process bytes, not allocator attribution): \(memoryCheckpoints)",
+            "Memory limits: latest CVPixelBuffer <=1; compressed decode queue <=8; translation cache <=256; pack pages <=2 MiB; spatial pages <=1 MiB; learning ingress <=16. Native/Swift/VT/Vision/Chiaki allocator attribution requires device Instruments."
         ]
         return (values+[packLibrary.metrics.summary]+sessionDiagnostics).joined(separator:"\n")
     }
@@ -309,6 +331,21 @@ final class AppModel: ObservableObject {
     }
 
     init(profileRoot: URL? = nil) {
+        SessionControlStore.save(.stopped)
+        memoryCheckpoints["app.initialized"] = ResourceMonitor.residentBytes()
+        translator.onResource = { [weak self] stage,bytes in self?.memoryCheckpoints[stage] = bytes }
+        pipeline.onSpatialMetrics = { [weak self] in self?.spatialMetrics = $0 }
+        controlObserver = NotificationCenter.default.addObserver(forName:Notification.Name("GameLingoControlRequest"),object:nil,queue:.main) { [weak self] _ in
+            Task { @MainActor in self?.consumeControlRequest() }
+        }
+        pressureObserver = NotificationCenter.default.addObserver(forName:UIApplication.didReceiveMemoryWarningNotification,object:nil,queue:.main) { [weak self] _ in
+            Task { @MainActor in
+                guard let self else { return }
+                self.memoryCheckpoints["memory.warning"] = ResourceMonitor.residentBytes()
+                self.pipeline.memoryPressure(); self.translator.memoryPressure()
+                if !self.running { self.translator.releaseResources(); self.modelReady = false }
+            }
+        }
         improvementWorker.onUpdate = { [weak self] status,snapshot in self?.improvementStatus = status; self?.pipeline.configureImprovedMemory(snapshot) }
         modelDownload.completion = { [weak self] result in
             guard let self else { return }
@@ -370,6 +407,10 @@ final class AppModel: ObservableObject {
             self.discovered.removeAll { $0.host == item.host }; self.discovered.append(item)
             if self.discovered.count > 16 { self.discovered.removeFirst() }
         }
+        remote.onPermanentStop = { [weak self] cause in
+            guard let self, self.policy.wanted else { return }
+            self.stop(reason:cause == .rest ? "PS5 في وضع الراحة؛ يلزم بدء يدوي" : "انتهى اتصال PS5؛ يلزم بدء يدوي")
+        }
         remote.onState = { [weak self] in self?.remoteStatus = $0 }
         remote.onLoginPIN = { [weak self] in self?.loginRequired = true }
         remote.onInterruption = { [weak self] in self?.pipeline.interrupt() }
@@ -387,6 +428,7 @@ final class AppModel: ObservableObject {
                 self.sessionStatus = !self.policy.canExecute ? "بانتظار السماح بالتنفيذ" : !self.policy.network ? "بانتظار الشبكة" : "جارٍ استرداد بث PS5"
             }
             if connected { self.recoveryAttempts = 0; self.sessionStatus = "البث متصل؛ الترجمة نشطة" }
+            self.syncControl()
         }
         remote.onTelemetry = { [weak self] metrics,stage,detail,time in
             guard let self, !self.policy.wanted || time >= self.sessionStartedUptime else { return }; self.remoteMetrics = metrics
@@ -440,7 +482,7 @@ final class AppModel: ObservableObject {
         hub.onConnected = { [weak self] in self?.tvConnected = true }
         hub.onCapabilities = { [weak self] in
             self?.tvDocuments = $0.contains("document_v1"); self?.tvSpeakers = $0.contains("speaker_v1")
-            self?.tvMenus = $0.contains("menu_v1"); self?.tvRegionEditing = $0.contains("roi_edit_v1"); self?.tvPersistentPreview = $0.contains("persistent_preview_v1")
+            self?.tvSpatial = $0.contains("spatial_v1"); self?.tvMenus = $0.contains("menu_v1"); self?.tvRegionEditing = $0.contains("roi_edit_v1"); self?.tvPersistentPreview = $0.contains("persistent_preview_v1")
         }
         hub.onRenderSignature = { [weak self] trace in if self?.quality[.punctuationTrace] == true { self?.tvRenderSignature = trace } }
         hub.onDisplayAck = { [weak self] id in
@@ -496,12 +538,15 @@ final class AppModel: ObservableObject {
         if !addresses.contains(settings.localIP), let first = addresses.first { settings.localIP = first }
     }
     func sampleSystem() {
+        consumeControlRequest(); syncControl()
         localSubtitles.expire(now:ProcessInfo.processInfo.systemUptime)
         packLibrary.refreshMetrics()
         let now = ProcessInfo.processInfo.systemUptime
         if policy.wanted && lastSystemSample > 0 && now-lastSystemSample > 8 { recordSession("execution.callback_gap","Main callback gap=\(Int(now-lastSystemSample))s; OS suspension is not confirmed") }
         lastSystemSample = now; remote.sampleHealth()
         let usage = resources.sample(); cpuPercent = usage.cpu; residentMegabytes = Double(usage.residentBytes)/1048576
+        peakResident = max(peakResident,usage.residentBytes)
+        memoryCheckpoints[running ? "session.steady_latest" : "session.idle_latest"] = usage.residentBytes
         let battery = UIDevice.current.batteryLevel
         if running && battery >= 0 {
             if initialBattery < 0 { initialBattery = battery }
@@ -537,11 +582,15 @@ final class AppModel: ObservableObject {
         catch { errorMessage = error.localizedDescription }
     }
     func start() {
+        if !modelReady && translator.installed && !modelBusy { startAfterModelLoad = true; loadModel(); return }
         guard !packLibrary.busy else { errorMessage = "انتظر اكتمال استيراد التعريب أو ألغِه قبل بدء الجلسة"; return }
         guard !running, modelReady, !pairing, let console = consoles.first(where:{ $0.id == settings.selectedConsoleID }) else { errorMessage = "اختر PS5 مسجلًا وجهّز نموذج الترجمة أولًا"; return }
         guard settings.roi.isValid else { errorMessage = "اضبط منطقة الحوار داخل حدود صورة البث أولًا"; return }
         do {
             improvementWorker.cancel(); translator.cancel()
+            learningConsent = true
+            pipeline.configureSpatial(game:currentGame,version:packLibrary.store.outputKey)
+            memoryCheckpoints["session.before_start"] = ResourceMonitor.residentBytes()
             outputFence.invalidate()
             configureMenuOptions()
             packLibrary.store.resetMetrics()
@@ -556,12 +605,14 @@ final class AppModel: ObservableObject {
             if policy.experimentalAudio { audio.start() }
             try remote.connect(console)
             pipeline.start(roi:settings.roi,mode:settings.mode); pipelineActive = true; running = true
+            syncControl()
             if gameOptions.destination.tvEnabled && !tvListening && !hubStarting { connectTV() }
             UIApplication.shared.isIdleTimerDisabled = true
             applyDim()
         } catch { policy.stop(); SessionIntentStore.save(false); audio.stop(); errorMessage = error.localizedDescription }
     }
     func stop(reason: String = "أوقفها المستخدم") {
+        startAfterModelLoad = false; modelRequest = UUID(); modelBusy = false
         menuSuggestionToken = UUID(); menuSuggestionVisible = false
         outputFence.invalidate(); hub.publish(TVProtocol.envelope("subtitle_clear")); hub.publish(TVProtocol.envelope("menu_clear"))
         regionTicket = nil; regionGame = nil; hub.publish(TVProtocol.envelope("roi_edit_end"))
@@ -571,12 +622,14 @@ final class AppModel: ObservableObject {
         policy.stop(); recoveryTask?.cancel(); recoveryTask = nil; endExecutionGrace(); audio.stop()
         SessionIntentStore.save(false); UIDevice.current.isBatteryMonitoringEnabled = false
         pipelineActive = false; sessionStatus = reason
-        running = false; pairing = false; loginRequired = false; remote.stop(); pipeline.stop()
+        running = false; streamConnected = false; pairing = false; loginRequired = false; remote.stop(); pipeline.stop()
+        learningConsent = false; improvementWorker.cancel(); translator.releaseResources(); modelReady = false
+        syncControl()
         localSubtitles.clear()
         localMenuItems = []; localMenuUntil = 0
         UIApplication.shared.isIdleTimerDisabled = policy.foreground && tvListening
         if let brightness = originalBrightness { UIScreen.main.brightness = brightness; originalBrightness = nil }
-        if learningConsent && modelReady { improvementWorker.run(translator:translator) }
+
     }
     func smartRead() {
         guard running, modelReady, streamConnected, tvConnected, tvDocuments else { return }
@@ -605,6 +658,7 @@ final class AppModel: ObservableObject {
         else { hub.stop(); pairingCode = ""; tvStatus = "أُوقف الاتصال عند مغادرة التطبيق" }
     }
     func foreground() {
+        consumeControlRequest()
         policy.foreground = true; endExecutionGrace()
         if policy.wanted { recordSession("lifecycle.foreground","Execution opportunity; preserve healthy sessions") }
         UIApplication.shared.isIdleTimerDisabled = tvListening || running
@@ -637,7 +691,8 @@ final class AppModel: ObservableObject {
         endExecutionGrace()
         guard !policy.canExecute else { return }
         recordSession("execution.unavailable","Finite execution grace expired; awaiting execution opportunity")
-        remote.stop(); pipeline.pause(); pipelineActive = false; hub.stop(); hubStarting = false
+        remote.suspend(); pipeline.pause(); pipelineActive = false; hub.stop(); hubStarting = false
+        streamConnected = false; syncControl()
         sessionStatus = "التنفيذ غير متاح؛ الاستئناف عند سماح iOS أو العودة للتطبيق"
     }
     private func scheduleRecovery() {
@@ -684,8 +739,10 @@ final class AppModel: ObservableObject {
         translator.load { [weak self] result in
             guard let self, self.modelRequest == request else { return }; self.modelBusy = false
             switch result {
-            case .success: self.modelReady = true; self.modelStatus = "English → Arabic جاهز دون إنترنت"; self.recoverSession()
-            case .failure(let error): self.modelStatus = "النموذج غير جاهز"; self.errorMessage = error.localizedDescription
+            case .success:
+                self.modelReady = true; self.modelStatus = "English → Arabic جاهز دون إنترنت"; self.recoverSession()
+                if self.startAfterModelLoad { self.startAfterModelLoad = false; self.start() }
+            case .failure(let error): self.startAfterModelLoad = false; self.modelStatus = "النموذج غير جاهز"; self.errorMessage = error.localizedDescription
             }
         }
     }

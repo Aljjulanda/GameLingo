@@ -8,7 +8,7 @@ struct QualitySettingsSection: View {
         Section(diagnostics ? "أدوات التشخيص الاختيارية" : "جودة القراءة والترجمة") {
             // Show only implemented units. Later units add their flags here
             // after their tests pass; the storage enum alone is not a feature.
-            ForEach(diagnostics ? [QualityFlag.measurement,.provenanceMarker,.punctuationTrace,.sessionCapture] : [QualityFlag.stageCues,.speakerClassification,.speakerGeometry,.visionNames,.learnNames,.corrections,.packMarkup,.packPunctuation,.packLabels,.punctuationRepair,.commandPunctuation,.lineLimits,.arabicParagraphDirection],id:\.rawValue) { flag in
+            ForEach(diagnostics ? [QualityFlag.measurement,.punctuationTrace,.sessionCapture] : [QualityFlag.stageCues,.speakerClassification,.speakerGeometry,.visionNames,.learnNames,.corrections,.packMarkup,.packPunctuation,.packLabels,.punctuationRepair,.commandPunctuation,.lineLimits,.arabicParagraphDirection],id:\.rawValue) { flag in
                 Toggle(flag.title,isOn:Binding(get:{model.quality[flag]},set:{model.quality[flag] = $0}))
             }
             if !diagnostics {

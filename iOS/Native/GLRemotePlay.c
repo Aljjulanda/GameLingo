@@ -21,7 +21,8 @@ struct GLDiscovery { ChiakiDiscoveryService service; ChiakiLog log; GLHostCallba
 static void discovered(ChiakiDiscoveryHost *hosts, size_t count, void *user) {
     GLDiscovery *d = user;
     for(size_t i=0;i<count;i++) if(chiaki_discovery_host_is_ps5(&hosts[i]) && hosts[i].host_addr)
-        d->callback(hosts[i].host_addr, hosts[i].host_name ? hosts[i].host_name : "PS5", (int)hosts[i].state, d->context);
+        d->callback(hosts[i].host_addr, hosts[i].host_name ? hosts[i].host_name : "PS5",
+            hosts[i].state==CHIAKI_DISCOVERY_HOST_STATE_READY ? 1 : hosts[i].state==CHIAKI_DISCOVERY_HOST_STATE_STANDBY ? 2 : 0, d->context);
 }
 GLDiscovery *GLDiscoveryCreate(GLHostCallback callback, void *context, int *error) {
     *error = GLInitialize(); if(*error || !callback) return NULL;
@@ -65,7 +66,22 @@ struct GLSession { ChiakiSession session; ChiakiLog log; char *host; bool starte
 static void session_event(ChiakiEvent *event, void *user) {
     GLSession *s=user;
     if(event->type==CHIAKI_EVENT_CONNECTED)s->event(1,0,s->context);
-    else if(event->type==CHIAKI_EVENT_QUIT)s->event(2,(int)event->quit.reason,s->context);
+    else if(event->type==CHIAKI_EVENT_QUIT) {
+        // Stable bridge causes: never infer wake permission from an upstream ordinal.
+        int cause=0;
+        switch(event->quit.reason) {
+            case CHIAKI_QUIT_REASON_STOPPED: cause=1;break;
+            case CHIAKI_QUIT_REASON_CTRL_CONNECT_FAILED:
+            case CHIAKI_QUIT_REASON_CTRL_UNKNOWN:
+            case CHIAKI_QUIT_REASON_SESSION_REQUEST_CONNECTION_REFUSED:
+            case CHIAKI_QUIT_REASON_CTRL_CONNECTION_REFUSED: cause=2;break;
+            case CHIAKI_QUIT_REASON_STREAM_CONNECTION_UNKNOWN: cause=3;break;
+            case CHIAKI_QUIT_REASON_STREAM_CONNECTION_REMOTE_SHUTDOWN: cause=4;break;
+            // Remote disconnect may be intentional; require explicit activation.
+            default: cause=0;break;
+        }
+        s->event(2,cause,s->context);
+    }
     else if(event->type==CHIAKI_EVENT_LOGIN_PIN_REQUEST)s->event(3,event->login_pin_request.pin_incorrect,s->context);
 }
 static bool video_sample(uint8_t *bytes,size_t count,int32_t lost,bool recovered,void *user) {

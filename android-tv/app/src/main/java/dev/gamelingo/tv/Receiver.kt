@@ -153,7 +153,7 @@ class Receiver(context: Context, private val render: (JSONObject?) -> Unit, priv
                 try {
                     val auth = if (pin.isNotEmpty()) JSONObject().put("type","pair").put("pin",pin)
                         else JSONObject().put("type","hello").put("token", Pairing.decrypt(prefs.getString("token","")!!))
-                    ws.send(auth.put("v",1).put("features",JSONArray(listOf("document_v1","speaker_v1","display_ack","menu_v1","roi_edit_v1","persistent_preview_v1"))).toString())
+                    ws.send(auth.put("v",1).put("features",JSONArray(listOf("document_v1","speaker_v1","display_ack","menu_v1","spatial_v1","roi_edit_v1","persistent_preview_v1"))).toString())
                 } catch (_: Exception) { stop(); status("أعد الاقتران من إعدادات GameLingo") }
             }
             override fun onMessage(ws: WebSocket, text: String) = onMain {

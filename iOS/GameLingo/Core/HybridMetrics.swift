@@ -2,8 +2,8 @@ import Foundation
 
 enum TranslationOrigin: String, Codable, CaseIterable {
     case userCorrection, rule, packExact, packNormalized, packPunctuationless
-    case reuse, argosCache, argosInference, command, apple
-    var isPack: Bool { self == .packExact || self == .packNormalized || self == .packPunctuationless }
+    case reuse, argosCache, argosInference, command, apple, packOCR, packFuzzy, learningMemory
+    var isPack: Bool { [.packExact,.packNormalized,.packPunctuationless,.packOCR,.packFuzzy].contains(self) }
     var title: String {
         switch self {
         case .userCorrection: return "تصحيحك المحفوظ"
@@ -16,6 +16,9 @@ enum TranslationOrigin: String, Codable, CaseIterable {
         case .argosInference: return "Argos · ترجمة جديدة"
         case .command: return "أمر قصير"
         case .apple: return "Apple · تجريبي"
+        case .packOCR: return "الحزمة · تصحيح OCR محمي"
+        case .packFuzzy: return "الحزمة · مطابقة محمية"
+        case .learningMemory: return "ذاكرة التعلم المعتمدة"
         }
     }
 }
@@ -63,6 +66,7 @@ struct HybridMetrics {
     // Retain legacy attempt counters for comparison; none is the denominator Y.
     var dialogueEvents = 0, lookups = 0, matches = 0, fallbacks = 0, ambiguous = 0
     var argos = 0, exact = 0, normalized = 0, punctuationless = 0, approximate = 0
+    var ocrTolerant = 0, contextResolved = 0, misses = 0
     var lookupTotal = 0.0
     var samples = LatencySamples()
     private(set) var published = 0, publishedPack = 0
@@ -106,7 +110,7 @@ struct HybridMetrics {
     }
     var summary: String {
         let identity = lastEvent.map { "last id=\($0.eventID) game=\($0.game ?? "general") pack=\($0.pack ?? "none") origin=\($0.origin.rawValue) basis=\($0.basis?.rawValue ?? "none")" } ?? "last event=none"
-        return "Attempts: \(lookups); matches: \(matches); Argos requests: \(argos); published unique IDs Y: \(published); published pack X: \(publishedPack); saturated: \(saturated); lookup avg/p95 ms: \(NumericInput.format(average))/\(NumericInput.format(samples.p95)); \(identity)"
+        return "Attempts: \(lookups); matches: \(matches); exact/normalized/punctuation/OCR/fuzzy/context: \(exact)/\(normalized)/\(punctuationless)/\(ocrTolerant)/\(approximate)/\(contextResolved); ambiguous/misses: \(ambiguous)/\(misses); learned attempts/published: \(attemptOrigins[.learningMemory,default:0])/\(origins[.learningMemory,default:0]); Argos requests: \(argos); published unique IDs Y: \(published); published pack X: \(publishedPack); saturated: \(saturated); lookup avg/p95 ms: \(NumericInput.format(average))/\(NumericInput.format(samples.p95)); \(identity)"
     }
 }
 

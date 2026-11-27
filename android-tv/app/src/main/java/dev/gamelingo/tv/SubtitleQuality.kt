@@ -7,11 +7,8 @@ internal data class SubtitleQuality(
     val arabicName:String="", val cue:String="", val cueOnly:Boolean=false,
     val provenance:String="", val basis:String="", val arabicParagraphDirection:Boolean=false
 ) {
-    val badge:String get()=when(if(provenance=="reuse") basis else provenance) {
-        "packExact","packNormalized","packPunctuationless" -> "حزمة"
-        "userCorrection" -> "تصحيح"
-        else -> ""
-    }
+    // Keep provenance available to diagnostics, never append it to translated content.
+    val badge:String get()=""
     val decorated:Boolean get()=arabicName.isNotEmpty() || cue.isNotEmpty() || badge.isNotEmpty() || arabicParagraphDirection
     companion object {
         fun parse(message:JSONObject):SubtitleQuality {

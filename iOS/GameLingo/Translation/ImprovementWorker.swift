@@ -10,6 +10,7 @@ final class ImprovementWorker {
     private var store: ImprovementMemoryStore?
     private var busy = false
     private var memoryVersion = 0
+    private var queued = 0
     var onUpdate: ((String,ImprovedMemorySnapshot) -> Void)?
     init() {
         queue.async { [self] in
@@ -21,11 +22,18 @@ final class ImprovementWorker {
     }
     func setConsent(_ value: Bool) { queue.async { self.consent = value; self.report(value ? "الجمع المحلي مفعّل · نصوص فقط · 200 مثال / 7 أيام" : "توقف الجمع والمعالجة؛ الذاكرة المعتمدة باقية") }; if !value { cancel() } }
     func observe(_ example: ImprovementExample) {
+        // Bound ingress before dispatching, including while disk writes are slow.
+        lock.lock(); guard queued < 16 else { lock.unlock(); return }; queued += 1; lock.unlock()
         queue.async { [self] in
+            defer { lock.lock(); queued -= 1; lock.unlock() }
             guard consent, let store else { return }
             // Two real OCR observations suffice; do not rewrite a file every frame.
-            if let old = store.raw.first(where:{$0.game == example.game && $0.source == example.source && $0.context == example.context}), old.observations >= 2, example.trustedTarget == nil { return }
-            do { try store.observe(example,consent:consent) } catch { report("تعذر حفظ المثال المحلي؛ لم يُستخدم لتحسين الترجمة") }
+            if let old = store.raw.first(where:{$0.game == example.game && PackLookupKey.normalized($0.source) == PackLookupKey.normalized(example.source) && $0.context == example.context}), old.observations >= 3, old.trustedTarget != nil { return }
+            do {
+                try store.observe(example,consent:consent)
+                let count = try store.approveAutomatic()
+                if count > 0 { report("تعلم تلقائي محلي · مرجع مستقل معتمد؛ دون تدريب النموذج") }
+            } catch { report("تعذر حفظ المثال المحلي؛ لم يُستخدم لتحسين الترجمة") }
         }
     }
     func cancel() { lock.lock(); generation = UUID(); lock.unlock() }

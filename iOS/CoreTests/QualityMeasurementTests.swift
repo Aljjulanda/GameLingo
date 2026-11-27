@@ -15,7 +15,7 @@ final class QualityMeasurementTests: XCTestCase {
         settings[.arabicParagraphDirection] = false
         let rollback = TVProtocol.qualityFields(message,settings:settings,origin:.packExact)
         XCTAssertNil(rollback["arabic_paragraph_direction"])
-        XCTAssertEqual(rollback["provenance"] as? String,"packExact")
+        XCTAssertNil(rollback["provenance"])
         XCTAssertEqual(rollback["quality_trace"] as? Bool,true)
     }
     func testCaptureRefusesUnconfirmedOrWeakerPhysicalProtection() {
@@ -104,14 +104,14 @@ final class QualityMeasurementTests: XCTestCase {
         XCTAssertEqual(try TVProtocol.encode(TVProtocol.qualityFields(baseline,settings:off,origin:.reuse,basis:.packExact)),try TVProtocol.encode(baseline))
         var all = off
         for flag in QualityFlag.allCases { all[flag] = true }
-        XCTAssertEqual(TVProtocol.qualityFields(baseline,settings:all,origin:.packExact)["provenance"] as? String,"packExact")
+        XCTAssertNil(TVProtocol.qualityFields(baseline,settings:all,origin:.packExact)["provenance"])
         all[.provenanceMarker] = false
         let markerOff = TVProtocol.qualityFields(baseline,settings:all,origin:.packExact)
         XCTAssertNil(markerOff["provenance"])
         XCTAssertEqual(try TVProtocol.encode(markerOff.filter{baseline.keys.contains($0.key)}),try TVProtocol.encode(baseline))
         all[.provenanceMarker] = true; all[.punctuationTrace] = false
         let traceOff = TVProtocol.qualityFields(baseline,settings:all,origin:.packExact)
-        XCTAssertNil(traceOff["quality_trace"]); XCTAssertEqual(traceOff["provenance"] as? String,"packExact")
+        XCTAssertNil(traceOff["quality_trace"]); XCTAssertNil(traceOff["provenance"])
     }
     func testCaptureConsentBoundsStopRetentionAndReplay() throws {
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)

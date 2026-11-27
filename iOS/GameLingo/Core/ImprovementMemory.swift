@@ -9,6 +9,7 @@ struct ImprovementExample: Codable, Equatable, Identifiable {
     var authority: String?
     var created = Date()
     var model = "argos-en_ar-1.0"
+    var evidence: LearningEvidence? = nil
     var valid: Bool { UserDataFile.validGame(game) && game != "general" && !source.isEmpty && source.count <= 1800 && context.count <= 4096 && confidence.isFinite && (0...1).contains(confidence) && (1...1000).contains(observations) && (trustedTarget?.count ?? 0) <= 2400 }
 }
 struct ImprovementProposal: Codable, Identifiable {
@@ -73,14 +74,24 @@ final class ImprovementMemoryStore {
     }
     private func save<T: Encodable>(_ name: String, _ value: T) throws { try UserDataFile.write(JSONEncoder().encode(value),to:root.appendingPathComponent(name+".json")) }
     func observe(_ example: ImprovementExample, consent: Bool) throws {
-        guard consent, example.valid else { return }
+        guard consent, example.valid, !TextPrivacy.excluded(example.source) else { return }
         try prune()
-        if let index = raw.firstIndex(where:{$0.game == example.game && $0.source == example.source && $0.context == example.context}) {
+        if let index = raw.firstIndex(where:{$0.game == example.game && PackLookupKey.normalized($0.source) == PackLookupKey.normalized(example.source) && $0.context == example.context}) {
             if example.trustedTarget == nil { raw[index].observations = min(1000,raw[index].observations+1) }
             raw[index].confidence = min(raw[index].confidence,example.confidence)
+            if let evidence = example.evidence { raw[index].evidence = evidence }
             if let target = example.trustedTarget { raw[index].trustedTarget = target; raw[index].authority = example.authority }
         } else { raw.append(example); raw = Array(raw.suffix(200)) }
         try save("raw",raw)
+    }
+    /// Continuous reference-backed memory updates. No model inference/training,
+    /// no approval dialog, and repeated Argos output cannot enter this path.
+    @discardableResult func approveAutomatic() throws -> Int {
+        var count = 0
+        for sample in raw where LearningSafety.trusted(sample) && !proposals.contains(where:{$0.id == sample.id}) {
+            if try record(sample,candidate:sample.trustedTarget!) { count += 1 }
+        }
+        return count
     }
     func record(_ example: ImprovementExample, candidate: String) throws -> Bool {
         guard raw.contains(where:{$0.id == example.id}), !proposals.contains(where:{$0.id == example.id}) else { return false }
@@ -91,8 +102,11 @@ final class ImprovementMemoryStore {
         proposals = Array(proposals.suffix(200)); try save("proposals",proposals); return reason == nil
     }
     func prune(now: Date = Date()) throws {
+        raw.removeAll { TextPrivacy.excluded($0.source) || ($0.evidence == nil && LearningSafety.confidence(source:$0.source,speaker:nil,speakerConfidence:0,ocr:$0.confidence,ui:false) == nil) }
+        proposals.removeAll { TextPrivacy.excluded($0.example.source) }
+        approved.removeAll { TextPrivacy.excluded($0.source) }
         raw.removeAll { now.timeIntervalSince($0.created) > 7*86400 }; proposals.removeAll { now.timeIntervalSince($0.example.created) > 7*86400 }
-        try save("raw",raw); try save("proposals",proposals)
+        try save("raw",raw); try save("proposals",proposals); try save("approved",approved)
         let exported = root.appendingPathComponent("export.json")
         if let modified = try? exported.resourceValues(forKeys:[.contentModificationDateKey]).contentModificationDate,
            now.timeIntervalSince(modified) > 900 { try? FileManager.default.removeItem(at:exported) }
@@ -102,7 +116,9 @@ final class ImprovementMemoryStore {
     func export() throws -> URL {
         try prune()
         let file = root.appendingPathComponent("export.json")
-        let data = try JSONSerialization.data(withJSONObject:["raw":JSONSerialization.jsonObject(with:JSONEncoder().encode(raw)),"proposals":JSONSerialization.jsonObject(with:JSONEncoder().encode(proposals)),"approved":JSONSerialization.jsonObject(with:JSONEncoder().encode(approved))],options:[.sortedKeys])
+        let validated = raw.filter { $0.evidence?.dialogue ?? 0 >= 0.9 && $0.observations >= 3 }
+        let references = raw.filter { $0.trustedTarget != nil && $0.authority?.hasPrefix("pack-exact:") == true }
+        let data = try JSONSerialization.data(withJSONObject:["schema_version":2,"raw":JSONSerialization.jsonObject(with:JSONEncoder().encode(raw)),"validated_dialogue":JSONSerialization.jsonObject(with:JSONEncoder().encode(validated)),"ocr_corrections":[],"trusted_references":JSONSerialization.jsonObject(with:JSONEncoder().encode(references)),"unverified_candidates":JSONSerialization.jsonObject(with:JSONEncoder().encode(proposals.filter{!$0.accepted})),"quarantined":JSONSerialization.jsonObject(with:JSONEncoder().encode(proposals.filter{!$0.accepted})),"proposals":JSONSerialization.jsonObject(with:JSONEncoder().encode(proposals)),"approved":JSONSerialization.jsonObject(with:JSONEncoder().encode(approved))],options:[.sortedKeys])
         guard data.count <= 12*1024*1024 else { throw LingoError.invalid("التصدير يتجاوز الحد المسموح") }
         #if os(iOS)
         try data.write(to:file,options:[.atomic,.completeFileProtectionUntilFirstUserAuthentication])

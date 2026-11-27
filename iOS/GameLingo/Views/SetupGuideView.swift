@@ -14,7 +14,7 @@ private struct SetupGuideContent: View {
     var finish: () -> Void
     private var console: ConsoleCredentials? { model.consoles.first { $0.id == model.settings.selectedConsoleID } }
     private var readiness: TranslationReadiness {
-        TranslationReadiness(modelReady:model.modelReady,hasConsole:console != nil,
+        TranslationReadiness(modelReady:model.modelAvailable,hasConsole:console != nil,
             validRegion:model.settings.roi.isValid,importing:library.busy,pairing:model.pairing,
             destination:model.gameOptions.destination,tvConnected:model.tvConnected)
     }

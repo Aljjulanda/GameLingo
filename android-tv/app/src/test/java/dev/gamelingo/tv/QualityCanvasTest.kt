@@ -120,11 +120,11 @@ class QualityCanvasTest {
         val q=SubtitleQuality(arabicName="آرثر",cue="(همس)",provenance="packExact",arabicParagraphDirection=true)
         val text=QualitySubtitleText.inline(body,"Arthur",true,speakerColor,mutedColor,q) as Spanned
         val visible=TextPresentation.clean(text.toString()).replace('\u00a0',' ')
-        assertEquals("(همس) آرثر: $body ◆ حزمة",visible)
+        assertEquals("(همس) آرثر: $body",visible)
         assertTrue(text.toString().startsWith("\u2067(همس)\u2069"))
         assertTrue(text.toString().contains("\u2068آرثر\u2069"))
-        assertEquals(3,text.getSpans(0,text.length,SpeakerColorSpan::class.java).size)
-        assertEquals(.60f,text.getSpans(0,text.length,RelativeSizeSpan::class.java).single().sizeChange,0f)
+        assertEquals(2,text.getSpans(0,text.length,SpeakerColorSpan::class.java).size)
+        assertTrue(text.getSpans(0,text.length,RelativeSizeSpan::class.java).isEmpty())
         val muted=text.getSpans(0,text.length,SpeakerColorSpan::class.java).first {it.color==mutedColor}
         val paint=TextPaint().apply { color=Color.RED;alpha=77;style=Paint.Style.STROKE }
         muted.updateDrawState(paint);assertEquals(Color.RED and 0x00ffffff,paint.color and 0x00ffffff);assertEquals(77,paint.alpha)

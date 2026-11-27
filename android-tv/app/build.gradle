@@ -10,8 +10,8 @@ android {
         manifestPlaceholders = [appLabel: project.hasProperty('labBuild') ? 'GameLingo TV Lab' : 'GameLingo TV']
         minSdk 26
         targetSdk 32
-        versionCode 12
-        versionName '0.8.0-preview.1'
+        versionCode 13
+        versionName '0.5.0'
         testInstrumentationRunner project.hasProperty('qrTest') ? 'dev.gamelingo.tv.BootstrapRunner' : project.hasProperty('rtl021Test') ? 'dev.gamelingo.tv.Rtl021Runner' : project.hasProperty('advancedCanvasTest') ? 'dev.gamelingo.tv.AdvancedCanvasRunner' : project.hasProperty('tvNetworkTest') ? 'dev.gamelingo.tv.NetworkRunner' : 'dev.gamelingo.tv.CanvasRunner'
     }
     compileOptions { sourceCompatibility JavaVersion.VERSION_1_8; targetCompatibility JavaVersion.VERSION_1_8 }
