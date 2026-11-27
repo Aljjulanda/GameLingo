@@ -37,6 +37,7 @@ final class NavigationPresentationTests: XCTestCase {
         XCTAssertEqual(contrastRange(blank),0,"The screenshot guard must reject the previous black attachments")
         let pages: [(String,AnyView)] = [
             ("home",AnyView(MainView())),
+            ("session-feedback",AnyView(SessionFeedbackFixture())),
             ("games",AnyView(NavigationStack { GamesView() })),
             ("settings",AnyView(NavigationStack { AppSettingsView() })),
             ("appearance",AnyView(NavigationStack { AppearanceOverviewView() })),
@@ -110,8 +111,18 @@ final class NavigationPresentationTests: XCTestCase {
     }
 }
 
-/// Isolated controls with authored state, not an active PS5 session. This keeps
-/// Start and Stop visible for the large-text review without starting a session.
+/// Authored feedback state for material/RTL/layout review, not a PS5 run.
+private struct SessionFeedbackFixture: View {
+    @StateObject private var feedback = SessionFeedbackPresenter()
+    var body: some View {
+        ZStack(alignment:.top) {
+            LinearGradient(colors:[.teal.opacity(0.4),.blue.opacity(0.2)],startPoint:.topLeading,endPoint:.bottomTrailing)
+            SessionFeedbackBanner(feedback:feedback).padding(16)
+        }.onAppear { feedback.observe(.active) }
+    }
+}
+
+/// Isolated controls keep Start and Stop visible without starting a session.
 private struct SessionControlsFixture: View {
     var body: some View {
         Form {

@@ -23,7 +23,8 @@ private struct HomeContent: View {
                     .font(.headline).accessibilityIdentifier("home.readiness")
                 if model.running { Text(model.sessionStatus).font(.subheadline).foregroundColor(.secondary) }
                 TranslationSessionButton(running:model.running,canStart:readiness.canStart) {
-                    if model.running { model.stop() } else { model.start() }
+                    if model.running { model.stop() }
+                    else { model.feedback.requestAuthorizationIfNeeded(); model.start() }
                 }
                 .accessibilityIdentifier("home.session")
                 if !model.running { nextStep }
@@ -226,6 +227,7 @@ struct TranslationPreferencesView: View {
                 }
                 Toggle("تعتيم الشاشة أثناء الجلسة",isOn:$model.settings.dimScreen)
             }
+            SessionNotificationSettings(feedback:model.feedback)
         }.navigationTitle("الترجمة واللغة")
     }
 }

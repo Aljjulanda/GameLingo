@@ -8,7 +8,11 @@ struct SessionControlSnapshot: Codable {
     func isActive(now: Date = Date()) -> Bool { phase == .active && (0...12).contains(now.timeIntervalSince(updated)) }
     // Pending/recovering sessions must also be switchable OFF. Enabled does
     // not claim that the PS5 has connected or translated frames are arriving.
-    func isEnabled(now: Date = Date()) -> Bool { phase != .stopped && (0...12).contains(now.timeIntervalSince(updated)) }
+    func isEnabled(now: Date = Date()) -> Bool { enabledValue(now:now) == true }
+    func enabledValue(now: Date = Date()) -> Bool? {
+        guard (0...12).contains(now.timeIntervalSince(updated)) else { return nil }
+        return phase != .stopped
+    }
 }
 enum SessionControlStore {
     static let group = "group.dev.gamelingo.ios"

@@ -10,6 +10,9 @@ struct MainView: View {
             NavigationStack { AppSettingsView() }.tabItem { Label("الإعدادات",systemImage:"gearshape") }
         }
         .tint(.teal)
+        .overlay(alignment:.top) {
+            SessionFeedbackBanner(feedback:model.feedback).padding(.horizontal,16).padding(.top,8)
+        }
         .sheet(isPresented:$model.showingPackLibrary) {
             NavigationView {
                 GamePackLibraryView(library:model.packLibrary)

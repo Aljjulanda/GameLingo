@@ -2,6 +2,25 @@ import AppIntents
 import WidgetKit
 
 @available(iOS 18.0, *)
+struct ToggleTranslationIntent: AppIntent {
+    static var title: LocalizedStringResource = "Toggle GameLingo Translation"
+    static var openAppWhenRun: Bool = false
+    @MainActor func perform() async throws -> some IntentResult {
+        #if GAMELINGO_APP
+        try AppModel.shared.toggleTranslationFromControl()
+        #else
+        throw TranslationControlError(message:"تعذر تنفيذ التحكم داخل التطبيق. افتح GameLingo مرة واحدة وتأكد من تضمين امتداد التحكم عند التوقيع.")
+        #endif
+        ControlCenter.shared.reloadControls(ofKind:SessionControlStore.kind)
+        return .result()
+    }
+}
+
+@available(iOS 18.0, *)
+@available(iOSApplicationExtension, unavailable)
+extension ToggleTranslationIntent: ForegroundContinuableIntent {}
+
+@available(iOS 18.0, *)
 struct SetTranslationIntent: SetValueIntent {
     static var title: LocalizedStringResource = "GameLingo Translation"
     static var openAppWhenRun: Bool = false
