@@ -5,6 +5,18 @@ import ImageIO
 import CoreImage
 
 final class VisionDialogueOCR {
+#if targetEnvironment(simulator)
+    // The simulator shares its Vision/Metal service across independent OCR
+    // owners. Keep synthetic runs on CPU and serialize service submissions;
+    // physical iPhones retain their existing foreground compute policy.
+    private static let simulatorRequests = NSLock()
+#endif
+    private func perform(_ handler: VNImageRequestHandler, requests: [VNRequest]) throws {
+#if targetEnvironment(simulator)
+        Self.simulatorRequests.lock(); defer { Self.simulatorRequests.unlock() }
+#endif
+        try handler.perform(requests)
+    }
     private let request: VNRecognizeTextRequest = {
         let request = VNRecognizeTextRequest()
         request.recognitionLanguages = ["en-US"]; request.recognitionLevel = .accurate
@@ -19,7 +31,12 @@ final class VisionDialogueOCR {
     var strictRegion = false
     private let imageContext: CIContext
     init(softwareImageContext: Bool = false) {
+#if targetEnvironment(simulator)
+        imageContext = CIContext(options:[.cacheIntermediates:false,.useSoftwareRenderer:true])
+        request.usesCPUOnly = true
+#else
         imageContext = CIContext(options:[.cacheIntermediates:false,.useSoftwareRenderer:softwareImageContext])
+#endif
     }
     private func cropped(_ buffer: CVPixelBuffer, roi: SourceBox) throws -> CGImage {
         let width = Double(CVPixelBufferGetWidth(buffer)), height = Double(CVPixelBufferGetHeight(buffer))
@@ -53,7 +70,7 @@ final class VisionDialogueOCR {
         request.recognitionLanguages = ["en-US"]; request.recognitionLevel = .accurate
         request.usesLanguageCorrection = false; request.minimumTextHeight = 0.008
         request.usesCPUOnly = self.request.usesCPUOnly
-        try VNImageRequestHandler(cgImage:image,orientation:.up,options:[:]).perform([request])
+        try perform(VNImageRequestHandler(cgImage:image,orientation:.up,options:[:]),requests:[request])
         return Array((request.results ?? []).compactMap { observation -> OCRLine? in
             guard let candidate = observation.topCandidates(1).first, candidate.confidence >= 0.7 else { return nil }
             let box = project(observation.boundingBox,roi:roi)
@@ -102,13 +119,19 @@ final class VisionDialogueOCR {
         }
         return [original]
     }
-    func setBackground(_ background: Bool) { request.usesCPUOnly = background }
+    func setBackground(_ background: Bool) {
+#if targetEnvironment(simulator)
+        request.usesCPUOnly = true
+#else
+        request.usesCPUOnly = background
+#endif
+    }
     func document(_ buffer: CVPixelBuffer) throws -> [String] {
         let document = VNRecognizeTextRequest()
         document.recognitionLanguages = ["en-US"]; document.recognitionLevel = .accurate
         document.usesLanguageCorrection = true; document.minimumTextHeight = 0.008
         document.usesCPUOnly = request.usesCPUOnly
-        try VNImageRequestHandler(cvPixelBuffer:buffer,orientation:.up,options:[:]).perform([document])
+        try perform(VNImageRequestHandler(cvPixelBuffer:buffer,orientation:.up,options:[:]),requests:[document])
         guard (document.results?.count ?? 0) <= 150 else { throw LingoError.invalid("قسّم المستند إلى صفحات أصغر") }
         let lines = (document.results ?? []).compactMap { observation -> DocumentLine? in
             guard let candidate = observation.topCandidates(1).first else { return nil }
@@ -125,8 +148,8 @@ final class VisionDialogueOCR {
         if dictionary != dictionaryKey {
             request.customWords = dictionary.map { VisionNameDictionary.words([$0]) } ?? []; dictionaryKey = dictionary
         }
-        if strictRegion { try VNImageRequestHandler(cgImage:cropped(buffer,roi:roi),orientation:.up,options:[:]).perform([request]) }
-        else { try VNImageRequestHandler(cvPixelBuffer:buffer,orientation:.up,options:[:]).perform([request]) }
+        if strictRegion { try perform(VNImageRequestHandler(cgImage:cropped(buffer,roi:roi),orientation:.up,options:[:]),requests:[request]) }
+        else { try perform(VNImageRequestHandler(cvPixelBuffer:buffer,orientation:.up,options:[:]),requests:[request]) }
         var lines: [OCRLine] = [], raw: [OCRLine] = []
         for observation in request.results ?? [] {
             guard let candidate = observation.topCandidates(1).first else { continue }

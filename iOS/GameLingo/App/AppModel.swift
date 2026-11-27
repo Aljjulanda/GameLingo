@@ -175,6 +175,13 @@ final class AppModel: ObservableObject {
         let epoch = fence.snapshot()
         DispatchQueue.main.async { if fence.accepts(epoch) { self?.route(message) } }
     })
+#if DEBUG
+    func settlePipelineConfiguration() async {
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void,Never>) in
+            pipeline.drainConfiguration { continuation.resume() }
+        }
+    }
+#endif
     func route(_ message: [String:Any]) {
         let type = message["type"] as? String ?? ""
         guard running || ["subtitle_clear","document_hide","menu_clear"].contains(type) else { return }

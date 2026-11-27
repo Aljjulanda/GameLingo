@@ -91,7 +91,11 @@ final class PlayExperienceIntegrationTests: XCTestCase {
         model.quality[.measurement] = true
         XCTAssertEqual(model.currentGame,game)
         XCTAssertEqual(model.gameProfiles.count,1,"Applying quality must not recursively create a profile")
-        model.gameOptions.destination = .phone; model.running = true
+        model.gameOptions.destination = .phone
+        // Output is injected directly in this test, so first drain the profile
+        // setup that a real frame would wait behind on the OCR queue.
+        await model.settlePipelineConfiguration()
+        model.running = true
         model.route(TVProtocol.envelope("subtitle_show",fields:["id":"one-result","translated":"لا تغادر بدونها."]))
         XCTAssertEqual(model.localSubtitles.entries.count,1)
         model.hub.onDisconnected?()

@@ -25,6 +25,11 @@ final class FramePipeline {
     var onCurrentMenu: ((UUID,CurrentMenuReadout) -> Void)?
     var onMenuSuggestion: ((UUID,Bool,Double) -> Void)?
 #if DEBUG
+    /// Barrier for fixtures injecting output directly instead of waiting for a
+    /// real frame. Pending configuration clears must reach the UI first.
+    func drainConfiguration(_ completion: @escaping () -> Void) {
+        queue.async { DispatchQueue.main.async(execute:completion) }
+    }
     // Native synthetic fixtures opt in. No production hook, logger, or capture.
     var onCurrentMenuObservation: (([OCRLine],SourceBox,Double,Double) -> Void)?
     var onCurrentMenuFrameProof: ((Double,Bool,Double) -> Void)?
