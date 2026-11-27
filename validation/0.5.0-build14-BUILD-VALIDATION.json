@@ -1,0 +1,64 @@
+{
+  "version": "0.5.0",
+  "ios_build": 14,
+  "tv_version_code": 14,
+  "source_commit": "23693c8ddd3617793c68fdf6b18e6f80962888d4",
+  "branch": "codex/gamelingo-0.5.0",
+  "ios_run": {
+    "id": 46062852095,
+    "conclusion": "success",
+    "ipa_artifact_id": 15229953099,
+    "validation_artifact_id": 15230412773
+  },
+  "television": {
+    "run_id": 46062852052,
+    "job_id": 140721035423,
+    "conclusion": "success",
+    "ci_artifact_id": 15229229277,
+    "local_original_certificate_sha256": "48cf8a45a37f4e5c338f98fa7d5135c7cdbaf59d50b39b8bf591a79622a28e38",
+    "payload_identical_after_resigning": true,
+    "gradle_test_report": {
+      "tests": 56,
+      "failures": 0,
+      "ignored": 0
+    },
+    "previous_build14_installation_receipt": "validation/TCL-UPDATE-2026-11-28.json"
+  },
+  "tests": {
+    "core_passed": 226,
+    "native_executed": 79,
+    "native_passed": 73,
+    "native_skipped": 6,
+    "picker_ui_passed": 2,
+    "control_integration_passed": 4,
+    "notification_presenter_passed": 4,
+    "menu_dialogue_drain_seconds": 4.469452333333379
+  },
+  "validation": {
+    "unsigned_arm64_ipa": true,
+    "both_bundles_build14": true,
+    "toggle_intent_metadata_in_both_bundles": true,
+    "openAppWhenRun": false,
+    "notification_settings_initial_viewports_reviewed": [
+      "normal-light-RTL",
+      "small-AX3-dark-RTL"
+    ],
+    "lower_settings_sections": "scrollable, not fully captured in these initial-view screenshots"
+  },
+  "ios_device_acceptance": "not performed; user private-store signed package and OS control routing not inspected",
+  "system_notifications": "client-spy scheduling tests passed; actual signed device presentation remains unverified",
+  "user_report": "glass banner works in app, notification authorization enabled, external notices and control icon absent on private-store installation",
+  "full_upgrade_specification": "incomplete; original checkpoint limitations remain",
+  "packages": [
+    {
+      "path": "build/0.5.0-preview.4/GameLingo-0.5.0-build14-unsigned.ipa",
+      "bytes": 3556542,
+      "sha256": "0dbb57b022d7d60a2a46ad35357234cde57859cf26cd12442c6917a7c5642d9f"
+    },
+    {
+      "path": "build/0.5.0-preview.4/GameLingo-TV-0.5.0-build14.apk",
+      "bytes": 1758950,
+      "sha256": "a4bb93cbe7c915ecdd6940d83d6e747577518ce99c557bdfe3879e4e7a3aa0f9"
+    }
+  ]
+}

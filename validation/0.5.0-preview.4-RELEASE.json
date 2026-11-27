@@ -1,0 +1,41 @@
+{
+  "url": "https://github.com/Aljjulanda/GameLingo/releases/tag/ios-v0.5.0-preview.4",
+  "tag": "ios-v0.5.0-preview.4",
+  "release_id": 461058774,
+  "source_commit": "23693c8ddd3617793c68fdf6b18e6f80962888d4",
+  "published_at": "2026-11-27T20:59:05Z",
+  "prerelease": true,
+  "stable_latest_preserved": 445055076,
+  "assets": [
+    {
+      "name": "GameLingo-0.5.0-build14-BUILD-VALIDATION.json",
+      "url": "https://github.com/Aljjulanda/GameLingo/releases/download/ios-v0.5.0-preview.4/GameLingo-0.5.0-build14-BUILD-VALIDATION.json",
+      "bytes": 2402,
+      "digest": "sha256:76353d121f95563921d73e806b6a0c8b0d3f27f193899129665195a1d4e1c10e"
+    },
+    {
+      "name": "GameLingo-0.5.0-build14-Report-AR.md",
+      "url": "https://github.com/Aljjulanda/GameLingo/releases/download/ios-v0.5.0-preview.4/GameLingo-0.5.0-build14-Report-AR.md",
+      "bytes": 6140,
+      "digest": "sha256:066bcfd441ea41522ef60ab18bb2c13b3ef987dc28ebdb96222519ce6eba64c2"
+    },
+    {
+      "name": "GameLingo-0.5.0-build14-unsigned.ipa",
+      "url": "https://github.com/Aljjulanda/GameLingo/releases/download/ios-v0.5.0-preview.4/GameLingo-0.5.0-build14-unsigned.ipa",
+      "bytes": 3556542,
+      "digest": "sha256:0dbb57b022d7d60a2a46ad35357234cde57859cf26cd12442c6917a7c5642d9f"
+    },
+    {
+      "name": "GameLingo-TV-0.5.0-build14.apk",
+      "url": "https://github.com/Aljjulanda/GameLingo/releases/download/ios-v0.5.0-preview.4/GameLingo-TV-0.5.0-build14.apk",
+      "bytes": 1758950,
+      "digest": "sha256:a4bb93cbe7c915ecdd6940d83d6e747577518ce99c557bdfe3879e4e7a3aa0f9"
+    },
+    {
+      "name": "SHA256SUMS.txt",
+      "url": "https://github.com/Aljjulanda/GameLingo/releases/download/ios-v0.5.0-preview.4/SHA256SUMS.txt",
+      "bytes": 419,
+      "digest": "sha256:b652156244dc5949673d269443b9a916db9611fcb524f0d319b07a5fdc3a6582"
+    }
+  ]
+}
