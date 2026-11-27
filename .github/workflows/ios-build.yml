@@ -33,8 +33,10 @@ concurrency:
 jobs:
   ios:
     # Approved preview keeps archive/Core/native non-Vision gates.
-    # Full Vision/Files tests remain available; no ignored failures.
-    runs-on: ${{ inputs.runner || 'macos-15-intel' }}
+    # Full push validation uses Apple Silicon after Intel iOS 18.5 crashes
+    # inside MTLSimDriver/VTPixelTransfer, including with CPU-only Vision.
+    # Explicit Intel dispatch remains available for the established preview.
+    runs-on: ${{ inputs.runner || 'macos-15' }}
     timeout-minutes: 90
     env:
       DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer

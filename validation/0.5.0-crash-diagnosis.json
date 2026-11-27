@@ -1,0 +1,464 @@
+{
+  "run": "https://github.com/Aljjulanda/GameLingo/actions/runs/45971294091",
+  "commit": "5655799c2438d6f3e250976859210a1e2cd7b699",
+  "artifact_id": 15186681794,
+  "environment": "Intel iOS 18.5 simulator, Xcode 16.4; not a physical iPhone",
+  "crashes": [
+    {
+      "test": "PlayExperienceIntegrationTests/testUnregisteredMenuUsesFreshVisionFramesAndReturnsToDialogue()",
+      "report": "41D9AFBF-981C-4585-AD1C-25B58C4FB885.ips",
+      "sha256": "b4ff169ca464c806c2f19d2ce3c56083edd4adcd95430d8a9b4976d14b73aa21",
+      "cpu_type": "X86-64",
+      "exception": {
+        "codes": "0x0000000000000000, 0x0000000000000000",
+        "rawCodes": [
+          0,
+          0
+        ],
+        "type": "EXC_CRASH",
+        "signal": "SIGABRT"
+      },
+      "thread": "com.apple.VN.detectorSyncTasksQueue.VNCRImageReaderDetector",
+      "frames": [
+        {
+          "module": "libsystem_kernel.dylib",
+          "symbol": "__pthread_kill"
+        },
+        {
+          "module": "libsystem_pthread.dylib",
+          "symbol": "pthread_kill"
+        },
+        {
+          "module": "libsystem_c.dylib",
+          "symbol": "abort"
+        },
+        {
+          "module": "libsystem_c.dylib",
+          "symbol": "__assert_rtn"
+        },
+        {
+          "module": "Metal",
+          "symbol": "MTLReportFailure.cold.1"
+        },
+        {
+          "module": "Metal",
+          "symbol": "MTLReportFailure"
+        },
+        {
+          "module": "MTLSimDriver",
+          "symbol": "sendXPCMessageWithReplySync(NSObject<OS_xpc_object>*, NSObject<OS_xpc_object>*)"
+        },
+        {
+          "module": "MTLSimDriver",
+          "symbol": "-[MTLSimDevice newCommandQueueWithDescriptor:]"
+        },
+        {
+          "module": "VideoToolbox",
+          "symbol": "vtMetalTransferSessionRebuild"
+        },
+        {
+          "module": "VideoToolbox",
+          "symbol": "vtMetalTransferSessionConfigureForManySourcesAndManyDests"
+        },
+        {
+          "module": "VideoToolbox",
+          "symbol": "vtMetalTransferSessionTransferImageCommonSync"
+        },
+        {
+          "module": "VideoToolbox",
+          "symbol": "VTMetalTransferSessionTransferImageSync"
+        },
+        {
+          "module": "VideoToolbox",
+          "symbol": "VTMetalTransferSessionDoTransfer"
+        },
+        {
+          "module": "VideoToolbox",
+          "symbol": "VTPixelTransferChainDoTransfer"
+        },
+        {
+          "module": "VideoToolbox",
+          "symbol": "vtPixelTransferSession_BuildChain"
+        },
+        {
+          "module": "VideoToolbox",
+          "symbol": "_VTPixelTransferSessionTransferImage"
+        },
+        {
+          "module": "VideoToolbox",
+          "symbol": "VTPixelTransferSessionTransferImage"
+        },
+        {
+          "module": "TextRecognition",
+          "symbol": "CRCropRectangleFromPixelBuffer"
+        },
+        {
+          "module": "TextRecognition",
+          "symbol": "-[CRImage_PixelBuffer imageByCroppingRectangle:toSurface:]"
+        },
+        {
+          "module": "TextRecognition",
+          "symbol": "-[CRNeuralTextDetectorV3 enumerateTilesForImage:cachedSurface:guidedByScoreMapFullTile:block:]"
+        },
+        {
+          "module": "TextRecognition",
+          "symbol": "__62-[CRNeuralTextDetectorV3 detectInImage:trackingSession:error:]_block_invoke"
+        },
+        {
+          "module": "TextRecognition",
+          "symbol": "-[CRPerformanceStatistics measureBlock:]"
+        },
+        {
+          "module": "TextRecognition",
+          "symbol": "-[CRNeuralTextDetectorV3 detectInImage:trackingSession:error:]"
+        },
+        {
+          "module": "TextRecognition",
+          "symbol": "0x14b00"
+        }
+      ]
+    },
+    {
+      "test": "AppleIntegrationTests/testVisionStructuredSpeakerAboveAndOnBothSides()",
+      "report": "46D7DD3F-7D6D-4260-B761-EFCFA3A7C541.ips",
+      "sha256": "f13d7e336a1a993ef77805ccd3022deb58217cc678072d757725d15e126cf17d",
+      "cpu_type": "X86-64",
+      "exception": {
+        "codes": "0x0000000000000000, 0x0000000000000000",
+        "rawCodes": [
+          0,
+          0
+        ],
+        "type": "EXC_CRASH",
+        "signal": "SIGABRT"
+      },
+      "thread": "com.apple.VN.detectorSyncTasksQueue.VNCRImageReaderDetector",
+      "frames": [
+        {
+          "module": "libsystem_kernel.dylib",
+          "symbol": "__pthread_kill"
+        },
+        {
+          "module": "libsystem_pthread.dylib",
+          "symbol": "pthread_kill"
+        },
+        {
+          "module": "libsystem_c.dylib",
+          "symbol": "abort"
+        },
+        {
+          "module": "libsystem_c.dylib",
+          "symbol": "__assert_rtn"
+        },
+        {
+          "module": "Metal",
+          "symbol": "MTLReportFailure.cold.1"
+        },
+        {
+          "module": "Metal",
+          "symbol": "MTLReportFailure"
+        },
+        {
+          "module": "MTLSimDriver",
+          "symbol": "sendXPCMessageWithReplySync(NSObject<OS_xpc_object>*, NSObject<OS_xpc_object>*)"
+        },
+        {
+          "module": "MTLSimDriver",
+          "symbol": "-[MTLSimDevice newCommandQueueWithDescriptor:]"
+        },
+        {
+          "module": "VideoToolbox",
+          "symbol": "vtMetalTransferSessionRebuild"
+        },
+        {
+          "module": "VideoToolbox",
+          "symbol": "vtMetalTransferSessionConfigureForManySourcesAndManyDests"
+        },
+        {
+          "module": "VideoToolbox",
+          "symbol": "vtMetalTransferSessionTransferImageCommonSync"
+        },
+        {
+          "module": "VideoToolbox",
+          "symbol": "VTMetalTransferSessionTransferImageSync"
+        },
+        {
+          "module": "VideoToolbox",
+          "symbol": "VTMetalTransferSessionDoTransfer"
+        },
+        {
+          "module": "VideoToolbox",
+          "symbol": "VTPixelTransferChainDoTransfer"
+        },
+        {
+          "module": "VideoToolbox",
+          "symbol": "vtPixelTransferSession_BuildChain"
+        },
+        {
+          "module": "VideoToolbox",
+          "symbol": "_VTPixelTransferSessionTransferImage"
+        },
+        {
+          "module": "VideoToolbox",
+          "symbol": "VTPixelTransferSessionTransferImage"
+        },
+        {
+          "module": "TextRecognition",
+          "symbol": "+[CRImage_PixelBuffer _convertPixelBuffer:toFormat:iosurfaceBacking:]"
+        },
+        {
+          "module": "TextRecognition",
+          "symbol": "-[CRImage_PixelBuffer pixelBufferWithScale:paddedToSize:adjustedToSize:paddingMode:format:hardwareAcceleration:iosurfaceBacking:]"
+        },
+        {
+          "module": "TextRecognition",
+          "symbol": "-[CRImage_PixelBuffer pixelBufferWithScale:paddedToSize:adjustedToSize:paddingMode:format:hardwareAcceleration:toSurface:]"
+        },
+        {
+          "module": "TextRecognition",
+          "symbol": "-[CRNeuralTextDetectorV3 runFullTileInferenceOnImage:cachedSurface:outputMaps:inputSize:outputSize:modelContext:error:]"
+        },
+        {
+          "module": "TextRecognition",
+          "symbol": "__62-[CRNeuralTextDetectorV3 detectInImage:trackingSession:error:]_block_invoke"
+        },
+        {
+          "module": "TextRecognition",
+          "symbol": "-[CRPerformanceStatistics measureBlock:]"
+        },
+        {
+          "module": "TextRecognition",
+          "symbol": "-[CRNeuralTextDetectorV3 detectInImage:trackingSession:error:]"
+        }
+      ]
+    },
+    {
+      "test": "PlayExperienceIntegrationTests/testActualVisionOCRComparisonCorpusIsExportedWithoutPrivateImages()",
+      "report": "4E163B4E-47C6-4F42-BDFE-364B9CB02325.ips",
+      "sha256": "db783f79c167e5935ca51b3175468e88d0853b5f966b7bb3153e69c8d46bb591",
+      "cpu_type": "X86-64",
+      "exception": {
+        "codes": "0x0000000000000000, 0x0000000000000000",
+        "rawCodes": [
+          0,
+          0
+        ],
+        "type": "EXC_CRASH",
+        "signal": "SIGABRT"
+      },
+      "thread": "com.apple.VN.detectorSyncTasksQueue.VNCRImageReaderDetector",
+      "frames": [
+        {
+          "module": "libsystem_kernel.dylib",
+          "symbol": "__pthread_kill"
+        },
+        {
+          "module": "libsystem_pthread.dylib",
+          "symbol": "pthread_kill"
+        },
+        {
+          "module": "libsystem_c.dylib",
+          "symbol": "abort"
+        },
+        {
+          "module": "libsystem_c.dylib",
+          "symbol": "__assert_rtn"
+        },
+        {
+          "module": "Metal",
+          "symbol": "MTLReportFailure.cold.1"
+        },
+        {
+          "module": "Metal",
+          "symbol": "MTLReportFailure"
+        },
+        {
+          "module": "MTLSimDriver",
+          "symbol": "sendXPCMessageWithReplySync(NSObject<OS_xpc_object>*, NSObject<OS_xpc_object>*)"
+        },
+        {
+          "module": "MTLSimDriver",
+          "symbol": "-[MTLSimDevice newCommandQueueWithDescriptor:]"
+        },
+        {
+          "module": "VideoToolbox",
+          "symbol": "vtMetalTransferSessionRebuild"
+        },
+        {
+          "module": "VideoToolbox",
+          "symbol": "vtMetalTransferSessionConfigureForManySourcesAndManyDests"
+        },
+        {
+          "module": "VideoToolbox",
+          "symbol": "vtMetalTransferSessionTransferImageCommonSync"
+        },
+        {
+          "module": "VideoToolbox",
+          "symbol": "VTMetalTransferSessionTransferImageSync"
+        },
+        {
+          "module": "VideoToolbox",
+          "symbol": "VTMetalTransferSessionDoTransfer"
+        },
+        {
+          "module": "VideoToolbox",
+          "symbol": "VTPixelTransferChainDoTransfer"
+        },
+        {
+          "module": "VideoToolbox",
+          "symbol": "vtPixelTransferSession_BuildChain"
+        },
+        {
+          "module": "VideoToolbox",
+          "symbol": "_VTPixelTransferSessionTransferImage"
+        },
+        {
+          "module": "VideoToolbox",
+          "symbol": "VTPixelTransferSessionTransferImage"
+        },
+        {
+          "module": "TextRecognition",
+          "symbol": "+[CRImage_PixelBuffer _convertPixelBuffer:toFormat:iosurfaceBacking:]"
+        },
+        {
+          "module": "TextRecognition",
+          "symbol": "-[CRImage_PixelBuffer pixelBufferWithScale:paddedToSize:adjustedToSize:paddingMode:format:hardwareAcceleration:iosurfaceBacking:]"
+        },
+        {
+          "module": "TextRecognition",
+          "symbol": "-[CRImage_PixelBuffer pixelBufferWithScale:paddedToSize:adjustedToSize:paddingMode:format:hardwareAcceleration:toSurface:]"
+        },
+        {
+          "module": "TextRecognition",
+          "symbol": "-[CRNeuralTextDetectorV3 runFullTileInferenceOnImage:cachedSurface:outputMaps:inputSize:outputSize:modelContext:error:]"
+        },
+        {
+          "module": "TextRecognition",
+          "symbol": "__62-[CRNeuralTextDetectorV3 detectInImage:trackingSession:error:]_block_invoke"
+        },
+        {
+          "module": "TextRecognition",
+          "symbol": "-[CRPerformanceStatistics measureBlock:]"
+        },
+        {
+          "module": "TextRecognition",
+          "symbol": "-[CRNeuralTextDetectorV3 detectInImage:trackingSession:error:]"
+        }
+      ]
+    },
+    {
+      "test": "AppleIntegrationTests/testQualityPipelineExplicitCorrectionPrecedesBodyRuleAndRollsBack()",
+      "report": "C16CBAB2-0D59-4C33-8F32-C1CAA22ABDC8.ips",
+      "sha256": "abc8b4ef966a754d719a57ba012d9ad20cfacf4a1c55bc9506a649ef3c784940",
+      "cpu_type": "X86-64",
+      "exception": {
+        "codes": "0x0000000000000000, 0x0000000000000000",
+        "rawCodes": [
+          0,
+          0
+        ],
+        "type": "EXC_CRASH",
+        "signal": "SIGABRT"
+      },
+      "thread": "com.apple.VN.detectorSyncTasksQueue.VNCRImageReaderDetector",
+      "frames": [
+        {
+          "module": "libsystem_kernel.dylib",
+          "symbol": "__pthread_kill"
+        },
+        {
+          "module": "libsystem_pthread.dylib",
+          "symbol": "pthread_kill"
+        },
+        {
+          "module": "libsystem_c.dylib",
+          "symbol": "abort"
+        },
+        {
+          "module": "libsystem_c.dylib",
+          "symbol": "__assert_rtn"
+        },
+        {
+          "module": "Metal",
+          "symbol": "MTLReportFailure.cold.1"
+        },
+        {
+          "module": "Metal",
+          "symbol": "MTLReportFailure"
+        },
+        {
+          "module": "MTLSimDriver",
+          "symbol": "sendXPCMessageWithReplySync(NSObject<OS_xpc_object>*, NSObject<OS_xpc_object>*)"
+        },
+        {
+          "module": "MTLSimDriver",
+          "symbol": "-[MTLSimDevice newCommandQueueWithDescriptor:]"
+        },
+        {
+          "module": "VideoToolbox",
+          "symbol": "vtMetalTransferSessionRebuild"
+        },
+        {
+          "module": "VideoToolbox",
+          "symbol": "vtMetalTransferSessionConfigureForManySourcesAndManyDests"
+        },
+        {
+          "module": "VideoToolbox",
+          "symbol": "vtMetalTransferSessionTransferImageCommonSync"
+        },
+        {
+          "module": "VideoToolbox",
+          "symbol": "VTMetalTransferSessionTransferImageSync"
+        },
+        {
+          "module": "VideoToolbox",
+          "symbol": "VTMetalTransferSessionDoTransfer"
+        },
+        {
+          "module": "VideoToolbox",
+          "symbol": "VTPixelTransferChainDoTransfer"
+        },
+        {
+          "module": "VideoToolbox",
+          "symbol": "vtPixelTransferSession_BuildChain"
+        },
+        {
+          "module": "VideoToolbox",
+          "symbol": "_VTPixelTransferSessionTransferImage"
+        },
+        {
+          "module": "VideoToolbox",
+          "symbol": "VTPixelTransferSessionTransferImage"
+        },
+        {
+          "module": "TextRecognition",
+          "symbol": "+[CRImage_PixelBuffer _convertPixelBuffer:toFormat:iosurfaceBacking:]"
+        },
+        {
+          "module": "TextRecognition",
+          "symbol": "-[CRImage_PixelBuffer pixelBufferWithScale:paddedToSize:adjustedToSize:paddingMode:format:hardwareAcceleration:iosurfaceBacking:]"
+        },
+        {
+          "module": "TextRecognition",
+          "symbol": "__62-[CRNeuralTextDetectorV3 detectInImage:trackingSession:error:]_block_invoke"
+        },
+        {
+          "module": "TextRecognition",
+          "symbol": "-[CRPerformanceStatistics measureBlock:]"
+        },
+        {
+          "module": "TextRecognition",
+          "symbol": "-[CRNeuralTextDetectorV3 detectInImage:trackingSession:error:]"
+        },
+        {
+          "module": "TextRecognition",
+          "symbol": "0x14b00"
+        },
+        {
+          "module": "TextRecognition",
+          "symbol": "0x13bf1"
+        }
+      ]
+    }
+  ]
+}
