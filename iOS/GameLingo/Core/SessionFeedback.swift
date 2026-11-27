@@ -30,7 +30,7 @@ struct SessionFeedbackState {
             let recovering = before == .active || before == .suspended
             return SessionNotice(kind:recovering ? .recovering : .starting,title:recovering ? "جارٍ استعادة الاتصال" : "جارٍ تشغيل المترجم",body:"بانتظار اتصال بث PS5؛ لم يبدأ البث بعد.")
         case .active:
-            return SessionNotice(kind:.active,title:"تم تشغيل المترجم",body:"اتصل بث PS5 وأصبحت جلسة الترجمة نشطة.")
+            return SessionNotice(kind:.active,title:"تم تشغيل المترجم",body:"بث PS5 متصل.")
         case .stopped:
             return SessionNotice(kind:.stopped,title:"تم إيقاف المترجم",body:String(detail.prefix(180)))
         case .suspended:

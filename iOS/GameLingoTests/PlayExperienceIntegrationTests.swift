@@ -324,7 +324,17 @@ final class PlayExperienceIntegrationTests: XCTestCase {
         let diagnostic = XCTAttachment(data:payload,uniformTypeIdentifier:"public.json")
         diagnostic.name = "synthetic-current-menu-lifecycle"; diagnostic.lifetime = .keepAlways; add(diagnostic)
         let stopped = expectation(description:"Menu and dialogue pipeline drained")
-        pipeline.stop { stopped.fulfill() }; await fulfillment(of:[stopped],timeout:5)
+        // Stop invalidates publication immediately, but completion deliberately
+        // waits for both owners' in-flight Vision requests. Software simulator
+        // OCR has measured 8-14s cold reads above; five seconds is not a valid
+        // cleanup budget. Keep the drain assertion and the same bounded 30s
+        // budget as acquisition, without changing production Stop behavior.
+        let drainStarted = ProcessInfo.processInfo.systemUptime
+        pipeline.stop {
+            print("SYNTHETIC_MENU_DIALOGUE_DRAIN_SECONDS \(ProcessInfo.processInfo.systemUptime-drainStarted)")
+            stopped.fulfill()
+        }
+        await fulfillment(of:[stopped],timeout:30)
     }
     private func frame(_ text: [(String,CGPoint,UIColor)]) throws -> CVPixelBuffer {
         let image = UIGraphicsImageRenderer(size:CGSize(width:1280,height:720)).image { context in
