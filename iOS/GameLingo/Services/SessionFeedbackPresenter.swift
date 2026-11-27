@@ -2,20 +2,45 @@ import SwiftUI
 import UIKit
 import UserNotifications
 
+final class SessionNotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
+    private static let retained = SessionNotificationDelegate()
+    static func install() { UNUserNotificationCenter.current().delegate = retained }
+    func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification) async -> UNNotificationPresentationOptions {
+        let identifier = notification.request.identifier
+        let active = await MainActor.run { UIApplication.shared.applicationState == .active }
+        let show = SessionNotificationPolicy.showSystemBanner(identifier:identifier,appIsActive:active)
+        // Control Center may leave the app inactive while notifications
+        // are still delivered through this foreground delegate.
+        return show ? [.banner,.list] : []
+    }
+}
+
 @MainActor
 protocol SessionNotificationClient {
     func authorization() async -> UNAuthorizationStatus
     func requestAuthorization() async throws -> Bool
     func replace(_ notice: SessionNotice) async throws
+    func sendTest() async throws
+    func presentationSummary() async -> String
     func clear()
+}
+
+extension SessionNotificationClient {
+    func presentationSummary() async -> String { "" }
 }
 
 @MainActor
 private final class LocalSessionNotifications: SessionNotificationClient {
     private let center = UNUserNotificationCenter.current()
-    private let identifier = "dev.gamelingo.session.status"
+    private let identifier = SessionNotificationPolicy.statusIdentifier
     func authorization() async -> UNAuthorizationStatus { (await center.notificationSettings()).authorizationStatus }
     func requestAuthorization() async throws -> Bool { try await center.requestAuthorization(options:[.alert]) }
+    func presentationSummary() async -> String {
+        let settings = await center.notificationSettings()
+        let alerts = settings.alertSetting == .enabled ? "مسموحة" : "غير مفعّلة"
+        let style = settings.alertStyle == .none ? "دون لافتة" : "لافتة أو تنبيه"
+        return "تنبيهات النظام: "+alerts+" · "+style
+    }
     func replace(_ notice: SessionNotice) async throws {
         let content = UNMutableNotificationContent()
         content.title = notice.title; content.body = notice.body
@@ -27,12 +52,23 @@ private final class LocalSessionNotifications: SessionNotificationClient {
         center.removePendingNotificationRequests(withIdentifiers:[identifier])
         center.removeDeliveredNotifications(withIdentifiers:[identifier])
     }
+    func sendTest() async throws {
+        let content = UNMutableNotificationContent()
+        content.title = "إشعارات GameLingo تعمل"
+        content.body = "هذا إشعار تجريبي فقط؛ لم تتغير جلسة الترجمة."
+        let id = SessionNotificationPolicy.testIdentifier
+        center.removeDeliveredNotifications(withIdentifiers:[id])
+        try await center.add(UNNotificationRequest(identifier:id,content:content,trigger:UNTimeIntervalNotificationTrigger(timeInterval:1,repeats:false)))
+    }
 }
 
 @MainActor
 final class SessionFeedbackPresenter: ObservableObject {
     @Published private(set) var notice: SessionNotice?
     @Published private(set) var authorization: UNAuthorizationStatus = .notDetermined
+    @Published private(set) var notificationDiagnostic = ""
+    @Published private(set) var testingNotification = false
+    @Published private(set) var presentationSummary = ""
     private var state = SessionFeedbackState()
     private let client: SessionNotificationClient
     private let foreground: () -> Bool
@@ -49,7 +85,32 @@ final class SessionFeedbackPresenter: ObservableObject {
     }
     func failure(_ message: String) { present(state.failure(message)) }
     func dismiss() { dismissal?.cancel(); notice = nil }
-    func refreshAuthorization() async { authorization = await client.authorization() }
+    func previewBanner() {
+        present(SessionNotice(kind:.active,title:"التنبيه الزجاجي يعمل",body:"معاينة فقط؛ لم تتغير جلسة الترجمة."))
+    }
+    func testSystemNotification() async {
+        guard foreground(), !testingNotification else { return }
+        testingNotification = true
+        defer { testingNotification = false }
+        await refreshAuthorization()
+        if authorization == .notDetermined && foreground() {
+            do { _ = try await client.requestAuthorization() }
+            catch { notificationDiagnostic = "تعذر طلب الإذن: "+error.localizedDescription; return }
+            await refreshAuthorization()
+        }
+        guard [.authorized,.provisional,.ephemeral].contains(authorization) else {
+            notificationDiagnostic = "لم يُسمح بالإشعارات. فعّل السماح واللافتات من إعدادات الآيفون."
+            return
+        }
+        do {
+            try await client.sendTest()
+            notificationDiagnostic = "سُجل الإشعار التجريبي. إذا لم يظهر، راجع اللافتات ووضع التركيز في إعدادات الآيفون."
+        } catch { notificationDiagnostic = "تعذر جدولة الإشعار: "+error.localizedDescription }
+    }
+    func refreshAuthorization() async {
+        authorization = await client.authorization()
+        presentationSummary = await client.presentationSummary()
+    }
     func requestAuthorizationIfNeeded() {
         // Ask in context after an in-app start press or the settings button.
         // A Control Center command never opens the app to request permission.
@@ -59,7 +120,8 @@ final class SessionFeedbackPresenter: ObservableObject {
             defer { self.permission = nil }
             await self.refreshAuthorization()
             if self.authorization == .notDetermined && self.foreground() {
-                _ = try? await self.client.requestAuthorization()
+                do { _ = try await self.client.requestAuthorization() }
+                catch { self.notificationDiagnostic = "تعذر طلب إذن الإشعارات: "+error.localizedDescription }
                 await self.refreshAuthorization()
             }
         }
@@ -87,7 +149,8 @@ final class SessionFeedbackPresenter: ObservableObject {
             let permission = await self.client.authorization()
             guard !Task.isCancelled, self.latest == value.id, !self.foreground(),
                   [.authorized,.provisional,.ephemeral].contains(permission) else { return }
-            try? await self.client.replace(value)
+            do { try await self.client.replace(value) }
+            catch { self.notificationDiagnostic = "تعذر جدولة إشعار الحالة: "+error.localizedDescription }
         }
     }
 }

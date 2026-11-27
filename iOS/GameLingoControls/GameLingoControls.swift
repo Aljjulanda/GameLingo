@@ -8,26 +8,14 @@ struct GameLingoControls: WidgetBundle {
 }
 struct TranslationControl: ControlWidget {
     var body: some ControlWidgetConfiguration {
-        StaticControlConfiguration(kind:SessionControlStore.kind,provider:Provider()) { enabled in
-            // Put the symbol in the primary label, including the compact tile.
-            // The command resolves the next state inside the app, never from a
-            // potentially unavailable/stale shared-defaults value.
+        // Rendering does not depend on a provider, App Group, or optional value.
+        // The containing app resolves start/stop from its actual session state.
+        StaticControlConfiguration(kind:SessionControlStore.kind) {
             ControlWidgetButton(action:ToggleTranslationIntent()) {
-                Label(enabled.map { $0 ? "إيقاف الترجمة" : "بدء الترجمة" } ?? "GameLingo",systemImage:"gamecontroller.fill")
+                Label("GameLingo",systemImage:"gamecontroller.fill")
             }
         }
         .displayName("GameLingo")
         .description("بدء أو إيقاف ترجمة اللعبة باستخدام إعداداتك المحفوظة")
-    }
-    struct Provider: ControlValueProvider {
-        var previewValue: Bool? { false }
-        func currentValue() async throws -> Bool? {
-            guard FileManager.default.containerURL(forSecurityApplicationGroupIdentifier:SessionControlStore.group) != nil else {
-                // Sideload signing can omit App Groups. Keep the tile usable
-                // with an unknown status instead of failing its entire render.
-                return nil
-            }
-            return SessionControlStore.snapshot().enabledValue()
-        }
     }
 }

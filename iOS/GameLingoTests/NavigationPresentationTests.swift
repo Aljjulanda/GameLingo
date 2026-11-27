@@ -38,6 +38,7 @@ final class NavigationPresentationTests: XCTestCase {
         let pages: [(String,AnyView)] = [
             ("home",AnyView(MainView())),
             ("session-feedback",AnyView(SessionFeedbackFixture())),
+            ("notification-settings",AnyView(NavigationStack { TranslationPreferencesView() })),
             ("games",AnyView(NavigationStack { GamesView() })),
             ("settings",AnyView(NavigationStack { AppSettingsView() })),
             ("appearance",AnyView(NavigationStack { AppearanceOverviewView() })),

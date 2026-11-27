@@ -1,5 +1,14 @@
 import Foundation
 
+enum SessionNotificationPolicy {
+    static let statusIdentifier = "dev.gamelingo.session.status"
+    static let testIdentifier = "dev.gamelingo.session.test"
+    static func showSystemBanner(identifier: String, appIsActive: Bool) -> Bool {
+        if identifier == testIdentifier { return true }
+        return identifier == statusIdentifier && !appIsActive
+    }
+}
+
 struct SessionNotice: Identifiable, Equatable {
     enum Kind: Equatable { case starting, active, recovering, stopped, suspended, failed }
     let id = UUID()

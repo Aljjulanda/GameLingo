@@ -1,7 +1,16 @@
 import SwiftUI
+import UIKit
+
+final class GameLingoAppDelegate: NSObject, UIApplicationDelegate {
+    func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey:Any]? = nil) -> Bool {
+        SessionNotificationDelegate.install()
+        return true
+    }
+}
 
 @main
 struct GameLingoApp: App {
+    @UIApplicationDelegateAdaptor(GameLingoAppDelegate.self) private var appDelegate
     @StateObject private var model = AppModel.shared
     @Environment(\.scenePhase) private var phase
     var body: some Scene {

@@ -1,0 +1,16 @@
+{
+  "device": "TCL Smart TV Pro",
+  "package": "dev.gamelingo.tv",
+  "version": "0.5.0",
+  "version_code": 14,
+  "apk_sha256": "56e23e2b7e14860c72cfb5b6345d1ab5b0ee1d4985e508d112c2210ef30e775c",
+  "install_success": true,
+  "installed_apk_hash_verified": true,
+  "update": "adb install -r",
+  "preferences_byte_identical_before_open": true,
+  "stable_preferences_preserved_after_open": true,
+  "changed_preference_names": [],
+  "checked_preferences": 8,
+  "release": "https://github.com/Aljjulanda/GameLingo/releases/tag/ios-v0.5.0-preview.3",
+  "gameplay_or_iPhone_connection_tested": false
+}

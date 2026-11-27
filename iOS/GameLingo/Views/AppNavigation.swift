@@ -228,6 +228,7 @@ struct TranslationPreferencesView: View {
                 Toggle("تعتيم الشاشة أثناء الجلسة",isOn:$model.settings.dimScreen)
             }
             SessionNotificationSettings(feedback:model.feedback)
+            ControlInstallationSection()
         }.navigationTitle("الترجمة واللغة")
     }
 }

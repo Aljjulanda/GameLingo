@@ -333,7 +333,7 @@ final class AppModel: ObservableObject {
     var performanceSnapshot: String {
         func age(_ at: Double?) -> String { at.map { NumericInput.format(max(0,ProcessInfo.processInfo.systemUptime-$0))+" s" } ?? "not observed" }
         let values = [
-            "GameLingo 0.5.0 (13)", "Measurement started: \(sessionStarted.formatted())", sessionStatus, audioStatus,
+            "GameLingo 0.5.0 (14)", "Measurement started: \(sessionStarted.formatted())", sessionStatus, audioStatus,
             "CPU: \(NumericInput.format(cpuPercent))% (100%=one core)", "RSS: \(NumericInput.format(residentMegabytes)) MB", "Thermal: \(thermal.rawValue)",
             "Translation p95: \(NumericInput.format(metrics.translationP95)) ms", "OCR p95: \(NumericInput.format(metrics.ocrP95)) ms",
             "PS5 native connected: \(streamConnected); encoded age: \(remoteMetrics.encodedFrameAge.map(NumericInput.format) ?? "none"); decoded age: \(remoteMetrics.decodedFrameAge.map(NumericInput.format) ?? "none")",

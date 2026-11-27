@@ -2,6 +2,14 @@ import XCTest
 @testable import LingoCore
 
 final class SessionFeedbackTests: XCTestCase {
+    func testInactiveAppGetsABannerWhileActiveAppUsesGlassUnlessTesting() {
+        let status = SessionNotificationPolicy.statusIdentifier
+        let test = SessionNotificationPolicy.testIdentifier
+        XCTAssertFalse(SessionNotificationPolicy.showSystemBanner(identifier:status,appIsActive:true))
+        XCTAssertTrue(SessionNotificationPolicy.showSystemBanner(identifier:status,appIsActive:false),"Control Center can leave the app inactive")
+        XCTAssertTrue(SessionNotificationPolicy.showSystemBanner(identifier:test,appIsActive:true))
+        XCTAssertFalse(SessionNotificationPolicy.showSystemBanner(identifier:"unrelated",appIsActive:false))
+    }
     func testRequestedConnectionNeverClaimsSuccessAndRepeatedSamplesStayQuiet() {
         var state = SessionFeedbackState()
         XCTAssertNil(state.observe(.stopped))

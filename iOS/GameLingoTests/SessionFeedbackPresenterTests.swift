@@ -21,6 +21,33 @@ final class SessionFeedbackPresenterTests: XCTestCase {
         XCTAssertEqual(client.permissionRequests,0,"Background control must not ask for permission or open the app")
         XCTAssertEqual(feedback.notice?.kind,.stopped)
     }
+    @MainActor
+    func testSystemTestUsesAuthorizedDeliveryWithoutRequestingPermissionAgain() async {
+        let client = FeedbackNotificationSpy(); client.gateFirstRead = false
+        let feedback = SessionFeedbackPresenter(client:client,foreground:{ true })
+        await feedback.testSystemNotification()
+        XCTAssertEqual(client.testsSent,1)
+        XCTAssertEqual(client.permissionRequests,0)
+        XCTAssertFalse(feedback.testingNotification)
+        XCTAssertTrue(feedback.notificationDiagnostic.contains("سُجل"))
+    }
+    @MainActor
+    func testDeniedPermissionDoesNotPretendToScheduleAnAlert() async {
+        let client = FeedbackNotificationSpy(); client.gateFirstRead = false; client.status = .denied
+        let feedback = SessionFeedbackPresenter(client:client,foreground:{ true })
+        await feedback.testSystemNotification()
+        XCTAssertEqual(client.testsSent,0)
+        XCTAssertEqual(client.permissionRequests,0)
+        XCTAssertTrue(feedback.notificationDiagnostic.contains("لم يُسمح"))
+    }
+    @MainActor
+    func testSystemSchedulingErrorsRemainVisible() async {
+        let client = FeedbackNotificationSpy(); client.gateFirstRead = false; client.failTest = true
+        let feedback = SessionFeedbackPresenter(client:client,foreground:{ true })
+        await feedback.testSystemNotification()
+        XCTAssertTrue(feedback.notificationDiagnostic.contains("synthetic scheduling failure"))
+        XCTAssertFalse(feedback.testingNotification)
+    }
 }
 
 @MainActor
@@ -30,15 +57,23 @@ private final class FeedbackNotificationSpy: SessionNotificationClient {
     var onDelivery: (() -> Void)?
     var delivered: [SessionNotice] = []
     var permissionRequests = 0
+    var testsSent = 0
+    var gateFirstRead = true
+    var status = UNAuthorizationStatus.authorized
+    var failTest = false
     private var firstRead = true
     func authorization() async -> UNAuthorizationStatus {
-        if firstRead {
+        if firstRead && gateFirstRead {
             firstRead = false
             return await withCheckedContinuation { waiting = $0; onFirstRead?() }
         }
-        return .authorized
+        return status
     }
     func requestAuthorization() async throws -> Bool { permissionRequests += 1; return true }
     func replace(_ notice: SessionNotice) async throws { delivered.append(notice); onDelivery?() }
+    func sendTest() async throws {
+        if failTest { throw NSError(domain:"synthetic scheduling failure",code:1,userInfo:[NSLocalizedDescriptionKey:"synthetic scheduling failure"]) }
+        testsSent += 1
+    }
     func clear() {}
 }
