@@ -5,9 +5,9 @@ import CoreGraphics
 final class LocalizationPickerUITests: XCTestCase {
     private let app = XCUIApplication(bundleIdentifier:"dev.gamelingo.ios")
     // prepare-simulator.py provisions an iPhone 16 (393pt width). The document
-    // provider renders in another process, absent from the AUT's AX hierarchy.
-    // Recognize the actual visible label and tap screen coordinates, then require
-    // the delegate-delivered filename in the AUT. No picker acceptance is mocked.
+    // provider may render in another process. Prefer its real accessible file
+    // cell when exposed; retain visible-label OCR for inaccessible providers.
+    // Both routes require the delegate-delivered filename in the AUT.
     // Independent simctl PNG: iPhone16 English provider More=(364,97)pt.
     // The earlier OCR-derived header ordinate injected y40 into the status bar.
     private let headerY: CGFloat = 97.0/852
@@ -45,22 +45,29 @@ final class LocalizationPickerUITests: XCTestCase {
         return button
     }
     private func waitFinished(filename: String) throws {
-        var dismissed = false, clearFrames = 0
-        for _ in 0..<60 {
-            let labels = try visiblePickerText()
-            let header = labels.contains { $0.0.contains("gamelingo") && $0.1.midY > 0.82 }
-            if !header { clearFrames += 1 } else { clearFrames = 0 }
-            if clearFrames >= 2 { dismissed = true; break }
-            Thread.sleep(forTimeInterval:0.25)
-        }
-        XCTAssertTrue(dismissed,"Native provider did not dismiss after thumbnail tap")
-        guard dismissed else { return }
+        // Delegate output plus a hittable app import button prove selection,
+        // dismissal and import completion; repeated header OCR proves none of
+        // those and previously consumed minutes when a coordinate tap missed.
         let summary = app.staticTexts["gamePacks.fileSummary"]
         let finished = NSPredicate { [self] _,_ in
             summary.exists && summary.label.contains(filename) && app.buttons["gamePacks.import"].isEnabled && app.buttons["gamePacks.import"].isHittable
         }
         expectation(for:finished,evaluatedWith:app); waitForExpectations(timeout:40)
         XCTAssertFalse(app.staticTexts["gamePacks.importStatus"].label.isEmpty)
+    }
+    private func accessiblePickerFile(_ ext: String) -> XCUIElement? {
+        let base = ext.isEmpty ? "GLPicker-no-extension" : "GLPicker-"+ext
+        let filename = ext.isEmpty ? base : base+"."+ext
+        // Files may hide familiar extensions in List presentation. Its cell AX
+        // identifier/label still names the row, unlike the app's inbox buttons.
+        let predicate = NSPredicate(format:"identifier BEGINSWITH %@ OR identifier BEGINSWITH %@ OR label BEGINSWITH %@ OR label BEGINSWITH %@",base+",",filename+",",base+",",filename+",")
+        return app.cells.matching(predicate).allElementsBoundByIndex.first { $0.exists && $0.isHittable }
+    }
+    private func tapPickerFile(_ ext: String, fallback: CGPoint) {
+        if let cell = accessiblePickerFile(ext) {
+            print("PICKER_ACCESSIBLE_CELL_TAP "+cell.identifier)
+            cell.tap()
+        } else { screenCoordinate(fallback).tap() }
     }
     private func screenCoordinate(_ point: CGPoint) -> XCUICoordinate {
         app.coordinate(withNormalizedOffset:CGVector(dx:point.x,dy:point.y))
@@ -165,7 +172,7 @@ final class LocalizationPickerUITests: XCTestCase {
             let name = ext.isEmpty ? "GLPicker-no-extension" : "GLPicker-"+ext
             let points = try pickerFilePoints(ext)
             diagnosticScreen("before-file-"+name)
-            screenCoordinate(points.thumbnail).tap()
+            tapPickerFile(ext,fallback:points.thumbnail)
             Thread.sleep(forTimeInterval:1.0)
             // The recorded XML preview stayed in Files after a correctly placed
             // thumbnail tap. Files also exposes the filename as a selection hit
@@ -175,7 +182,7 @@ final class LocalizationPickerUITests: XCTestCase {
             if try visiblePickerText().contains(where:{ $0.0.contains("gamelingo") && $0.1.midY > 0.82 }) {
                 print("PICKER_CAPTION_TAP \(ext) \(points.caption)")
                 diagnosticScreen("before-caption-"+name)
-                screenCoordinate(points.caption).tap()
+                tapPickerFile(ext,fallback:points.caption)
             }
             try waitFinished(filename:ext.isEmpty ? name : name+"."+ext)
             print("PICKER_SELECTION_VERIFIED "+(ext.isEmpty ? "extensionless" : ext))
