@@ -1,0 +1,64 @@
+{
+  "version": "0.5.0",
+  "ios_build": 13,
+  "tv_version_code": 14,
+  "source_commit": "6c5fb33fdad3f528ecf594fedb2599fec8c0d00f",
+  "branch": "codex/gamelingo-0.5.0",
+  "ios_run": {
+    "id": 46055575156,
+    "conclusion": "success",
+    "ipa_artifact_id": 15226998344,
+    "validation_artifact_id": 15227233071
+  },
+  "television": {
+    "run_id": 46055575137,
+    "job_id": 140697119799,
+    "conclusion": "success",
+    "ci_artifact_id": 15226417225,
+    "local_original_certificate_sha256": "48cf8a45a37f4e5c338f98fa7d5135c7cdbaf59d50b39b8bf591a79622a28e38",
+    "payload_identical_after_resigning": true,
+    "payload_identical_to_preview2": false,
+    "gradle_test_report": {
+      "tests": 56,
+      "failures": 0,
+      "ignored": 0
+    }
+  },
+  "tests": {
+    "core_passed": 223,
+    "native_executed": 76,
+    "native_passed": 70,
+    "native_skipped": 6,
+    "picker_ui_passed": 2,
+    "control_integration_passed": 4,
+    "notification_async_ordering_passed": 1,
+    "menu_dialogue_drain_seconds": 3.2466079583333567
+  },
+  "validation": {
+    "unsigned_arm64_ipa": true,
+    "both_bundles_build13": true,
+    "toggle_intent_metadata_in_both_bundles": true,
+    "openAppWhenRun": false,
+    "glass_screenshots_reviewed": [
+      "normal-light-RTL",
+      "small-AX3-dark-RTL"
+    ]
+  },
+  "physical_device_testing": "not performed",
+  "control_center_system_routing": "requires signed device acceptance",
+  "system_notifications": "requires device authorization and real delivery test; native ordering test uses a spy",
+  "background_execution": "finite system opportunity, not indefinite permission",
+  "full_upgrade_specification": "incomplete; earlier checkpoint limitations remain",
+  "packages": [
+    {
+      "path": "build/0.5.0-preview.3/GameLingo-0.5.0-build13-unsigned.ipa",
+      "bytes": 3544742,
+      "sha256": "013685e7f6d4632877819b319cf8ea694160277d91b321a164120908bbd24121"
+    },
+    {
+      "path": "build/0.5.0-preview.3/GameLingo-TV-0.5.0-build14.apk",
+      "bytes": 1758950,
+      "sha256": "56e23e2b7e14860c72cfb5b6345d1ab5b0ee1d4985e508d112c2210ef30e775c"
+    }
+  ]
+}
