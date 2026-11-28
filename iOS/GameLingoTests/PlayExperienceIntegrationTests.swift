@@ -104,6 +104,14 @@ final class PlayExperienceIntegrationTests: XCTestCase {
         model.route(TVProtocol.envelope("subtitle_update",fields:["id":"one-result","translated":"لا تغادر بدونها! "]))
         XCTAssertEqual(model.localSubtitles.entries.count,1)
         model.streamConnected = true
+        let automaticLine = OCRLine(text:"Audio",box:SourceBox(x:0.1,y:0.2,w:0.2,h:0.04),confidence:0.98)
+        let automaticElement = SpatialElement(source:"Audio",normalized:"audio",translated:"الصوت",box:automaticLine.box,scale:0.04,dynamic:false,origin:"command",confidence:0.98)
+        let automaticScreen = SpatialScreen(game:"synthetic",gameVersion:"1",id:"automatic",fingerprint:"audio",category:.menu,visualHash:"",elements:[automaticElement],observed:1)
+        model.route(try XCTUnwrap(SpatialPresentation.snapshot(automaticScreen,rows:[automaticLine],aspect:16.0/9)))
+        XCTAssertEqual(model.localMenuItems.map(\.translated),["الصوت"],"Automatic snapshots must reach the actual phone routing decoder")
+        model.route(TVProtocol.envelope("menu_clear",fields:["menu_id":"spatial-obsolete"]))
+        XCTAssertEqual(model.localMenuItems.count,1,"A scoped old clear must not delete a newer menu")
+        model.route(TVProtocol.envelope("menu_clear"))
         model.closeCurrentMenu()
         let lateItems = [MenuOverlayItem(id:"late-menu-item",source:"Audio",translated:"الصوت",box:SourceBox(x:0.1,y:0.2,w:0.2,h:0.04),color:nil)]
         let itemJSON = try JSONSerialization.jsonObject(with:JSONEncoder().encode(lateItems))
@@ -335,6 +343,70 @@ final class PlayExperienceIntegrationTests: XCTestCase {
             stopped.fulfill()
         }
         await fulfillment(of:[stopped],timeout:30)
+    }
+    @MainActor
+    func testAutomaticMenuSubmenuObjectiveAndDialogueUseActualFrameOutput() async throws {
+        let folder = try XCTUnwrap(Bundle(for:Self.self).url(forResource:"en_ar",withExtension:nil))
+        let translator = OfflineTranslator(folder:folder)
+        let loaded = expectation(description:"Synthetic frame test model")
+        translator.load { result in if case .failure(let error) = result { XCTFail(error.localizedDescription) }; loaded.fulfill() }
+        await fulfillment(of:[loaded],timeout:30)
+        var sources = Set<String>(), dialogue = false, clears = 0
+        var trace: [[String:Any]] = []
+        let pipeline = FramePipeline(translator:translator,softwareImageContext:true) { message in
+            DispatchQueue.main.async {
+                if message["type"] as? String == "menu_clear" { sources = []; clears += 1 }
+                if message["type"] as? String == "menu_snapshot" {
+                    do {
+                        let data = try TVProtocol.encode(message)
+                        let decoded = try TVProtocol.decode(data)
+                        let items = try JSONDecoder().decode([MenuOverlayItem].self,from:JSONSerialization.data(withJSONObject:decoded["items"]!))
+                        let style = try JSONDecoder().decode(MenuAppearance.self,from:JSONSerialization.data(withJSONObject:decoded["appearance"]!))
+                        XCTAssertTrue(style.valid)
+                        sources = Set(items.map(\.source))
+                        trace.append(["sources":items.map(\.source),"targets":items.map(\.translated),"category":message["category"] ?? "menu"])
+                        if trace.count > 40 { trace.removeFirst() }
+                    } catch { XCTFail("Actual automatic output must decode for the phone: \(error)") }
+                }
+                if message["type"] as? String == "subtitle_show" {
+                    let source = message["source"] as? String ?? ""
+                    XCTAssertFalse(source.lowercased().contains("escape the police"),"Objectives must not enter dialogue")
+                    if source.contains("We should leave now") { dialogue = true }
+                }
+            }
+        }
+        defer { pipeline.stop() }
+        var options = GameOptions(); options.menusEnabled = true // Old empty setup must not suppress automatic mode.
+        pipeline.configureMenus(options)
+        pipeline.configureSpatial(game:"synthetic-field-repair",version:UUID().uuidString)
+        pipeline.start(roi:.dialogue,mode:.balanced)
+        func feed(_ pixels: CVPixelBuffer, until done: () -> Bool) async throws {
+            let began = ProcessInfo.processInfo.systemUptime
+            repeat {
+                pipeline.offer(pixels)
+                try await Task.sleep(nanoseconds:150_000_000)
+            } while !done() && ProcessInfo.processInfo.systemUptime-began < 25
+            XCTAssertTrue(done(),"Source-to-output fixture timed out: \(trace)")
+        }
+        try await feed(frame([("Settings",CGPoint(x:140,y:140),.white),("Audio",CGPoint(x:140,y:240),.white),("Back",CGPoint(x:140,y:340),.white)])) {
+            sources.isSuperset(of:["Audio","Back"])
+        }
+        try await feed(frame([("Subtitles",CGPoint(x:140,y:140),.white),("Off",CGPoint(x:140,y:240),.white),("Back",CGPoint(x:140,y:340),.white)])) {
+            sources.isSuperset(of:["Subtitles","Off"]) && !sources.contains("Audio")
+        }
+        try await feed(frame([("Subtitles",CGPoint(x:140,y:140),.white),("On",CGPoint(x:140,y:240),.white),("Back",CGPoint(x:140,y:340),.white)])) {
+            sources.isSuperset(of:["Subtitles","On"]) && !sources.contains("Off")
+        }
+        try await feed(frame([("Escape the police",CGPoint(x:100,y:100),.white),("POLICE",CGPoint(x:700,y:380),.white)])) {
+            sources == ["Escape the police"]
+        }
+        let before = clears
+        try await feed(frame([("We should leave now.",CGPoint(x:370,y:540),.white)])) { dialogue && sources.isEmpty && clears > before }
+        let stopped = expectation(description:"Automatic OCR owners drained")
+        pipeline.stop { stopped.fulfill() }
+        await fulfillment(of:[stopped],timeout:30)
+        let attachment = XCTAttachment(data:try JSONSerialization.data(withJSONObject:trace,options:[.prettyPrinted,.sortedKeys]),uniformTypeIdentifier:"public.json")
+        attachment.name = "synthetic-automatic-menu-objective-source-to-output"; attachment.lifetime = .keepAlways; add(attachment)
     }
     private func frame(_ text: [(String,CGPoint,UIColor)]) throws -> CVPixelBuffer {
         let image = UIGraphicsImageRenderer(size:CGSize(width:1280,height:720)).image { context in

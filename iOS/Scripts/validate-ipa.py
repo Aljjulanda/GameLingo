@@ -26,6 +26,19 @@ def validate(path):
             raise ValueError('Unexpected app identity')
         if info.get('CFBundlePackageType') != 'APPL':
             raise ValueError('Invalid application bundle')
+        primary = info.get('CFBundleIcons', {}).get('CFBundlePrimaryIcon', {})
+        icons = primary.get('CFBundleIconFiles', [])
+        if primary.get('CFBundleIconName') != 'AppIcon' or not icons or prefix+'Assets.car' not in names:
+            raise ValueError('Missing compiled app-icon metadata/catalog')
+        phone_icons = [archive.read(n) for n in names if n.startswith(prefix+'AppIcon') and n.endswith('.png')]
+        if not any(b[:8] == b'\x89PNG\r\n\x1a\n' and len(b) >= 26 and struct.unpack_from('>II', b, 16) == (180, 180) for b in phone_icons):
+            raise ValueError('Missing explicit 60pt @3x iPhone app icon')
+        control = prefix+'PlugIns/GameLingoControls.appex/'
+        if control+'Info.plist' not in names or control+'GameLingoControls' not in names:
+            raise ValueError('Missing embedded control extension')
+        extension = plistlib.loads(archive.read(control+'Info.plist'))
+        if extension.get('CFBundleVersion') != info.get('CFBundleVersion') or extension.get('NSExtension', {}).get('NSExtensionPointIdentifier') != 'com.apple.widgetkit-extension':
+            raise ValueError('Mismatched control build or extension point')
         executable = archive.read(prefix + 'GameLingo')
         # Archive targets a physical arm64 iPhone: require a 64-bit little-endian Mach-O.
         if len(executable) < 32 or executable[:4] != b'\xcf\xfa\xed\xfe' or struct.unpack_from('<I', executable, 4)[0] != 0x0100000C:

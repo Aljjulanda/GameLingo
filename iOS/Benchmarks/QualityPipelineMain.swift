@@ -70,6 +70,13 @@ struct BenchmarkReading {
                             var wire = TVProtocol.subtitle(job,arabic:output,now:Int64(now*1000)+1)
                             #if QUALITY_CURRENT
                             wire = TVProtocol.qualityFields(wire,settings:quality,origin:.argosInference)
+                            // The legacy comparison checks existing payload
+                            // fields; validate the additive lifetime contract
+                            // independently before projecting to that contract.
+                            precondition(wire["source_generation"] as? Int == Int(job.generation))
+                            precondition(wire["source_lease_ms"] as? Int == 1800)
+                            wire.removeValue(forKey:"source_generation")
+                            wire.removeValue(forKey:"source_lease_ms")
                             if quality[.punctuationTrace] { traces += SubtitlePresentation.punctuation(reading.content.text).count+SubtitlePresentation.punctuation(output).count }
                             #endif
                             wire["id"] = identity(job.id)

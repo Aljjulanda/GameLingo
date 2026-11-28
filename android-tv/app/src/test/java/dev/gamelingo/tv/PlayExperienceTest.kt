@@ -17,6 +17,22 @@ import java.time.Duration
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @LooperMode(LooperMode.Mode.PAUSED)
 class PlayExperienceTest {
+    @Test fun oldScopedMenuClearCannotDeleteNewSnapshot() {
+        val overlay=MenuOverlay()
+        val value=menu("حديث").put("menu_id","new")
+        overlay.apply(value,0);overlay.clear("old");assertNotNull(overlay.snapshot)
+        overlay.clear("new");assertNull(overlay.snapshot)
+    }
+    @Test fun sourceGoneBeforeCanvasDrawCannotResurrectQueuedTranslation() {
+        val context:android.content.Context=RuntimeEnvironment.getApplication()
+        val view=SubtitleCanvas(context){}
+        view.layout(0,0,1920,1080)
+        view.message(JSONObject().put("type","subtitle_show").put("id","queued").put("source_generation",1).put("translated","متأخر"))
+        view.message(JSONObject().put("type","subtitle_source_gone").put("id","queued").put("source_generation",1))
+        val bitmap=Bitmap.createBitmap(1920,1080,Bitmap.Config.ARGB_8888)
+        view.draw(Canvas(bitmap));bitmap.recycle()
+        assertTrue(view.state.entries.isEmpty())
+    }
     private fun canvas()=SubtitleCanvas(RuntimeEnvironment.getApplication()){}.apply {
         measure(View.MeasureSpec.makeMeasureSpec(1920,View.MeasureSpec.EXACTLY),View.MeasureSpec.makeMeasureSpec(1080,View.MeasureSpec.EXACTLY));layout(0,0,1920,1080)
     }

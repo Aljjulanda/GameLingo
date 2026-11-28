@@ -8,7 +8,10 @@ import org.json.JSONObject
 class MenuOverlay {
     var snapshot: JSONObject? = null; private set
     var until = 0L; private set
-    fun clear() { snapshot=null;until=0 }
+    fun clear(id:String?=null) {
+        if(id!=null && snapshot?.optString("menu_id")!=id)return
+        snapshot=null;until=0
+    }
     fun apply(message:JSONObject,now:Long) {
         val items=message.optJSONArray("items") ?: return
         require(items.length()<=24)

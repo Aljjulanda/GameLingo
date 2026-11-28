@@ -18,10 +18,14 @@ class PackagingTests(unittest.TestCase):
     def package(self, path, extra=None, executable=None):
         prefix = 'Payload/GameLingo.app/'
         items = {
-            prefix + 'Info.plist': plistlib.dumps({'CFBundleExecutable': 'GameLingo', 'CFBundleIdentifier': 'dev.gamelingo.ios', 'CFBundlePackageType': 'APPL'}),
+            prefix + 'Info.plist': plistlib.dumps({'CFBundleExecutable': 'GameLingo', 'CFBundleIdentifier': 'dev.gamelingo.ios', 'CFBundlePackageType': 'APPL', 'CFBundleVersion':'synthetic', 'CFBundleIcons':{'CFBundlePrimaryIcon':{'CFBundleIconName':'AppIcon','CFBundleIconFiles':['AppIcon60x60']}}}),
             prefix + 'GameLingo': executable or (struct.pack('<IIIIIIII', 0xfeedfacf, 0x0100000C, 0, 2, 1, 24, 0, 0) + struct.pack('<IIIIII', 0x32, 24, 2, 0x00100000, 0x00120000, 0)),
             prefix + 'tv-display-schema.json': b'{}', prefix + 'ThirdPartyNotices.txt': b'Synthetic test only',
             prefix + 'PrivacyInfo.xcprivacy': b'<plist/>',
+            prefix + 'Assets.car': b'Synthetic catalog only',
+            prefix + 'AppIcon60x60@3x.png': b'\x89PNG\r\n\x1a\n'+b'\0'*8+struct.pack('>II',180,180)+b'\0'*8,
+            prefix + 'PlugIns/GameLingoControls.appex/Info.plist':plistlib.dumps({'CFBundleVersion':'synthetic','NSExtension':{'NSExtensionPointIdentifier':'com.apple.widgetkit-extension'}}),
+            prefix + 'PlugIns/GameLingoControls.appex/GameLingoControls':b'Synthetic extension only',
         }
         items.update(extra or {})
         with zipfile.ZipFile(path, 'w') as archive:
@@ -58,6 +62,16 @@ class PackagingTests(unittest.TestCase):
             with self.assertRaises(ValueError): validator.validate(path)
             self.package(path, extra={'Payload/GameLingo.app/en_ar/model/model.bin': b'test-only'})
             with self.assertRaises(ValueError): validator.validate(path)
+
+    def test_missing_3x_icon_and_mismatched_control_are_rejected(self):
+        for extra in [
+            {'Payload/GameLingo.app/AppIcon60x60@3x.png':b'not an icon'},
+            {'Payload/GameLingo.app/PlugIns/GameLingoControls.appex/Info.plist':plistlib.dumps({'CFBundleVersion':'wrong'})},
+        ]:
+            with self.subTest(extra=list(extra)), tempfile.TemporaryDirectory() as tmp:
+                path=pathlib.Path(tmp)/'fixture.zip'
+                self.package(path,extra=extra)
+                with self.assertRaises(ValueError):validator.validate(path)
 
 
 if __name__ == '__main__':

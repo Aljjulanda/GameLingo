@@ -175,7 +175,12 @@ struct PostOCRReading {
 
 enum DialogueObservation {
     static func resolve(_ lines: [OCRLine], roi: SourceBox, knownNames: String, selector: inout DialogueSelection, quality: QualitySettings = QualitySettings()) -> PostOCRReading {
-        var filtered = lines.filter { !DialogueNoise.rejects($0.text) }
+        let known = Set(knownNames.split(separator:",").map{DialogueText.normalized(String($0)).lowercased()})
+        var filtered = lines.filter { line in
+            let label = line.text.split(separator:":",maxSplits:1,omittingEmptySubsequences:false)
+            let spokenNumber = label.count == 2 && known.contains(DialogueText.normalized(String(label[0])).lowercased())
+            return !DialogueNoise.rejects(line.text,spokenNumber:spokenNumber) && !DialogueNoise.vehicleLettering(line,roi:roi,knownNames:knownNames)
+        }
         // If only the detached speaker remains after removing a code/counter,
         // do not fall back to translating the orphaned label on its own.
         if filtered.count < lines.count && !filtered.isEmpty {

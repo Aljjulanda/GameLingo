@@ -153,7 +153,7 @@ class Receiver(context: Context, private val render: (JSONObject?) -> Unit, priv
                 try {
                     val auth = if (pin.isNotEmpty()) JSONObject().put("type","pair").put("pin",pin)
                         else JSONObject().put("type","hello").put("token", Pairing.decrypt(prefs.getString("token","")!!))
-                    ws.send(auth.put("v",1).put("features",JSONArray(listOf("document_v1","speaker_v1","display_ack","menu_v1","spatial_v1","roi_edit_v1","persistent_preview_v1"))).toString())
+                    ws.send(auth.put("v",1).put("features",JSONArray(listOf("document_v1","speaker_v1","display_ack","menu_v1","spatial_v1","source_lifetime_v1","roi_edit_v1","persistent_preview_v1"))).toString())
                 } catch (_: Exception) { stop(); status("أعد الاقتران من إعدادات GameLingo") }
             }
             override fun onMessage(ws: WebSocket, text: String) = onMain {
@@ -180,11 +180,12 @@ class Receiver(context: Context, private val render: (JSONObject?) -> Unit, priv
                             serverTime = m.getLong("time_ms"); syncTime = SystemClock.elapsedRealtime()
                             render(null); diagnostic("auth.ok", "متصل · في انتظار الترجمة")
                         }
-                        "subtitle_show", "subtitle_update", "subtitle_hide", "subtitle_clear", "subtitle_source_gone", "context_show", "context_present", "context_clear" -> {
+                        "subtitle_show", "subtitle_update", "subtitle_hide", "subtitle_clear", "subtitle_source_gone", "subtitle_source_present", "context_show", "context_present", "context_clear" -> {
                             if (session.isEmpty() || m.optString("session") != session || m.getLong("seq") <= sequence) return@onMain
                             sequence = m.getLong("seq")
                             if (m.getString("type") in listOf("subtitle_clear","subtitle_hide")) { render(m); return@onMain }
                             if(m.getString("type")=="subtitle_source_gone") { render(m); return@onMain }
+                            if(m.getString("type")=="subtitle_source_present") { require(m.getString("id").length in 1..160 && m.getLong("source_generation")>=0);render(m);return@onMain }
                             if(m.getString("type").startsWith("context_")) { render(m); return@onMain }
                             val left = m.optLong("expires_at",Long.MAX_VALUE) - (serverTime + SystemClock.elapsedRealtime() - syncTime)
                             if (left <= 0) return@onMain

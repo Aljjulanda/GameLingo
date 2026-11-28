@@ -19,17 +19,43 @@ enum SpatialRecognition {
     static func category(_ lines: [OCRLine]) -> ScreenCategory {
         let keys = lines.map { key($0.text) }, words = Set(keys)
         if keys.contains(where: { $0.contains("messages") || $0 == "contacts" || $0 == "inbox" }), lines.count >= 2 { return .phone }
-        if keys.contains(where: { $0.contains("objective") || $0.hasPrefix("mission:") || $0.hasPrefix("mission objective") }) { return .objective }
         if keys.contains(where: { $0.hasPrefix("press ") || $0.hasPrefix("hold ") || $0.hasPrefix("tap ") }) { return .tutorial }
         if !words.isDisjoint(with:["graphics","audio","accessibility","display","controls","brightness","settings"]), lines.count >= 3 { return .settings }
         if !words.isDisjoint(with:["inventory","weapons","equipment","items"]), lines.count >= 3 { return .inventory }
         if !words.isDisjoint(with:["shop","buy","sell","purchase"]), lines.count >= 3 { return .shop }
         if words.contains("map"), keys.contains(where:{$0.contains("waypoint") || $0.contains("legend")}) { return .map }
         if !words.isDisjoint(with:["resume","resume game","new game","load game","main menu","options","save game","pause"]), lines.count >= 3 { return .menu }
+        // A submenu often has only two selectable rows. Require both known UI
+        // labels AND shared column geometry; one sign/word is never a menu.
+        let labels: Set<String> = ["back","continue","resume","resume game","settings","options","graphics","audio","display","controls","accessibility","brightness","subtitles","language","on","off","apply","cancel","confirm","new game","load game","save game","quit","quit game"]
+        let ui = lines.filter { labels.contains(key($0.text)) && $0.confidence >= 0.8 }
+        if ui.contains(where:{ a in ui.contains { b in a != b && abs(a.box.x-b.box.x)<0.04 && abs(a.box.y-b.box.y)>max(a.box.h,b.box.h) && abs(a.box.y-b.box.y)<0.45 } }) { return .menu }
         // Generic lists need geometric and textual evidence; environmental signs alone aren't menus.
         let aligned = lines.filter { l in lines.filter { abs($0.box.x-l.box.x)<0.03 && $0.box.y != l.box.y }.count >= 3 }
         if aligned.count >= 4, keys.contains(where:{["back","select","confirm","cancel"].contains($0)}) { return .menu }
+        if lines.contains(where:isObjective) || keys.contains(where:{$0.hasPrefix("mission:") || $0.hasPrefix("mission objective")}) { return .objective }
         return .gameplay
+    }
+    static func isObjective(_ line: OCRLine) -> Bool {
+        let text = key(line.text)
+        guard line.confidence >= 0.8, line.box.isValid, line.box.y < 0.55,
+              line.box.h <= 0.12, (2...24).contains(text.split(separator:" ").count), !TextPrivacy.excluded(text) else { return false }
+        return ["escape ","lose the ","evade ","reach ","return to ","go to ","find ","follow ","protect ","defend ","collect ","deliver ","meet ","steal ","destroy "].contains(where:text.hasPrefix)
+    }
+    static func sameObservation(_ a: [OCRLine], _ b: [OCRLine]) -> Bool {
+        a.count == b.count && a.allSatisfy { row in b.contains { key($0.text) == key(row.text) && abs($0.box.x-row.box.x)<0.035 && abs($0.box.y-row.box.y)<0.035 } }
+    }
+    static func rows(_ lines: [OCRLine], dialogue: SourceBox, category: ScreenCategory) -> [OCRLine] {
+        let safe = rows(lines,dialogue:dialogue)
+        if category == .objective {
+            // A HUD objective does not authorize translating the surrounding
+            // world. Each selected row needs its own instruction evidence.
+            return safe.filter { isObjective($0) || key($0.text).hasPrefix("mission:") || key($0.text).hasPrefix("mission objective") }
+        }
+        if category == .tutorial {
+            return safe.filter { let s = key($0.text); return s.hasPrefix("press ") || s.hasPrefix("hold ") || s.hasPrefix("tap ") }
+        }
+        return safe
     }
     static func dynamic(_ text: String, category: ScreenCategory) -> Bool {
         text.contains(where:\.isNumber) || [.phone,.objective,.tutorial].contains(category)
@@ -77,8 +103,10 @@ struct SpatialScreen: Codable {
 }
 struct SpatialMetrics {
     var scans = 0, recognized = 0, discoveries = 0, cacheHits = 0, misses = 0, dynamicUpdates = 0, rejected = 0, published = 0
+    var observedRows = 0, selectedRows = 0
+    var category = "gameplay"
     var recall = LatencySamples()
-    var summary: String { "Spatial scans/discoveries/recognized: \(scans)/\(discoveries)/\(recognized); hits/misses/dynamic/rejected/published: \(cacheHits)/\(misses)/\(dynamicUpdates)/\(rejected)/\(published); recall p95 ms: \(recall.p95)" }
+    var summary: String { "Spatial scans/discoveries/recognized: \(scans)/\(discoveries)/\(recognized); category/observed/selected: \(category)/\(observedRows)/\(selectedRows); hits/misses/dynamic/rejected/published: \(cacheHits)/\(misses)/\(dynamicUpdates)/\(rejected)/\(published); recall p95 ms: \(recall.p95)" }
 }
 enum SpatialTarget {
     static func valid(source: String, target: String) -> Bool {
@@ -87,6 +115,26 @@ enum SpatialTarget {
             DialogueText.matches(text,"[0-9٠-٩]+(?:[.,][0-9٠-٩]+)*").map { String($0.map { c in c.wholeNumberValue.map{Character(String($0))} ?? c }) }
         }
         return numbers(source) == numbers(target) && ["%","$","€","£","△","□","✕","○","L1","L2","R1","R2"].allSatisfy { !source.contains($0) || target.contains($0) }
+    }
+}
+
+/// One payload contract for the TV receiver and the phone's Codable decoder.
+enum SpatialPresentation {
+    static func snapshot(_ screen: SpatialScreen, rows: [OCRLine], aspect: Double) -> [String:Any]? {
+        guard aspect.isFinite, (0.5...4).contains(aspect) else { return nil }
+        let items = screen.elements.compactMap { element -> [String:Any]? in
+            guard let row = rows.first(where:{SpatialRecognition.key($0.text) == element.normalized && abs($0.box.x-element.box.x)<0.035 && abs($0.box.y-element.box.y)<0.035}) else { return nil }
+            return ["id":SpatialRecognition.hash(element.normalized+"@\(Int(row.box.x*100)),\(Int(row.box.y*100))"),"source":row.text,"translated":SubtitlePresentation.clean(element.translated),
+                    "box":["x":row.box.x,"y":row.box.y,"w":row.box.w,"h":row.box.h],"alignment":element.alignment,"scale":element.scale,"dynamic":element.dynamic]
+        }
+        var appearance = MenuAppearance(); appearance.shadow = false
+        guard let data = try? JSONEncoder().encode(appearance), let style = try? JSONSerialization.jsonObject(with:data) else { return nil }
+        var bounded = Array(items.prefix(24))
+        while true {
+            let message = TVProtocol.envelope("menu_snapshot",fields:["menu_id":"spatial-"+screen.id,"items":bounded,"appearance":style,"spatial":true,"category":screen.category.rawValue,"frame_aspect":aspect,"lease_ms":1800])
+            if let data = try? TVProtocol.encode(message), data.count <= 14000 { return message }
+            if bounded.isEmpty { return nil }; bounded.removeLast()
+        }
     }
 }
 

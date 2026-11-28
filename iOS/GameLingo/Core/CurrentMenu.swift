@@ -145,7 +145,8 @@ enum MenuTerminology {
         "back":"رجوع","exit":"خروج","quit":"إنهاء","inventory":"المخزون","map":"الخريطة","objectives":"الأهداف",
         "controls":"التحكم","audio":"الصوت","video":"الفيديو","graphics":"الرسوم","language":"اللغة",
         "subtitles":"الترجمة النصية","brightness":"السطوع","difficulty":"الصعوبة","apply":"تطبيق","cancel":"إلغاء",
-        "yes":"نعم","no":"لا","on":"تشغيل","off":"إيقاف","enabled":"مفعّل","disabled":"معطّل","default":"افتراضي"]
+        "yes":"نعم","no":"لا","on":"تشغيل","off":"إيقاف","enabled":"مفعّل","disabled":"معطّل","default":"افتراضي",
+        "escape the police":"اهرب من الشرطة"]
     static func translation(_ source: String) -> String? { terms[CurrentMenuLayout.key(source).lowercased()] }
 }
 

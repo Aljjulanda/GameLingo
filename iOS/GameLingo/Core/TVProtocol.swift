@@ -27,6 +27,8 @@ enum TVProtocol {
             "duration_ms":8000,"expires_at":now+8000
         ]
         fields["event_fresh"] = !job.correction
+        fields["source_generation"] = Int(job.generation)
+        fields["source_lease_ms"] = 1800
         fields["meaningful_correction"] = job.meaningfulCorrection
         if !job.eventBoundary.isEmpty { fields["event_boundary"] = job.eventBoundary; fields["source_gap_ms"] = job.sourceGapMilliseconds }
         if let speaker = job.speaker {

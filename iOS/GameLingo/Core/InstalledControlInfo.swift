@@ -5,6 +5,8 @@ struct InstalledControlInfo {
     let appVersion: String
     let appBuild: String?
     let controlBuild: String?
+    var iconName: String?
+    var iconPNGCount = 0
     var versionsMatch: Bool? {
         guard let appBuild, let controlBuild else { return nil }
         return appBuild == controlBuild
@@ -22,6 +24,10 @@ struct InstalledControlInfo {
         let control = plugins.prefix(32).filter { $0.pathExtension == "appex" }.map(metadata).first {
             ($0["NSExtension"] as? [String:Any])?["NSExtensionPointIdentifier"] as? String == "com.apple.widgetkit-extension"
         }
-        return InstalledControlInfo(appVersion:version,appBuild:build,controlBuild:control?["CFBundleVersion"] as? String)
+        let primary = (app["CFBundleIcons"] as? [String:Any])?["CFBundlePrimaryIcon"] as? [String:Any]
+        let resources = (try? FileManager.default.contentsOfDirectory(at:appURL,includingPropertiesForKeys:nil)) ?? []
+        return InstalledControlInfo(appVersion:version,appBuild:build,controlBuild:control?["CFBundleVersion"] as? String,
+                                    iconName:primary?["CFBundleIconName"] as? String,
+                                    iconPNGCount:resources.filter{$0.pathExtension == "png" && $0.lastPathComponent.hasPrefix("AppIcon")}.count)
     }
 }

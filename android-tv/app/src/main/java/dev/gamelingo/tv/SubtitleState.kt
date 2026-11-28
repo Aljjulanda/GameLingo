@@ -5,6 +5,34 @@ data class SubtitleEntry(val id: String, var text: String, val shownAt: Long, va
     var source:String="",var box:SourceBox?=null,var speaker:String="")
 
 class SubtitleState {
+    private data class SourceLease(var generation:Long,var until:Long,var closed:Boolean=false)
+    private val sourceLeases=java.util.LinkedHashMap<String,SourceLease>()
+    fun sourcePresent(id:String,generation:Long,now:Long,lease:Long=1800) {
+        val old=sourceLeases[id]
+        if(old!=null && (old.closed || generation<old.generation))return
+        val deadline=now+lease.coerceIn(200,2000)
+        sourceLeases[id]=SourceLease(generation,deadline)
+        while(sourceLeases.size>128)sourceLeases.remove(sourceLeases.keys.first())
+        entries.firstOrNull {it.id==id}?.until=deadline
+    }
+    fun sourceGone(id:String,generation:Long):Boolean {
+        val old=sourceLeases[id] ?: run {
+            if(generation<0)return false
+            sourcePresent(id,generation,0);sourceLeases[id]!!
+        }
+        if(generation<old.generation)return true
+        old.closed=true;old.generation=generation
+        entries.removeAll {it.id==id}
+        return true
+    }
+    fun acceptsSource(id:String,now:Long):Boolean=sourceLeases[id]?.let {!it.closed && it.until>now} ?: true
+    fun sourceShow(id:String,generation:Long,now:Long,lease:Long=1800):Boolean {
+        if(id !in sourceLeases)sourcePresent(id,generation,now,lease)
+        val current=sourceLeases[id] ?: return false
+        if(!acceptsSource(id,now) || generation<current.generation)return false
+        current.generation=generation
+        return true
+    }
     val entries = mutableListOf<SubtitleEntry>()
     // A small tombstone set prevents delayed duplicates resurrecting expired entries.
     private val seen = java.util.LinkedHashSet<String>()
@@ -88,6 +116,7 @@ class SubtitleState {
     fun show(id: String, text: String, now: Long, duration: Long, capacity: Int,source:String="",box:SourceBox?=null,
         speaker:String="",freshEvent:Boolean=false,meaningfulCorrection:Boolean=false,boundary:String?=null,sourceGap:Long=0) {
         expire(now)
+        if(!acceptsSource(id,now))return
         val old = entries.firstOrNull { it.id == (aliases[id] ?: id) }
         if (old != null) {
             // Cosmetic OCR/Arabic paraphrases do not rewrite a visible card.
@@ -104,7 +133,7 @@ class SubtitleState {
         val compatible:(SubtitleEntry)->Boolean={it.speaker.isEmpty() || speaker.isEmpty() || it.speaker.equals(speaker,true)}
         // Legacy fresh-event messages retain their behavior. New senders supply
         // boundary evidence; a bare new ID must not stack the same active line.
-        val matching=if(provedNew || (freshEvent && boundary==null)) null else if(freshEvent) entries.lastOrNull()?.takeIf {
+        val matching=if(id in sourceLeases || provedNew || (freshEvent && boundary==null)) null else if(freshEvent) entries.lastOrNull()?.takeIf {
             it.id !in visuallySuperseded && compatible(it) && sameSource(it,source,box)
         } else entries.lastOrNull {it.id !in visuallySuperseded && compatible(it) && now-it.shownAt<=3500 && sameSource(it,source,box)}
         remember(id)
@@ -124,6 +153,7 @@ class SubtitleState {
             entries.remove(matching)
         }
         entries.add(SubtitleEntry(id, text, now, now + duration,source,box,speaker))
+        sourceLeases[id]?.let {lease -> entries.last().until=lease.until}
         while (entries.size > capacity.coerceIn(1,3)) entries.removeAt(0)
     }
     fun expire(now: Long) { entries.removeAll { it.until <= now } }
@@ -148,6 +178,6 @@ class SubtitleState {
     }
     fun alpha(entry: SubtitleEntry, now: Long, fade: Long): Float =
         if (fade <= 0) 1f else ((entry.until-now).toFloat()/fade).coerceIn(0f,1f)
-    fun clear() { entries.clear(); seen.clear();aliases.clear();visuallySuperseded.clear();semanticKeys.clear() }
+    fun clear() { entries.clear(); seen.clear();aliases.clear();visuallySuperseded.clear();semanticKeys.clear();sourceLeases.clear() }
 }
 

@@ -26,4 +26,13 @@ final class InstalledControlInfoTests: XCTestCase {
         info["CFBundleVersion"] = "14"; try write(info,at:plugin)
         XCTAssertEqual(InstalledControlInfo.inspect(appURL:root).versionsMatch,true)
     }
+    func testInstalledIconMetadataAndLooseResourcesAreReportedWithoutSigningClaim() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at:root) }
+        try write(["CFBundleVersion":"15","CFBundleIcons":["CFBundlePrimaryIcon":["CFBundleIconName":"AppIcon"]]],at:root)
+        try Data("synthetic PNG presence only".utf8).write(to:root.appendingPathComponent("AppIcon60x60@3x.png"))
+        let info = InstalledControlInfo.inspect(appURL:root)
+        XCTAssertEqual(info.iconName,"AppIcon"); XCTAssertEqual(info.iconPNGCount,1)
+        XCTAssertNil(info.controlBuild)
+    }
 }

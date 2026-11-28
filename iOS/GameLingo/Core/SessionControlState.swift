@@ -27,3 +27,22 @@ enum SessionControlStore {
         d.set(try? JSONEncoder().encode(SessionControlSnapshot(phase:phase,updated:Date())),forKey:"session.actual.v1"); d.synchronize()
     }
 }
+
+/// Bounded command receipts; no game text, credentials or independent session state.
+enum ControlCommandReceipt {
+    static func record(_ stage: String, detail: String = "", extensionProcess: Bool = false) {
+        let key = extensionProcess ? "control.extension.receipt.v1" : "control.app.receipt.v1"
+        let value = ["stage":stage,"detail":String(detail.prefix(240)),"at":ISO8601DateFormatter().string(from:Date())]
+        for d in [UserDefaults.standard, UserDefaults(suiteName:SessionControlStore.group)].compactMap({$0}) {
+            d.set(value,forKey:key); d.synchronize()
+        }
+    }
+    static func summary() -> String {
+        let shared = UserDefaults(suiteName:SessionControlStore.group); shared?.synchronize()
+        return ["control.extension.receipt.v1","control.app.receipt.v1"].compactMap { key in
+            let value = (key.contains("extension") ? shared?.dictionary(forKey:key) : UserDefaults.standard.dictionary(forKey:key))
+            guard let value else { return nil }
+            return ["at","stage","detail"].compactMap{value[$0] as? String}.filter{!$0.isEmpty}.joined(separator:" · ")
+        }.joined(separator:"\n")
+    }
+}

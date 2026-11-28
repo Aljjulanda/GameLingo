@@ -7,8 +7,16 @@ struct ToggleTranslationIntent: AppIntent {
     static var openAppWhenRun: Bool = false
     @MainActor func perform() async throws -> some IntentResult {
         #if GAMELINGO_APP
-        try AppModel.shared.toggleTranslationFromControl()
+        ControlCommandReceipt.record("app.received.toggle")
+        do {
+            try AppModel.shared.toggleTranslationFromControl()
+            ControlCommandReceipt.record("app.accepted.toggle",detail:AppModel.shared.sessionStatus)
+        } catch {
+            ControlCommandReceipt.record("app.failed.toggle",detail:error.localizedDescription)
+            throw error
+        }
         #else
+        ControlCommandReceipt.record("extension.wrongProcess.toggle",extensionProcess:true)
         throw TranslationControlError(message:"تعذر تنفيذ التحكم داخل التطبيق. افتح GameLingo مرة واحدة وتأكد من تضمين امتداد التحكم عند التوقيع.")
         #endif
         ControlCenter.shared.reloadControls(ofKind:SessionControlStore.kind)
@@ -28,8 +36,16 @@ struct SetTranslationIntent: SetValueIntent {
     @MainActor func perform() async throws -> some IntentResult {
         #if GAMELINGO_APP
         // Execute against the same model as the UI, including a cold launch.
-        try AppModel.shared.setTranslationFromControl(value)
+        ControlCommandReceipt.record("app.received.set",detail:String(value))
+        do {
+            try AppModel.shared.setTranslationFromControl(value)
+            ControlCommandReceipt.record("app.accepted.set",detail:AppModel.shared.sessionStatus)
+        } catch {
+            ControlCommandReceipt.record("app.failed.set",detail:error.localizedDescription)
+            throw error
+        }
         #else
+        ControlCommandReceipt.record("extension.wrongProcess.set",extensionProcess:true)
         // Never silently succeed after executing in the wrong process.
         throw TranslationControlError(message:"تعذر تشغيل التحكم. افتح GameLingo مرة واحدة وتأكد من توقيع التطبيق وامتداد التحكم معًا.")
         #endif

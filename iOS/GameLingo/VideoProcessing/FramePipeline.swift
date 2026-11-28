@@ -102,6 +102,7 @@ final class FramePipeline {
                 finishCurrentMenu("تغيرت إعدادات القوائم؛ أعد الطلب")
             }
             menuOptions = value; menuFailures = []; menuEpoch = UUID(); menuIdentity = nil; menuItems = []; menuReadings = []; menuCache = BoundedLRU(capacity:128)
+            spatial.setEnabled(!value.usesConfiguredMenus && !reading && !currentMenu.active); spatialRegions = []
             publish(TVProtocol.envelope("menu_clear"))
         }
     }
@@ -117,6 +118,7 @@ final class FramePipeline {
     }
     private var active = false
     private var runID = UUID()
+    private var sourceStalled = false
     private var roi = SourceBox.dialogue
     private var mode = PerformanceMode.balanced
     private var thermal = 0, lowPower = false
@@ -351,6 +353,11 @@ final class FramePipeline {
     }
     private func sample() {
         let now = ProcessInfo.processInfo.systemUptime
+        if frameAge >= 1.8 && !sourceStalled {
+            sourceStalled = true; runID = UUID(); pending = nil; tracker.reset(); signature = FrameSignature()
+            spatial.invalidate(); spatialRegions = []; clearMenu()
+            publish(TVProtocol.envelope("subtitle_clear"))
+        }
         if reading || currentMenu.active || frameAge >= MenuSuggestionSession.lifetime { menuSuggestion.clear() }
         else { menuSuggestion.expire(now:now) }
         reportMenuSuggestion()
@@ -368,9 +375,10 @@ final class FramePipeline {
         slotLock.lock(); let frame = latest; latest = nil; let dropped = metricsDropped; slotLock.unlock()
         guard let (buffer,received,stamp) = frame else { return }
         guard now-received < 1 else { return }
+        sourceStalled = false
         lastSample = now; metrics.frames &+= 1; metrics.dropped = dropped
         metrics.lastFrameAt = received
-        if !reading && !currentMenu.active && !menuOptions.menusEnabled { spatial.offer(buffer,now:now) }
+        if !reading && !currentMenu.active && !menuOptions.usesConfiguredMenus { spatial.offer(buffer,now:now) }
         if previewEnabled || previewRequested {
             previewRequested = false
             let lines = setupRequested ? (try? ocr.menuLines(buffer,roi:setupRegion)) ?? [] : []
@@ -382,7 +390,7 @@ final class FramePipeline {
             processCurrentMenu(buffer,received:received,now:now)
             return // Dialogue resumes from the next fresh frame, never this menu frame.
         }
-        if menuOptions.menusEnabled && !reading { processMenu(buffer,now:now) }
+        if menuOptions.usesConfiguredMenus && !reading { processMenu(buffer,now:now) }
         else if !menuItems.isEmpty { clearMenu() }
         if reading {
             if captureRequested {
@@ -415,7 +423,10 @@ final class FramePipeline {
             let storedNames = quality[.learnNames] ? speakerWords : ""
             let (_,box) = try autoreleasepool { try ocr.recognize(buffer,roi:roi,knownNames:names+","+storedNames,dictionaryNames:names+","+namesWords) }
             guard isActive() else { return }
-            let content = ocr.content
+            // Suppress confirmed UI before translation, dialogue context or
+            // learning ingress. Its own spatial worker owns these observations.
+            let isUI = menuReadings.contains(where:{$0.box.contains(box) || box.contains($0.box)}) || spatialRegions.contains(where:{$0.contains(box) || box.contains($0)})
+            let content = isUI ? DialogueContent(text:"",speaker:nil) : ocr.content
             if menuOptions.suggestMenus == true && menuIdentity == nil {
                 menuSuggestion.observe(ocr.menuEvidenceLines,frameAt:received,now:ProcessInfo.processInfo.systemUptime)
             } else { menuSuggestion.clear() }
@@ -467,7 +478,7 @@ final class FramePipeline {
             switch tracker.observe(text:content.text,box:box,now:now,frameMilliseconds:stamp,speaker:content.speaker,confidence:ocr.confidence) {
             case .unchanged: break
             case .gone(let id):
-                translator.cancel(); pending = nil; publish(TVProtocol.envelope("subtitle_source_gone",fields:["id":id])); lastTextChange = now
+                translator.cancel(); pending = nil; publish(TVProtocol.envelope("subtitle_source_gone",fields:["id":id,"source_generation":Int(tracker.generation)])); lastTextChange = now
             case .dialogue(var job,let previous):
                 job.engineText = content.engineText; job.cue = content.cue
                 if quality[.learnNames], let speaker = content.speaker, let form = content.labelForm, let namesStore {
@@ -477,12 +488,15 @@ final class FramePipeline {
                 }
                 if quality[.learnNames], let speaker = job.speaker { job.speakerArabic = namesByKey[GameName.key(speaker)] }
                 translator.packs?.recordDialogue(job.id)
-                if let previous { publish(TVProtocol.envelope("subtitle_source_gone",fields:["id":previous])) }
+                if let previous { publish(TVProtocol.envelope("subtitle_source_gone",fields:["id":previous,"source_generation":Int(job.generation-1)])) }
                 guard stability.shouldPublish(job) else { memory.observe(job,now:now); break }
                 if !job.correction { translator.cancel() }
                 pendingCapture = capture.active ? ocr.lastLines.map{ CaptureLine(text:$0.text,box:$0.box,confidence:$0.confidence) } : []
                 pendingSegments = capture.active ? ocr.lastSegments.map{ CaptureLine(text:$0.text,box:$0.box,confidence:$0.confidence) } : []
                 pending = job; lastTextChange = now; submit()
+            }
+            if !content.text.isEmpty, let current = tracker.current {
+                publish(TVProtocol.envelope("subtitle_source_present",fields:["id":current.id,"source_generation":Int(current.generation),"lease_ms":1800]))
             }
 #if GAMELINGO_TYPEWRITER_RESEARCH
             if let held = heldPublication, tracker.current?.id != held.job.id { heldPublication = nil }
@@ -505,6 +519,7 @@ final class FramePipeline {
             menuSuggestion.clear(); reportMenuSuggestion()
             clearMenu(); resetDialogueAfterMenu()
             currentMenu.request(ticket,now:ProcessInfo.processInfo.systemUptime)
+            spatial.setEnabled(false); spatialRegions = []
             currentMenuLastSample = 0; menuFailures = []
             slotLock.lock(); latest = nil; slotLock.unlock()
             publish(TVProtocol.envelope("subtitle_clear"))
@@ -528,6 +543,7 @@ final class FramePipeline {
         translator.cancel()
         slotLock.lock(); latest = nil; slotLock.unlock()
         currentMenu.close(message); clearMenu(); resetDialogueAfterMenu(); reportCurrentMenu(ticket:ticket)
+        spatial.setEnabled(!menuOptions.usesConfiguredMenus && !reading)
     }
     private func currentMenuContext() -> MenuContext? {
         guard let ticket = currentMenu.ticket else { return nil }
@@ -720,7 +736,7 @@ final class FramePipeline {
             guard let self else { return }
             self.queue.async {
                 self.translating = false
-                if self.isActive() && epoch == self.runID && self.tracker.accepts(job) {
+                if self.isActive() && epoch == self.runID && self.frameAge < 1.6 && self.tracker.accepts(job) {
                     if correctionScope != self.correctionSnapshot.scopeKey { self.submit(); return }
                     // An explicit edit/scope/flag change affects only an unpublished
                     // job. Never replay an already displayed card or reset clocks.
@@ -734,7 +750,7 @@ final class FramePipeline {
                         guard self.isActive(), epoch == self.runID, self.tracker.accepts(job), correctionScope == self.correctionSnapshot.scopeKey, contextKey == self.outputContextKey else { return }
                     }
                     var delivered = job
-                    if let current = self.tracker.current, DialogueText.exactWords(current.text) == DialogueText.exactWords(job.text) { delivered.speaker = current.speaker }
+                    if let current = self.tracker.current, DialogueText.exactWords(current.text) == DialogueText.exactWords(job.text) { delivered.speaker = current.speaker; delivered.generation = current.generation }
                     delivered.speakerArabic = self.quality[.learnNames] ? delivered.speaker.flatMap { self.namesByKey[GameName.key($0)] } : nil
                     switch result {
                     case .success(let decision):
@@ -800,6 +816,7 @@ final class FramePipeline {
         queue.async { [self] in
             finishCurrentMenu("انتقلت إلى قراءة النص")
             runID = UUID(); pending = nil; tracker.markInterrupted(); reading = true; captureRequested = true; readingTicket = ticket
+            spatial.setEnabled(false); spatialRegions = []
 #if GAMELINGO_TYPEWRITER_RESEARCH
             heldPublication = nil; typewriter = TypewriterPublication(); typewriterScope = nil
 #endif
@@ -854,6 +871,7 @@ final class FramePipeline {
     private func finishReading(message: String = "القراءة مغلقة") {
         guard reading else { return }
         reading = false; captureRequested = false
+        spatial.setEnabled(!menuOptions.usesConfiguredMenus && !currentMenu.active)
         let ticket = readingTicket
         publish(TVProtocol.envelope("document_hide"))
         DispatchQueue.main.async { self.onReading?(ticket,false,[],message) }

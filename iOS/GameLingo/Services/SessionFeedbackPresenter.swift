@@ -9,6 +9,10 @@ final class SessionNotificationDelegate: NSObject, UNUserNotificationCenterDeleg
         let identifier = notification.request.identifier
         let active = await MainActor.run { UIApplication.shared.applicationState == .active }
         let show = SessionNotificationPolicy.showSystemBanner(identifier:identifier,appIsActive:active)
+        if identifier == SessionNotificationPolicy.testIdentifier {
+            UserDefaults.standard.set(Date().timeIntervalSince1970,forKey:"notification.test.delegate.at")
+            UserDefaults.standard.set(show,forKey:"notification.test.delegate.bannerRequested")
+        }
         // Control Center may leave the app inactive while notifications
         // are still delivered through this foreground delegate.
         return show ? [.banner,.list] : []
@@ -39,7 +43,10 @@ private final class LocalSessionNotifications: SessionNotificationClient {
         let settings = await center.notificationSettings()
         let alerts = settings.alertSetting == .enabled ? "مسموحة" : "غير مفعّلة"
         let style = settings.alertStyle == .none ? "دون لافتة" : "لافتة أو تنبيه"
-        return "تنبيهات النظام: "+alerts+" · "+style
+        let delivered = await center.deliveredNotifications().contains { $0.request.identifier == SessionNotificationPolicy.testIdentifier }
+        let at = UserDefaults.standard.double(forKey:"notification.test.delegate.at")
+        let delegate = at > 0 ? "وصل للمندوب: "+Date(timeIntervalSince1970:at).formatted(date:.omitted,time:.standard)+" · طلب لافتة: "+(UserDefaults.standard.bool(forKey:"notification.test.delegate.bannerRequested") ? "نعم" : "لا") : "لم يُرصد وصول للمندوب بعد (قد يسلّمه النظام مباشرة في الخلفية)"
+        return "تنبيهات النظام: "+alerts+" · "+style+"\n"+delegate+"\n"+(delivered ? "التجريبي موجود بقائمة النظام؛ ظهور اللافتة يحتاج ملاحظة الجهاز." : "التجريبي غير موجود بقائمة النظام حاليًا.")
     }
     func replace(_ notice: SessionNotice) async throws {
         let content = UNMutableNotificationContent()
@@ -54,10 +61,11 @@ private final class LocalSessionNotifications: SessionNotificationClient {
     }
     func sendTest() async throws {
         let content = UNMutableNotificationContent()
-        content.title = "إشعارات GameLingo تعمل"
+        content.title = "اختبار إشعارات GameLingo"
         content.body = "هذا إشعار تجريبي فقط؛ لم تتغير جلسة الترجمة."
         let id = SessionNotificationPolicy.testIdentifier
         center.removeDeliveredNotifications(withIdentifiers:[id])
+        UserDefaults.standard.removeObject(forKey:"notification.test.delegate.at")
         try await center.add(UNNotificationRequest(identifier:id,content:content,trigger:UNTimeIntervalNotificationTrigger(timeInterval:1,repeats:false)))
     }
 }

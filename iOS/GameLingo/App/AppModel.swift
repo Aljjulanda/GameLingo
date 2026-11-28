@@ -51,6 +51,7 @@ final class AppModel: ObservableObject {
     @Published var tvSpeakers = false
     @Published var tvMenus = false
     @Published var tvSpatial = false
+    @Published var tvSourceLifetime = false
     @Published var tvRegionEditing = false
     @Published var tvPersistentPreview = false
     @Published var readingActive = false
@@ -120,6 +121,7 @@ final class AppModel: ObservableObject {
     @Published var localMenuItems: [MenuOverlayItem] = []
     @Published var localMenuAppearance = MenuAppearance()
     @Published var localMenuUntil = 0.0
+    private var localMenuID = ""
     @Published var gameOptions = GameOptions() {
         didSet {
             guard !applyingProfile else { return }
@@ -193,12 +195,14 @@ final class AppModel: ObservableObject {
         if gameOptions.destination.tvEnabled && (type != "menu_snapshot" || (message["spatial"] as? Bool == true ? tvSpatial : tvMenus)) { hub.publish(message) }
         if gameOptions.destination.phoneEnabled {
             localSubtitles.apply(message,settings:settings.display,now:ProcessInfo.processInfo.systemUptime)
-            if type == "menu_clear" { localMenuItems = []; localMenuUntil = 0 }
+            if type == "menu_clear", message["menu_id"] == nil || message["menu_id"] as? String == localMenuID {
+                localMenuItems = []; localMenuUntil = 0; localMenuID = ""
+            }
             if type == "menu_snapshot", let raw = message["items"], let data = try? JSONSerialization.data(withJSONObject:raw),
                let items = try? JSONDecoder().decode([MenuOverlayItem].self,from:data), items.count <= 24,
                let style = message["appearance"], let styleData = try? JSONSerialization.data(withJSONObject:style),
                let appearance = try? JSONDecoder().decode(MenuAppearance.self,from:styleData), appearance.valid {
-                localMenuItems = items; localMenuAppearance = appearance; localMenuUntil = ProcessInfo.processInfo.systemUptime+1.8
+                localMenuItems = items; localMenuAppearance = appearance; localMenuUntil = ProcessInfo.processInfo.systemUptime+1.8; localMenuID = message["menu_id"] as? String ?? ""
             }
         }
     }
@@ -333,12 +337,13 @@ final class AppModel: ObservableObject {
     var performanceSnapshot: String {
         func age(_ at: Double?) -> String { at.map { NumericInput.format(max(0,ProcessInfo.processInfo.systemUptime-$0))+" s" } ?? "not observed" }
         let values = [
-            "GameLingo 0.5.0 (14)", "Measurement started: \(sessionStarted.formatted())", sessionStatus, audioStatus,
+            "GameLingo 0.5.0 (15)", "Measurement started: \(sessionStarted.formatted())", sessionStatus, audioStatus,
             "CPU: \(NumericInput.format(cpuPercent))% (100%=one core)", "RSS: \(NumericInput.format(residentMegabytes)) MB", "Thermal: \(thermal.rawValue)",
             "Translation p95: \(NumericInput.format(metrics.translationP95)) ms", "OCR p95: \(NumericInput.format(metrics.ocrP95)) ms",
             "PS5 native connected: \(streamConnected); encoded age: \(remoteMetrics.encodedFrameAge.map(NumericInput.format) ?? "none"); decoded age: \(remoteMetrics.decodedFrameAge.map(NumericInput.format) ?? "none")",
             "Last processed frame age: \(age(metrics.lastFrameAt)); last OCR age: \(age(metrics.lastOCRAt)); last translation publication age: \(age(metrics.lastTranslationAt))",
             "TV connected: \(tvConnected); destination: \(gameOptions.destination.rawValue)",
+            "TV capabilities menu/spatial/source-lifetime: \(tvMenus)/\(tvSpatial)/\(tvSourceLifetime)",
             "TV background render ACKs: \(backgroundDeliveries)", "Recovery backoff index: \(recoveryAttempts)",
             "PS5 reconnect attempts: \(remoteMetrics.attempts)", "Confirmed PS5 reconnects: \(remoteMetrics.successes)", "Failed PS5 reconnects: \(remoteMetrics.failures)",
             "Frame starvation events: \(remoteMetrics.starvations)", "Decoder IDR requests: \(remoteMetrics.decoderRequests)",
@@ -513,12 +518,13 @@ final class AppModel: ObservableObject {
         hub.onListenerFailure = { [weak self] in self?.hubStarting = false; self?.scheduleRecovery() }
         let processor = self.pipeline
         hub.onDisconnected = { [weak self] in
-            DispatchQueue.main.async { self?.tvConnected = false; self?.tvDocuments = false; self?.tvSpeakers = false; self?.tvMenus = false; self?.regionTicket = nil; self?.regionGame = nil }
+            DispatchQueue.main.async { self?.tvConnected = false; self?.tvDocuments = false; self?.tvSpeakers = false; self?.tvMenus = false; self?.tvSpatial = false; self?.tvSourceLifetime = false; self?.regionTicket = nil; self?.regionGame = nil }
         }
         hub.onConnected = { [weak self] in self?.tvConnected = true }
         hub.onCapabilities = { [weak self] in
             self?.tvDocuments = $0.contains("document_v1"); self?.tvSpeakers = $0.contains("speaker_v1")
             self?.tvSpatial = $0.contains("spatial_v1"); self?.tvMenus = $0.contains("menu_v1"); self?.tvRegionEditing = $0.contains("roi_edit_v1"); self?.tvPersistentPreview = $0.contains("persistent_preview_v1")
+            self?.tvSourceLifetime = $0.contains("source_lifetime_v1")
         }
         hub.onRenderSignature = { [weak self] trace in if self?.quality[.punctuationTrace] == true { self?.tvRenderSignature = trace } }
         hub.onDisplayAck = { [weak self] id in

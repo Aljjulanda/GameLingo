@@ -27,7 +27,7 @@ class SubtitleCanvas(context: Context, private val report: (String)->Unit) : Vie
     var measuredContext: RectF? = null; private set
     var measuredParagraphDirections:List<Int> = emptyList();private set
     private val decorations=java.util.LinkedHashMap<String,SubtitleQuality>()
-    private data class Queued(val id:String,val text:String,val duration:Long,val receivedAt:Long,val source:String,val box:SourceBox?,val speaker:String,val fresh:Boolean,val meaningful:Boolean,val boundary:String?,val gap:Long,val quality:SubtitleQuality)
+    private data class Queued(val id:String,val text:String,val duration:Long,val receivedAt:Long,val source:String,val box:SourceBox?,val speaker:String,val fresh:Boolean,val meaningful:Boolean,val boundary:String?,val gap:Long,val quality:SubtitleQuality,val generation:Long=-1)
     private val pending=java.util.ArrayDeque<Queued>()
     var style = JSONObject()
     private val ink = TextPaint(Paint.ANTI_ALIAS_FLAG)
@@ -62,7 +62,7 @@ class SubtitleCanvas(context: Context, private val report: (String)->Unit) : Vie
         if(message.has("settings")) style=message.getJSONObject("settings")
         when(message.optString("type")) {
             "menu_snapshot" -> { menus.apply(message,now);removeCallbacks(tick);post(tick);invalidate() }
-            "menu_clear" -> {menus.clear();invalidate()}
+            "menu_clear" -> {menus.clear(message.optString("menu_id").takeIf {it.isNotEmpty()});invalidate()}
             "roi_edit_start" -> {regionEditor.start(message);onEditingChanged?.invoke(true);invalidate()}
             "roi_edit_end" -> {regionEditor.end();onEditingChanged?.invoke(false);invalidate()}
             "document_show" -> {
@@ -90,11 +90,21 @@ class SubtitleCanvas(context: Context, private val report: (String)->Unit) : Vie
                 previewActive=false; state.clear();pending.clear();decorations.clear();document=null;contextLabel=null;contextUntil=0;invalidate()
             }
             "subtitle_source_gone" -> {
-                state.disappeared(message.optString("id"),now,(n("min_seconds",4.0)*1000).toLong(),(n("disappearance_grace",1.5)*1000).toLong())
+                val id=message.optString("id")
+                if(state.sourceGone(id,message.optLong("source_generation",-1))) {
+                    if(!state.acceptsSource(id,now))pending.removeAll {it.id==id}
+                } else state.disappeared(id,now,(n("min_seconds",4.0)*1000).toLong(),(n("disappearance_grace",1.5)*1000).toLong())
                 removeCallbacks(tick); post(tick)
+            }
+            "subtitle_source_present" -> {
+                state.sourcePresent(message.getString("id"),message.getLong("source_generation"),now,message.optLong("lease_ms",1800))
+                removeCallbacks(tick);post(tick)
             }
             "subtitle_show", "subtitle_update" -> {
                 val eventId = message.getString("id")
+                if(message.has("source_generation")) {
+                    if(!state.sourceShow(eventId,message.getLong("source_generation"),now,message.optLong("source_lease_ms",1800)))return
+                }
                 if(message.optBoolean("quality_trace",false)) traceRequested.add(eventId) else traceRequested.remove(eventId)
                 while(traceRequested.size > 64) traceRequested.remove(traceRequested.first())
                 val text=message.getString("translated")
@@ -102,7 +112,7 @@ class SubtitleCanvas(context: Context, private val report: (String)->Unit) : Vie
                     (n("min_seconds",4.0)*1000).toLong(),(n("max_seconds",8.0)*1000).toLong(),(n("fixed_seconds",5.0)*1000).toLong()).coerceAtMost((n("hard_seconds",8.0)*1000).toLong())
                 val box=if(listOf("x","y","w","h").all {message.has(it)}) SourceBox(message.optDouble("x"),message.optDouble("y"),message.optDouble("w"),message.optDouble("h")) else null
                 val speaker=message.optJSONObject("speaker")?.optString("name","")?.take(40) ?: ""
-                pending.add(Queued(message.getString("id"),text,duration,now,message.optString("source",""),box,speaker,message.optBoolean("event_fresh",false),message.optBoolean("meaningful_correction",false),if(message.has("event_boundary")) message.optString("event_boundary") else null,message.optLong("source_gap_ms",0),SubtitleQuality.parse(message)))
+                pending.add(Queued(message.getString("id"),text,duration,now,message.optString("source",""),box,speaker,message.optBoolean("event_fresh",false),message.optBoolean("meaningful_correction",false),if(message.has("event_boundary")) message.optString("event_boundary") else null,message.optLong("source_gap_ms",0),SubtitleQuality.parse(message),message.optLong("source_generation",-1)))
                 while(pending.size>3) pending.removeFirst()
                 removeCallbacks(tick); post(tick)
             }
@@ -125,6 +135,7 @@ class SubtitleCanvas(context: Context, private val report: (String)->Unit) : Vie
         val hadPending=pending.isNotEmpty()
         while(pending.isNotEmpty()) {
             val entry=pending.removeFirst()
+            if(entry.generation>=0 && !state.sourceShow(entry.id,entry.generation,now))continue
             if(now-entry.receivedAt>(n("hard_seconds",8.0)*1000).toLong()) continue
             val merges=state.coalesced
             state.show(entry.id,entry.text,now,entry.duration,n("max_entries",3.0).toInt(),entry.source,entry.box,entry.speaker,entry.fresh,entry.meaningful,entry.boundary,entry.gap)
