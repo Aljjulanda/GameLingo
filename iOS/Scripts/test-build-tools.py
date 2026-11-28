@@ -9,6 +9,7 @@ import unittest
 import zipfile
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
+PHONE_ICON = ROOT / 'GameLingo/Resources/Assets.xcassets/AppIcon.appiconset/Icon-180.png'
 spec = importlib.util.spec_from_file_location('ipa_validator', ROOT / 'Scripts/validate-ipa.py')
 validator = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(validator)
@@ -23,7 +24,7 @@ class PackagingTests(unittest.TestCase):
             prefix + 'tv-display-schema.json': b'{}', prefix + 'ThirdPartyNotices.txt': b'Synthetic test only',
             prefix + 'PrivacyInfo.xcprivacy': b'<plist/>',
             prefix + 'Assets.car': b'Synthetic catalog only',
-            prefix + 'AppIcon60x60@3x.png': b'\x89PNG\r\n\x1a\n'+b'\0'*8+struct.pack('>II',180,180)+b'\0'*8,
+            prefix + 'AppIcon60x60@3x.png': PHONE_ICON.read_bytes(),
             prefix + 'PlugIns/GameLingoControls.appex/Info.plist':plistlib.dumps({'CFBundleVersion':'synthetic','NSExtension':{'NSExtensionPointIdentifier':'com.apple.widgetkit-extension'}}),
             prefix + 'PlugIns/GameLingoControls.appex/GameLingoControls':b'Synthetic extension only',
         }
@@ -72,6 +73,18 @@ class PackagingTests(unittest.TestCase):
                 path=pathlib.Path(tmp)/'fixture.zip'
                 self.package(path,extra=extra)
                 with self.assertRaises(ValueError):validator.validate(path)
+
+    def test_optimized_icon_dimensions_and_declared_filename(self):
+        icon = PHONE_ICON.read_bytes()
+        cgbi = struct.pack('>I4sII', 4, b'CgBI', 0, 0)
+        self.assertEqual(validator.png_dimensions(icon[:8]+cgbi+icon[8:]), (180, 180))
+        self.assertIsNone(validator.png_dimensions(icon[:8]+cgbi[:10]))
+        with tempfile.TemporaryDirectory() as tmp:
+            path = pathlib.Path(tmp) / 'fixture.zip'
+            self.package(path, extra={'Payload/GameLingo.app/AppIcon60x60@3x.png': b'',
+                                      'Payload/GameLingo.app/AppIconUnrelated@3x.png': icon})
+            with self.assertRaisesRegex(ValueError, '60pt'):
+                validator.validate(path)
 
 
 if __name__ == '__main__':

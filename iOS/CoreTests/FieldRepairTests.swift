@@ -76,4 +76,17 @@ final class FieldRepairTests: XCTestCase {
             XCTAssertNil(PackFuzzyMatching.kind(source:source,reference:reference))
         }
     }
+    func testIdenticalObservedTextCanUseLatestGenerationForItsFirstDisplay() {
+        let job = DialogueJob(id:"dialogue",text:"Wait here.",generation:1,correction:false,box:.dialogue,frameMilliseconds:100)
+        var phone = LocalSubtitleState()
+        let settings = TVSettings()
+        phone.apply(TVProtocol.envelope("subtitle_source_present",fields:["id":job.id,"source_generation":2]),settings:settings,now:1)
+        let old = TVProtocol.subtitle(job,arabic:"انتظر هنا.",now:110)
+        phone.apply(old,settings:settings,now:1.1)
+        XCTAssertTrue(phone.entries.isEmpty)
+        let current = TVProtocol.subtitle(job,arabic:"انتظر هنا.",now:120,sourceGeneration:2)
+        XCTAssertEqual(current["type"] as? String,"subtitle_show")
+        phone.apply(current,settings:settings,now:1.2)
+        XCTAssertEqual(phone.entries.map(\.id),[job.id])
+    }
 }

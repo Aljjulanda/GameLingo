@@ -6,6 +6,25 @@ import sys
 import zipfile
 
 
+def png_dimensions(data):
+    if not data.startswith(b'\x89PNG\r\n\x1a\n'):
+        return None
+    offset = 8
+    # Apple's optimized PNG may put a CgBI chunk before IHDR.
+    for _ in range(2):
+        if offset + 12 > len(data):
+            return None
+        size, kind = struct.unpack_from('>I4s', data, offset)
+        if offset + size + 12 > len(data):
+            return None
+        if kind == b'IHDR' and size == 13:
+            return struct.unpack_from('>II', data, offset + 8)
+        if kind != b'CgBI':
+            return None
+        offset += size + 12
+    return None
+
+
 def validate(path):
     with zipfile.ZipFile(path) as archive:
         if archive.testzip() is not None:
@@ -30,8 +49,8 @@ def validate(path):
         icons = primary.get('CFBundleIconFiles', [])
         if primary.get('CFBundleIconName') != 'AppIcon' or not icons or prefix+'Assets.car' not in names:
             raise ValueError('Missing compiled app-icon metadata/catalog')
-        phone_icons = [archive.read(n) for n in names if n.startswith(prefix+'AppIcon') and n.endswith('.png')]
-        if not any(b[:8] == b'\x89PNG\r\n\x1a\n' and len(b) >= 26 and struct.unpack_from('>II', b, 16) == (180, 180) for b in phone_icons):
+        phone_icons = [prefix + stem + '@3x.png' for stem in icons]
+        if not any(n in names and png_dimensions(archive.read(n)) == (180, 180) for n in phone_icons):
             raise ValueError('Missing explicit 60pt @3x iPhone app icon')
         control = prefix+'PlugIns/GameLingoControls.appex/'
         if control+'Info.plist' not in names or control+'GameLingoControls' not in names:

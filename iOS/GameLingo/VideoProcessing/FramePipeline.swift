@@ -750,7 +750,12 @@ final class FramePipeline {
                         guard self.isActive(), epoch == self.runID, self.tracker.accepts(job), correctionScope == self.correctionSnapshot.scopeKey, contextKey == self.outputContextKey else { return }
                     }
                     var delivered = job
-                    if let current = self.tracker.current, DialogueText.exactWords(current.text) == DialogueText.exactWords(job.text) { delivered.speaker = current.speaker; delivered.generation = current.generation }
+                    var displayGeneration = job.generation
+                    if let current = self.tracker.current, current.id == job.id,
+                       DialogueText.exactWords(current.text) == DialogueText.exactWords(job.text) {
+                        delivered.speaker = current.speaker
+                        displayGeneration = current.generation
+                    }
                     delivered.speakerArabic = self.quality[.learnNames] ? delivered.speaker.flatMap { self.namesByKey[GameName.key($0)] } : nil
                     switch result {
                     case .success(let decision):
@@ -760,7 +765,8 @@ final class FramePipeline {
                             self.stability.didPublish(delivered)
                             self.translations.put((job.text,text,decision.withoutEngineTrace),for:job.id)
                             self.memory.observe(job,now:ProcessInfo.processInfo.systemUptime)
-                            var message = TVProtocol.qualityFields(TVProtocol.subtitle(delivered,arabic:text,now:TVHub.now()),settings:self.quality,origin:decision.origin,basis:decision.basis)
+                            let subtitle = TVProtocol.subtitle(delivered,arabic:text,now:TVHub.now(),sourceGeneration:displayGeneration)
+                            var message = TVProtocol.qualityFields(subtitle,settings:self.quality,origin:decision.origin,basis:decision.basis)
                             if self.quality[.stageCues], let cue = job.cue {
                                 message["cue"] = cueOnly && (decision.origin == .userCorrection || decision.basis == .userCorrection) ? text : cue
                                 if cueOnly { message["cue_only"] = true }

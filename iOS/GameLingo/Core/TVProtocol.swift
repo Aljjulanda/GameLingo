@@ -19,7 +19,7 @@ enum TVProtocol {
         }
         return value
     }
-    static func subtitle(_ job: DialogueJob, arabic: String, now: Int64) -> [String: Any] {
+    static func subtitle(_ job: DialogueJob, arabic: String, now: Int64, sourceGeneration: UInt64? = nil) -> [String: Any] {
         var fields: [String:Any] = [
             "id":job.id,"source":job.text,"translated":String(SubtitlePresentation.clean(arabic).prefix(2400)),"source_lang":"en","target_lang":"ar",
             "update_type":job.correction ? "correction" : "new","frame_ms":job.frameMilliseconds,"translation_ms":now,
@@ -27,7 +27,7 @@ enum TVProtocol {
             "duration_ms":8000,"expires_at":now+8000
         ]
         fields["event_fresh"] = !job.correction
-        fields["source_generation"] = Int(job.generation)
+        fields["source_generation"] = Int(sourceGeneration ?? job.generation)
         fields["source_lease_ms"] = 1800
         fields["meaningful_correction"] = job.meaningfulCorrection
         if !job.eventBoundary.isEmpty { fields["event_boundary"] = job.eventBoundary; fields["source_gap_ms"] = job.sourceGapMilliseconds }

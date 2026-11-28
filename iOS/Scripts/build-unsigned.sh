@@ -16,6 +16,12 @@ PACKAGE="$(mktemp -d "$ROOT/build/package.XXXXXX")"
 trap 'case "$PACKAGE" in "$ROOT"/build/package.*) rm -rf -- "$PACKAGE";; esac' EXIT
 mkdir "$PACKAGE/Payload"
 ditto "$APP" "$PACKAGE/Payload/GameLingo.app"
+# actool may keep the 3x rendition only in Assets.car. Also supply the
+# declared iPhone home-screen PNG to clients that inspect the unsigned IPA.
+PHONE_ICON="$PACKAGE/Payload/GameLingo.app/AppIcon60x60@3x.png"
+if [[ ! -e "$PHONE_ICON" ]]; then
+  cp "$ROOT/GameLingo/Resources/Assets.xcassets/AppIcon.appiconset/Icon-180.png" "$PHONE_ICON"
+fi
 (
   cd "$PACKAGE"
   /usr/bin/zip -q -r -y GameLingo-unsigned.ipa Payload

@@ -134,7 +134,8 @@ final class SpatialUIPipeline {
         if missingScans >= 2 { clear() }
     }
     private func translateNext() {
-        guard active, sourceConfirmed, !working, let screen, let row = rows.first(where:{ row in
+        guard active, sourceConfirmed, !working, ProcessInfo.processInfo.systemUptime-lastScan < 1.6,
+              let screen, let row = rows.first(where:{ row in
             !screen.elements.contains(where:{$0.normalized == SpatialRecognition.key(row.text)}) && failures.get(self.version+row.text) == nil
         }) else { return }
         let id = epoch, game = game, version = version
