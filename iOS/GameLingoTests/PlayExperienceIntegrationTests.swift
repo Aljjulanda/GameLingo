@@ -379,6 +379,11 @@ final class PlayExperienceIntegrationTests: XCTestCase {
         var options = GameOptions(); options.menusEnabled = true // Old empty setup must not suppress automatic mode.
         pipeline.configureMenus(options)
         pipeline.configureSpatial(game:"synthetic-field-repair",version:UUID().uuidString)
+        pipeline.onSpatialMetrics = { metrics in
+            trace.append(["stage":"spatial-metrics","scans":metrics.scans,"observed":metrics.observedRows,
+                          "selected":metrics.selectedRows,"rejected":metrics.rejected,"published":metrics.published])
+            if trace.count > 40 { trace.removeFirst() }
+        }
         pipeline.start(roi:.dialogue,mode:.balanced)
         func feed(_ pixels: CVPixelBuffer, until done: () -> Bool) async throws {
             let began = ProcessInfo.processInfo.systemUptime

@@ -14,6 +14,7 @@ final class SpatialUIPipeline {
     private var frameAspect = 16.0/9.0
     private let translator: OfflineTranslator
     private let publish: ([String:Any]) -> Void
+    private let verifyFrame: (CVPixelBuffer,Double) -> Double?
     private let ocr: VisionDialogueOCR
     private var store: SpatialMemoryStore?
     private var rows: [OCRLine] = []
@@ -26,8 +27,11 @@ final class SpatialUIPipeline {
     private var metrics = SpatialMetrics()
     var onMetrics: ((SpatialMetrics) -> Void)?
     var onRegions: (([SourceBox]) -> Void)?
-    init(translator: OfflineTranslator, softwareImageContext: Bool = false, publish: @escaping ([String:Any]) -> Void) {
+    init(translator: OfflineTranslator, softwareImageContext: Bool = false,
+         verifyFrame: @escaping (CVPixelBuffer,Double) -> Double?,
+         publish: @escaping ([String:Any]) -> Void) {
         self.translator = translator; self.publish = publish
+        self.verifyFrame = verifyFrame
         self.ocr = VisionDialogueOCR(softwareImageContext:softwareImageContext)
     }
     func configure(game: String, version: String, dialogue: SourceBox) {
@@ -71,15 +75,18 @@ final class SpatialUIPipeline {
         offered = true; lastOffered = now; lock.unlock()
         queue.async { [self] in
             defer { lock.lock(); offered = false; lock.unlock() }
-            guard active else { return }
+            guard active, !working else { return }
             frameAspect = Double(CVPixelBufferGetWidth(buffer))/Double(max(1,CVPixelBufferGetHeight(buffer)))
             let hash = FrameSignature.perceptualHash(buffer)
             // Revalidate anchors periodically even with unchanged pixels. Heartbeat
             // leases remain bounded and stop when fresh frames stop arriving.
-            if hash == visual, now-lastScan < 1.5, sourceConfirmed, screen != nil { emit(now:now); return }
+            if !hash.isEmpty, hash == visual, now-lastScan < 1.5, sourceConfirmed, screen != nil { emit(now:now); return }
             let began = ProcessInfo.processInfo.systemUptime
             let lines = (try? autoreleasepool { try ocr.menuLines(buffer,roi:SourceBox(x:0,y:0,w:1,h:1)) }) ?? []
             guard active else { return }
+            guard let verifiedArrival = verifyFrame(buffer,now) else {
+                clear(); report(); return
+            }
             metrics.scans += 1; visual = hash
             let safe = lines.filter{!TextPrivacy.excluded($0.text)}
             let category = SpatialRecognition.category(safe)
@@ -88,7 +95,7 @@ final class SpatialUIPipeline {
             let observed = SpatialRecognition.rows(safe,dialogue:dialogue,category:category)
             metrics.selectedRows = observed.count
             guard !observed.isEmpty else { missing(); return }
-            sourceConfirmed = true; missingScans = 0; lastScan = now
+            sourceConfirmed = true; missingScans = 0; lastScan = verifiedArrival
             let fingerprint = SpatialRecognition.fingerprint(observed,category:category)
             let changed = screen?.category != category || !SpatialRecognition.sameObservation(rows,observed)
             rows = observed
@@ -112,7 +119,7 @@ final class SpatialUIPipeline {
             }
             screen?.elements = elements; screen?.fingerprint = fingerprint; screen?.observed = Date().timeIntervalSince1970; screen?.uses += 1
             if let screen { try? store?.save(screen,version:version) }
-            onRegions?(rows.map(\.box)); emit(now:now)
+            onRegions?(rows.map(\.box)); emit(now:ProcessInfo.processInfo.systemUptime)
             metrics.recall.record((ProcessInfo.processInfo.systemUptime-began)*1000)
             translateNext(); report()
         }

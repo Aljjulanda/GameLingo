@@ -39,12 +39,27 @@ final class FramePipeline {
     var onLearningExample: ((ImprovementExample) -> Void)?
     var onSpatialMetrics: ((SpatialMetrics) -> Void)?
     private lazy var spatial: SpatialUIPipeline = {
-        let worker = SpatialUIPipeline(translator:translator,softwareImageContext:softwareImageContext,publish:publish)
+        let worker = SpatialUIPipeline(translator:translator,softwareImageContext:softwareImageContext,verifyFrame:{ [weak self] buffer,arrival in
+            self?.verifiedSpatialArrival(buffer,arrival:arrival)
+        },publish:publish)
         worker.onMetrics = { [weak self] value in self?.onSpatialMetrics?(value) }
         worker.onRegions = { [weak self] regions in self?.queue.async { self?.spatialRegions = regions } }
         return worker
     }()
     private var spatialRegions: [SourceBox] = []
+    private func verifiedSpatialArrival(_ input: CVPixelBuffer, arrival: Double) -> Double? {
+        let now = ProcessInfo.processInfo.systemUptime
+        if now-arrival < 1.6 { return arrival }
+        slotLock.lock()
+        let candidate = latest
+        let accepting = active
+        slotLock.unlock()
+        guard accepting, let (buffer,received,_) = candidate,
+              received > arrival, now-received < 1.6,
+              ExactMenuFrameProof.matches(input,buffer),
+              ProcessInfo.processInfo.systemUptime-received < 1.6 else { return nil }
+        return received
+    }
     func configureSpatial(game: String, version: String) { queue.async { self.spatial.configure(game:game,version:version,dialogue:self.roi) } }
     func memoryPressure() { queue.async { self.spatial.memoryPressure(); self.previewContext.clearCaches(); self.translations = BoundedLRU(capacity:8); self.menuCache = BoundedLRU(capacity:128) } }
     private var learningConsent = false
